@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, ScrollView, Image, StyleSheet, Dimensions } from 'react-native';
+import React, { useCallback } from 'react';
+import { View, Text, ScrollView, Image, StyleSheet, Dimensions, Alert, Linking, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import {
@@ -91,8 +91,6 @@ export default function AppointmentDetailScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const [cancelConfirm, setCancelConfirm] = useState(false);
-
   const apptId = id ?? '1';
   const appt = MOCK_APPT_DETAIL[apptId] ?? MOCK_APPT_DETAIL['1'];
   const totalPrice = appt.services.reduce((s: number, sv: Service) => s + sv.price, 0);
@@ -109,7 +107,8 @@ export default function AppointmentDetailScreen() {
 
   const handleSendMessage = useCallback(() => {
     console.log('[AppointmentDetail] Send message pressed for venue:', appt.venue_name);
-  }, [appt.venue_name]);
+    router.push(`/chat/${appt.id}`);
+  }, [appt.id, router]);
 
   const handleVenueDetails = useCallback(() => {
     console.log('[AppointmentDetail] Venue details pressed, navigating to venue:', appt.id);
@@ -118,15 +117,32 @@ export default function AppointmentDetailScreen() {
 
   const handleReschedule = useCallback(() => {
     console.log('[AppointmentDetail] Reschedule pressed for appointment:', appt.id);
-  }, [appt.id]);
+    router.push(`/booking/datetime?venueId=${appt.id}`);
+  }, [appt.id, router]);
 
   const handleCancelPress = useCallback(() => {
     console.log('[AppointmentDetail] Cancel appointment pressed for:', appt.id);
-    setCancelConfirm(true);
-  }, [appt.id]);
+    Alert.alert(
+      'Cancel Appointment',
+      'Are you sure you want to cancel this appointment?',
+      [
+        { text: 'Keep it', style: 'cancel' },
+        { text: 'Cancel', style: 'destructive', onPress: () => {
+          console.log('[AppointmentDetail] Cancelled:', appt.id);
+          router.back();
+        }},
+      ]
+    );
+  }, [appt.id, router]);
 
   const handleGetDirections = useCallback(() => {
     console.log('[AppointmentDetail] Get directions pressed for:', appt.venue_address);
+    const url = Platform.OS === 'ios'
+      ? `maps://app?daddr=${encodeURIComponent(appt.venue_address)}`
+      : `geo:0,0?q=${encodeURIComponent(appt.venue_address)}`;
+    Linking.openURL(url).catch(() => {
+      Linking.openURL(`https://maps.google.com/?q=${encodeURIComponent(appt.venue_address)}`);
+    });
   }, [appt.venue_address]);
 
   const mapHtml = MAP_HTML(appt.latitude, appt.longitude);

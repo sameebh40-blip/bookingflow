@@ -7,6 +7,9 @@ import {
   Animated,
   Image,
   ImageSourcePropType,
+  Alert,
+  Linking,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -112,6 +115,17 @@ function UpcomingCard({ appt, onViewDetails, onRebook }: {
 
   const handleCancelPress = useCallback(() => {
     console.log('[Bookings] Cancel pressed for appointment:', appt.id);
+    Alert.alert(
+      'Cancel Appointment',
+      'Are you sure you want to cancel this appointment?',
+      [
+        { text: 'Keep it', style: 'cancel' },
+        { text: 'Cancel appointment', style: 'destructive', onPress: () => {
+          console.log('[Bookings] Appointment cancelled:', appt.id);
+          // TODO: call supabase to update status
+        }},
+      ]
+    );
   }, [appt.id]);
 
   const handleCardPress = useCallback(() => {
@@ -121,8 +135,18 @@ function UpcomingCard({ appt, onViewDetails, onRebook }: {
 
   const handleReschedulePress = useCallback(() => {
     console.log('[Bookings] Reschedule pressed for appointment:', appt.id);
-    onRebook();
-  }, [appt.id, onRebook]);
+    router.push(`/booking/datetime?venueId=${appt.venue_id}`);
+  }, [appt.id, appt.venue_id, router]);
+
+  const handleGetDirections = useCallback(() => {
+    console.log('[Bookings] Get directions pressed for:', appt.venue_name);
+    const url = Platform.OS === 'ios'
+      ? `maps://app?daddr=${encodeURIComponent(appt.venue_name)}`
+      : `geo:0,0?q=${encodeURIComponent(appt.venue_name)}`;
+    Linking.openURL(url).catch(() => {
+      Linking.openURL(`https://maps.google.com/?q=${encodeURIComponent(appt.venue_name)}`);
+    });
+  }, [appt.venue_name]);
 
   return (
     <AnimatedPressable onPress={handleCardPress} style={upcomingCardStyles.card}>
@@ -160,7 +184,7 @@ function UpcomingCard({ appt, onViewDetails, onRebook }: {
           <Text style={upcomingCardStyles.infoText}>{durationText}</Text>
         </View>
         {/* Get directions */}
-        <AnimatedPressable onPress={onViewDetails}>
+        <AnimatedPressable onPress={handleGetDirections}>
           <Text style={upcomingCardStyles.directionsText}>Get directions</Text>
         </AnimatedPressable>
 

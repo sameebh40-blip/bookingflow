@@ -110,7 +110,7 @@ export default function FloatingTabBar({
       <View
         style={[
           styles.container,
-          { width: containerWidth, marginBottom: bottomMargin ?? 8 },
+          { width: containerWidth, marginBottom: bottomMargin ?? 0 },
         ]}
       >
         <BlurView
