@@ -130,29 +130,91 @@ export default function VenueDetailScreen() {
   }, [id]);
 
   const fetchVenueData = async () => {
-    console.log('[VenueDetail] Fetching venue data for id:', id);
+    console.log('[VenueDetail] Fetching venue data for id:', id, '(hallaq barbershops)');
     try {
       const [venueRes, servicesRes, reviewsRes, staffRes] = await Promise.all([
-        supabase.from('venues').select('*').eq('id', id).single(),
-        supabase.from('venue_services').select('*').eq('venue_id', id),
-        supabase.from('venue_reviews').select('*').eq('venue_id', id).order('created_at', { ascending: false }),
-        supabase.from('staff').select('*').eq('venue_id', id),
+        supabase
+          .from('barbershops')
+          .select('id, name, category, rating_avg, address, cover_url, logo_url, lat, lng, description, opening_hours, is_active, status, phone, instagram')
+          .eq('id', id)
+          .single(),
+        supabase
+          .from('services')
+          .select('id, name, duration_minutes, price_bhd, category, is_active')
+          .eq('shop_id', id)
+          .eq('is_active', true)
+          .limit(20),
+        supabase
+          .from('reviews')
+          .select('id, rating, text, created_at, customer_profile_id')
+          .eq('shop_id', id)
+          .eq('target_type', 'shop')
+          .order('created_at', { ascending: false })
+          .limit(10),
+        supabase
+          .from('barbers')
+          .select('id, display_name, specialty, avatar_url, rating_avg, reviews_count')
+          .eq('shop_id', id)
+          .eq('status', 'approved')
+          .limit(10),
       ]);
 
-      console.log('[VenueDetail] Venue fetch result:', venueRes.error?.message ?? 'ok');
-      setVenue(venueRes.error || !venueRes.data ? (MOCK_VENUES[id ?? '1'] ?? MOCK_VENUES['1']) : venueRes.data);
+      console.log('[VenueDetail] Barbershop fetch result:', venueRes.error?.message ?? 'ok');
+      if (venueRes.error || !venueRes.data) {
+        setVenue(MOCK_VENUES[id ?? '1'] ?? MOCK_VENUES['1']);
+      } else {
+        const data = venueRes.data;
+        setVenue({
+          id: data.id,
+          name: data.name,
+          category: data.category ?? 'Barber',
+          rating: Number(data.rating_avg) || 0,
+          review_count: 0,
+          distance_km: 0.5,
+          address: data.address ?? '',
+          image_url: data.cover_url ?? 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800',
+          description: data.description ?? '',
+          is_open: data.is_active,
+          open_until: '21:00',
+          starting_price: 5,
+        });
+      }
 
       console.log('[VenueDetail] Services fetch result:', servicesRes.error?.message ?? 'ok', 'count:', servicesRes.data?.length ?? 0);
-      setServices(servicesRes.error || !servicesRes.data || servicesRes.data.length === 0 ? MOCK_SERVICES : servicesRes.data);
+      if (servicesRes.error || !servicesRes.data || servicesRes.data.length === 0) {
+        setServices(MOCK_SERVICES);
+      } else {
+        setServices(servicesRes.data.map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          duration: s.duration_minutes ?? 30,
+          price: Number(s.price_bhd) || 0,
+          category: s.category ?? 'General',
+        })));
+      }
 
       console.log('[VenueDetail] Reviews fetch result:', reviewsRes.error?.message ?? 'ok', 'count:', reviewsRes.data?.length ?? 0);
       if (reviewsRes.data && reviewsRes.data.length > 0) {
-        setReviews(reviewsRes.data);
+        setReviews(reviewsRes.data.map((r: any) => ({
+          id: r.id,
+          name: 'Customer',
+          initials: 'C',
+          rating: r.rating,
+          comment: r.text ?? '',
+          date: r.created_at,
+        })));
       }
 
-      console.log('[VenueDetail] Staff fetch result:', staffRes.error?.message ?? 'ok', 'count:', staffRes.data?.length ?? 0);
+      console.log('[VenueDetail] Barbers fetch result:', staffRes.error?.message ?? 'ok', 'count:', staffRes.data?.length ?? 0);
       if (staffRes.data && staffRes.data.length > 0) {
-        setStaff(staffRes.data);
+        setStaff(staffRes.data.map((b: any) => ({
+          id: b.id,
+          name: b.display_name,
+          specialty: b.specialty ?? 'Barber',
+          avatar: b.avatar_url ?? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
+          rating: Number(b.rating_avg) || 0,
+          review_count: b.reviews_count ?? 0,
+        })));
       }
     } catch (err) {
       console.log('[VenueDetail] Exception fetching venue data:', err);

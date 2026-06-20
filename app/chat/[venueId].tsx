@@ -59,12 +59,12 @@ export default function ChatScreen() {
   }, [venueId]);
 
   const fetchVenueInfo = async () => {
-    console.log('[Chat] Fetching venue info for:', venueId);
+    console.log('[Chat] Fetching barbershop info for:', venueId);
     try {
-      const { data } = await supabase.from('venues').select('name, image_url').eq('id', venueId).single();
+      const { data } = await supabase.from('barbershops').select('name, cover_url').eq('id', venueId).single();
       if (data) {
         setVenueName(data.name ?? 'Venue');
-        setVenueImage(data.image_url ?? '');
+        setVenueImage(data.cover_url ?? '');
       }
     } catch (err) {
       console.log('[Chat] Could not fetch venue info:', err);

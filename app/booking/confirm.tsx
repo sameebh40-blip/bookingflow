@@ -110,18 +110,28 @@ export default function BookingConfirmScreen() {
         const scheduledAt = date && time
           ? new Date(`${date}T${time}`).toISOString()
           : new Date().toISOString();
-        const { error } = await supabase.from('appointments').insert({
-          user_id: user.id,
-          venue_id: venueId,
-          scheduled_at: scheduledAt,
+        const endAt = new Date(new Date(scheduledAt).getTime() + 30 * 60 * 1000).toISOString();
+        console.log('[Booking/Confirm] Inserting booking into hallaq bookings table');
+        const { error } = await supabase.from('bookings').insert({
+          customer_profile_id: user.id,
+          shop_id: venueId,
+          barber_id: staffId && staffId !== 'any' ? staffId : null,
+          start_at: scheduledAt,
+          end_at: endAt,
+          status: 'pending',
+          payment_status: 'unpaid',
+          payment_method: 'cash',
           total_price: totalPrice,
-          status: 'upcoming',
-          created_at: new Date().toISOString(),
+          price_bhd: totalPrice,
+          currency: 'BHD',
+          source: 'mobile_app',
+          customer_name: user.user_metadata?.full_name ?? null,
+          customer_email: user.email ?? null,
         });
         if (error) {
           console.log('[Booking/Confirm] Supabase insert error (non-fatal):', error.message);
         } else {
-          console.log('[Booking/Confirm] Appointment saved to Supabase');
+          console.log('[Booking/Confirm] Booking saved to Supabase (hallaq)');
         }
       }
       setConfirmed(true);

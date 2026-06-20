@@ -330,35 +330,52 @@ export default function BookingsScreen() {
         setAppointments(MOCK_APPOINTMENTS);
         return;
       }
+      console.log('[Bookings] Fetching from hallaq bookings table for user:', user.id);
       const { data, error } = await supabase
-        .from('appointments')
+        .from('bookings')
         .select(`
-          *,
-          venues (name, image_url)
+          id,
+          start_at,
+          end_at,
+          status,
+          total_price,
+          price_bhd,
+          shop_id,
+          barber_id,
+          barbershops!shop_id(id, name, cover_url, address)
         `)
-        .eq('user_id', user.id)
-        .order('scheduled_at', { ascending: false });
+        .eq('customer_profile_id', user.id)
+        .order('start_at', { ascending: false })
+        .limit(20);
 
       if (error || !data || data.length === 0) {
         console.log('[Bookings] Using mock appointments:', error?.message);
         setAppointments(MOCK_APPOINTMENTS);
       } else {
-        console.log('[Bookings] Loaded', data.length, 'appointments');
-        const mapped = data.map((row: any) => ({
-          id: row.id,
-          venue_id: row.venue_id,
-          venue_name: row.venues?.name ?? 'Unknown Venue',
-          venue_image: row.venues?.image_url ?? '',
-          date: row.scheduled_at
-            ? new Date(row.scheduled_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) +
-              ' at ' +
-              new Date(row.scheduled_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-            : row.date ?? '',
-          price: Number(row.total_price ?? row.price ?? 0),
-          items: Array.isArray(row.services) ? row.services.length : (row.items ?? 1),
-          status: row.status ?? 'upcoming',
-          services: row.services ?? [],
-        }));
+        console.log('[Bookings] Loaded', data.length, 'bookings from hallaq');
+        const mapped = data.map((row: any) => {
+          const shop = row.barbershops ?? {};
+          const rawStatus: string = row.status ?? 'pending';
+          const mappedStatus: 'upcoming' | 'past' =
+            rawStatus === 'pending' || rawStatus === 'confirmed' || rawStatus === 'in_progress'
+              ? 'upcoming'
+              : 'past';
+          return {
+            id: row.id,
+            venue_id: row.shop_id,
+            venue_name: shop.name ?? 'Unknown Venue',
+            venue_image: shop.cover_url ?? '',
+            date: row.start_at
+              ? new Date(row.start_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) +
+                ' at ' +
+                new Date(row.start_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+              : '',
+            price: Number(row.price_bhd ?? row.total_price ?? 0),
+            items: 1,
+            status: mappedStatus,
+            services: [],
+          };
+        });
         setAppointments(mapped);
       }
     } catch (err) {

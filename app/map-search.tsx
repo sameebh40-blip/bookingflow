@@ -182,12 +182,30 @@ export default function MapSearchScreen() {
 
   useEffect(() => {
     const fetchVenues = async () => {
-      console.log('[MapSearch] Fetching venues from Supabase');
+      console.log('[MapSearch] Fetching barbershops from Supabase (hallaq)');
       try {
-        const { data, error } = await supabase.from('venues').select('*');
+        const { data, error } = await supabase
+          .from('barbershops')
+          .select('id, name, category, rating_avg, address, cover_url, lat, lng, is_active, status')
+          .eq('status', 'approved')
+          .limit(20);
         if (!error && data && data.length > 0) {
-          console.log('[MapSearch] Loaded', data.length, 'venues');
-          setVenues(data);
+          console.log('[MapSearch] Loaded', data.length, 'barbershops');
+          setVenues(data.map((b: any) => ({
+            id: b.id,
+            name: b.name,
+            category: b.category ?? 'Barber',
+            rating: Number(b.rating_avg) || 0,
+            review_count: 0,
+            distance_km: 0.5,
+            address: b.address ?? '',
+            image_url: b.cover_url ?? 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800',
+            latitude: b.lat,
+            longitude: b.lng,
+            is_open: b.is_active,
+            starting_price: 5,
+            next_slot: '',
+          })));
           setMapKey(k => k + 1);
         } else {
           console.log('[MapSearch] Using mock venues:', error?.message);

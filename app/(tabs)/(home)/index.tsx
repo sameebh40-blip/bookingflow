@@ -220,20 +220,42 @@ export default function HomeScreen() {
   }, []);
 
   const fetchData = async () => {
-    console.log('[Home] Fetching venues and barbers from Supabase');
+    console.log('[Home] Fetching barbershops and barbers from Supabase (hallaq)');
     setLoading(true);
     try {
       const [venuesRes, barbersRes] = await Promise.all([
-        supabase.from('venues').select('*').limit(10),
-        supabase.from('staff').select('*').order('rating', { ascending: false }).limit(3),
+        supabase
+          .from('barbershops')
+          .select('id, name, category, rating_avg, address, cover_url, logo_url, lat, lng, is_active, status')
+          .eq('status', 'approved')
+          .eq('is_active', true)
+          .limit(10),
+        supabase
+          .from('barbers')
+          .select('id, display_name, specialty, rating_avg, avatar_url, reviews_count, status')
+          .eq('status', 'approved')
+          .order('rating_avg', { ascending: false })
+          .limit(10),
       ]);
 
       if (venuesRes.error || !venuesRes.data || venuesRes.data.length === 0) {
         console.log('[Home] Using mock venues:', venuesRes.error?.message);
         setVenues(MOCK_VENUES);
       } else {
-        console.log('[Home] Loaded', venuesRes.data.length, 'venues');
-        setVenues(venuesRes.data);
+        console.log('[Home] Loaded', venuesRes.data.length, 'barbershops');
+        setVenues(venuesRes.data.map((b: any) => ({
+          id: b.id,
+          name: b.name,
+          category: b.category ?? 'Barber',
+          rating: Number(b.rating_avg) || 0,
+          review_count: 0,
+          distance_km: 0.5,
+          address: b.address ?? '',
+          image_url: b.cover_url ?? 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800',
+          logo_url: b.logo_url,
+          starting_price: 5,
+          is_open: b.is_active,
+        })));
       }
 
       if (barbersRes.error || !barbersRes.data || barbersRes.data.length === 0) {
@@ -241,7 +263,16 @@ export default function HomeScreen() {
         setBarbers(MOCK_BARBERS);
       } else {
         console.log('[Home] Loaded', barbersRes.data.length, 'barbers');
-        setBarbers(barbersRes.data.map((b: Barber, i: number) => ({ ...b, rank: i + 1 })));
+        setBarbers(barbersRes.data.map((b: any, i: number) => ({
+          id: b.id,
+          name: b.display_name,
+          specialty: b.specialty ?? 'Barber',
+          rating: Number(b.rating_avg) || 0,
+          bookings: 0,
+          review_count: b.reviews_count ?? 0,
+          avatar: b.avatar_url ?? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
+          rank: i + 1,
+        })));
       }
     } catch (err) {
       console.log('[Home] Exception, using mock data:', err);

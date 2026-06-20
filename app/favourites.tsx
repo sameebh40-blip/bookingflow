@@ -73,24 +73,35 @@ export default function FavouritesScreen() {
         setFavs(MOCK_FAVOURITES);
         return;
       }
+      console.log('[Favourites] Fetching from hallaq favorites table for user:', user.id);
       const { data, error } = await supabase
-        .from('favourites')
-        .select('*, venues(*)')
-        .eq('user_id', user.id);
+        .from('favorites')
+        .select('id, target_id, target_type, created_at')
+        .eq('profile_id', user.id)
+        .eq('target_type', 'shop');
       if (error || !data || data.length === 0) {
         console.log('[Favourites] Using mock data:', error?.message);
         setFavs(MOCK_FAVOURITES);
       } else {
-        console.log('[Favourites] Loaded', data.length, 'favourites');
-        const mapped = data.map((row: any) => ({
-          id: row.venues?.id ?? row.venue_id,
-          name: row.venues?.name ?? 'Unknown',
-          category: row.venues?.category ?? '',
-          rating: row.venues?.rating ?? 0,
-          distance_km: row.venues?.distance_km ?? 0,
-          image_url: row.venues?.image_url ?? '',
-        }));
-        setFavs(mapped);
+        console.log('[Favourites] Loaded', data.length, 'favorites, fetching shop details');
+        const shopIds = data.map((f: any) => f.target_id);
+        const { data: shops } = await supabase
+          .from('barbershops')
+          .select('id, name, category, rating_avg, address, cover_url')
+          .in('id', shopIds);
+        if (!shops || shops.length === 0) {
+          setFavs(MOCK_FAVOURITES);
+        } else {
+          const mapped = shops.map((s: any) => ({
+            id: s.id,
+            name: s.name,
+            category: s.category ?? 'Barber',
+            rating: Number(s.rating_avg) || 0,
+            distance_km: 0.5,
+            image_url: s.cover_url ?? 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800',
+          }));
+          setFavs(mapped);
+        }
       }
     } catch (err) {
       console.log('[Favourites] Exception, using mock data:', err);
@@ -105,15 +116,17 @@ export default function FavouritesScreen() {
     setFavs(prev => prev.filter(f => f.id !== id));
     if (user) {
       try {
+        console.log('[Favourites] Removing from hallaq favorites table:', id);
         const { error } = await supabase
-          .from('favourites')
+          .from('favorites')
           .delete()
-          .eq('user_id', user.id)
-          .eq('venue_id', id);
+          .eq('profile_id', user.id)
+          .eq('target_id', id)
+          .eq('target_type', 'shop');
         if (error) {
           console.log('[Favourites] Error removing favourite:', error.message);
         } else {
-          console.log('[Favourites] Removed favourite from Supabase:', id);
+          console.log('[Favourites] Removed favourite from Supabase (hallaq):', id);
         }
       } catch (err) {
         console.log('[Favourites] Exception removing favourite:', err);

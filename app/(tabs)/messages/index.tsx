@@ -63,11 +63,11 @@ export default function MessagesScreen() {
   }, [user]);
 
   const fetchConversations = async () => {
-    console.log('[Messages] Fetching conversations from Supabase');
+    console.log('[Messages] Fetching conversations from Supabase (hallaq)');
     try {
       const { data: msgs, error } = await supabase
         .from('messages')
-        .select('*, venues(id, name, image_url)')
+        .select('*, barbershops!venue_id(id, name, cover_url)')
         .order('created_at', { ascending: false });
 
       if (!error && msgs && msgs.length > 0) {
@@ -75,12 +75,13 @@ export default function MessagesScreen() {
         const seen = new Set<string>();
         const convs: Conversation[] = [];
         for (const msg of msgs) {
-          if (!seen.has(msg.venue_id) && msg.venues) {
+          const shop = (msg as any).barbershops;
+          if (!seen.has(msg.venue_id) && shop) {
             seen.add(msg.venue_id);
             convs.push({
               id: msg.venue_id,
-              venue_name: msg.venues.name ?? 'Venue',
-              avatar: msg.venues.image_url ?? '',
+              venue_name: shop.name ?? 'Venue',
+              avatar: shop.cover_url ?? '',
               last_message: msg.text ?? '',
               timestamp: new Date(msg.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
               unread: 0,
