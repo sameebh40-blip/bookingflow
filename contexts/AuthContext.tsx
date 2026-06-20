@@ -9,6 +9,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
+  deleteAccount: () => Promise<{ error: Error | null }>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -18,6 +19,7 @@ const AuthContext = createContext<AuthContextType>({
   signIn: async () => ({ error: null }),
   signUp: async () => ({ error: null }),
   signOut: async () => {},
+  deleteAccount: async () => ({ error: null }),
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -82,8 +84,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
   };
 
+  const deleteAccount = async () => {
+    console.log('[Auth] deleteAccount');
+    try {
+      const { error } = await supabase.rpc('delete_user');
+      if (error) {
+        console.log('[Auth] deleteAccount rpc error:', error.message);
+        // Fallback: sign out even if deletion fails
+        await supabase.auth.signOut();
+        return { error };
+      }
+      await supabase.auth.signOut();
+      return { error: null };
+    } catch (err) {
+      console.log('[Auth] deleteAccount exception:', err);
+      await supabase.auth.signOut();
+      return { error: err as Error };
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, session, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, signIn, signUp, signOut, deleteAccount }}>
       {children}
     </AuthContext.Provider>
   );

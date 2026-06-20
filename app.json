@@ -13,15 +13,9 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.placeholder.app",
+      "bundleIdentifier": "com.booklyflow.app",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false,
-        "UIBackgroundModes": [
-          "remote-notification"
-        ]
-      },
-      "entitlements": {
-        "aps-environment": "production"
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -29,7 +23,7 @@
         "foregroundImage": "./assets/images/app-icon-owk.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.placeholder.app",
+      "package": "com.booklyflow.app",
       "googleServicesFile": "./google-services.json"
     },
     "web": {
