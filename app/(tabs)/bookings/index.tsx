@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Search, RefreshCw, CreditCard, Award, Star, Calendar, Clock } from 'lucide-react-native';
+import { Search, RefreshCw, CreditCard, Award, Calendar, Clock } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
@@ -104,6 +104,7 @@ function UpcomingCard({ appt, onViewDetails, onRebook }: {
   onViewDetails: () => void;
   onRebook: () => void;
 }) {
+  const router = useRouter();
   const totalDuration = (appt.services?.length ?? 1) * 30;
   const totalStr = `BHD ${Number(appt.price).toFixed(3)}`;
   const itemCount = appt.services?.length ?? appt.items;
@@ -113,8 +114,18 @@ function UpcomingCard({ appt, onViewDetails, onRebook }: {
     console.log('[Bookings] Cancel pressed for appointment:', appt.id);
   }, [appt.id]);
 
+  const handleCardPress = useCallback(() => {
+    console.log('[Bookings] UpcomingCard tapped, navigating to appointment detail:', appt.id);
+    router.push(`/appointment/${appt.id}`);
+  }, [appt.id, router]);
+
+  const handleReschedulePress = useCallback(() => {
+    console.log('[Bookings] Reschedule pressed for appointment:', appt.id);
+    onRebook();
+  }, [appt.id, onRebook]);
+
   return (
-    <View style={upcomingCardStyles.card}>
+    <AnimatedPressable onPress={handleCardPress} style={upcomingCardStyles.card}>
       {/* Cover image with gradient */}
       <View style={{ height: 180, borderTopLeftRadius: 16, borderTopRightRadius: 16, overflow: 'hidden' }}>
         <Image
@@ -160,12 +171,12 @@ function UpcomingCard({ appt, onViewDetails, onRebook }: {
           <AnimatedPressable style={upcomingCardStyles.cancelBtn} onPress={handleCancelPress}>
             <Text style={upcomingCardStyles.cancelBtnText}>Cancel</Text>
           </AnimatedPressable>
-          <AnimatedPressable style={upcomingCardStyles.rescheduleBtn} onPress={onRebook}>
+          <AnimatedPressable style={upcomingCardStyles.rescheduleBtn} onPress={handleReschedulePress}>
             <Text style={upcomingCardStyles.rescheduleBtnText}>Reschedule</Text>
           </AnimatedPressable>
         </View>
       </View>
-    </View>
+    </AnimatedPressable>
   );
 }
 
@@ -224,70 +235,56 @@ const upcomingCardStyles = StyleSheet.create({
   rescheduleBtnText: { fontSize: 14, fontWeight: '700', color: '#0A0A0F' },
 });
 
-function PastCard({ appt, onRebook, onMessage }: {
-  appt: Appointment;
-  onRebook: () => void;
-  onMessage: () => void;
-}) {
-  const [userRating, setUserRating] = useState(0);
-  const stars = [1, 2, 3, 4, 5];
-  const questionText = `How was your experience at ${appt.venue_name}?`;
+function PastCard({ appt, onRebook }: { appt: Appointment; onRebook: () => void }) {
+  const itemsLabel = appt.items === 1 ? 'item' : 'items';
+  const priceStr = Number(appt.price).toFixed(3);
 
-  const handleStarPress = useCallback((star: number) => {
-    console.log('[Bookings] Star rating pressed:', star, 'for appointment:', appt.id);
-    setUserRating(star);
-  }, [appt.id]);
+  const handleRebookPress = useCallback(() => {
+    console.log('[Bookings] Rebook pressed for past appointment:', appt.id, appt.venue_name);
+    onRebook();
+  }, [appt.id, appt.venue_name, onRebook]);
 
   return (
-    <View style={styles.pastCard}>
-      {/* Cover image with gradient */}
-      <View style={styles.pastImageContainer}>
-        <Image source={resolveImageSource(appt.venue_image)} style={styles.pastCoverImage} resizeMode="cover" />
-        <LinearGradient
-          colors={['transparent', 'rgba(10,10,15,0.85)']}
-          style={StyleSheet.absoluteFillObject}
-        />
-        {/* Completed badge */}
-        <View style={styles.completedBadge}>
-          <Text style={styles.completedBadgeText}>Completed</Text>
-        </View>
-        {/* Venue name overlay */}
-        <Text style={styles.pastVenueName}>{appt.venue_name}</Text>
+    <AnimatedPressable onPress={handleRebookPress} style={pastRowStyles.row}>
+      <Image source={resolveImageSource(appt.venue_image)} style={pastRowStyles.thumb} resizeMode="cover" />
+      <View style={pastRowStyles.info}>
+        <Text style={pastRowStyles.name} numberOfLines={1}>{appt.venue_name}</Text>
+        <Text style={pastRowStyles.date} numberOfLines={1}>{appt.date}</Text>
+        <Text style={pastRowStyles.meta}>BHD {priceStr} · {appt.items} {itemsLabel}</Text>
       </View>
-      {/* Info section */}
-      <View style={styles.pastInfo}>
-        {/* Date row */}
-        <View style={styles.pastDateRow}>
-          <Calendar size={14} color={MADAR_COLORS.gold} />
-          <Text style={styles.pastDateText}>{appt.date}</Text>
-        </View>
-        {/* Rating question */}
-        <Text style={styles.ratingQuestion}>{questionText}</Text>
-        {/* Stars */}
-        <View style={styles.starsRow}>
-          {stars.map((s) => (
-            <AnimatedPressable key={s} onPress={() => handleStarPress(s)}>
-              <Star
-                size={22}
-                color={s <= userRating ? MADAR_COLORS.gold : MADAR_COLORS.textTertiary}
-                fill={s <= userRating ? MADAR_COLORS.gold : 'transparent'}
-              />
-            </AnimatedPressable>
-          ))}
-        </View>
-        {/* Action buttons */}
-        <View style={styles.pastActions}>
-          <AnimatedPressable onPress={onRebook} style={styles.bookAgainBtn}>
-            <Text style={styles.bookAgainBtnText}>Book again</Text>
-          </AnimatedPressable>
-          <AnimatedPressable onPress={onMessage} style={styles.sendMessageBtn}>
-            <Text style={styles.sendMessageBtnText}>Send message</Text>
-          </AnimatedPressable>
-        </View>
+      <View style={pastRowStyles.rebookBtn}>
+        <Text style={pastRowStyles.rebookText}>Rebook</Text>
       </View>
-    </View>
+    </AnimatedPressable>
   );
 }
+
+const pastRowStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: MADAR_COLORS.surface,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: MADAR_COLORS.border,
+  },
+  thumb: { width: 56, height: 56, borderRadius: 10 },
+  info: { flex: 1, gap: 3 },
+  name: { fontSize: 14, fontWeight: '700', color: MADAR_COLORS.text },
+  date: { fontSize: 12, color: MADAR_COLORS.textSecondary },
+  meta: { fontSize: 12, color: MADAR_COLORS.textTertiary },
+  rebookBtn: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: MADAR_COLORS.border,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  rebookText: { fontSize: 13, color: MADAR_COLORS.text, fontWeight: '500' },
+});
 
 export default function BookingsScreen() {
   const insets = useSafeAreaInsets();
@@ -342,10 +339,6 @@ export default function BookingsScreen() {
     console.log('[Bookings] Rebook pressed:', venueId, venueName);
     router.push(`/venue/${venueId}`);
   }, [router]);
-
-  const handleMessage = useCallback((venueId: string, venueName: string) => {
-    console.log('[Bookings] Send message pressed for venue:', venueId, venueName);
-  }, []);
 
   const handleViewDetails = useCallback((apptId: string) => {
     console.log('[Bookings] View details pressed for appointment:', apptId);
@@ -409,14 +402,13 @@ export default function BookingsScreen() {
             {upcoming.length > 0 && (
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Upcoming</Text>
-                {upcoming.map((appt, index) => (
-                  <AnimatedListItem key={appt.id} index={index}>
-                    <UpcomingCard
-                      appt={appt}
-                      onViewDetails={() => handleViewDetails(appt.id)}
-                      onRebook={() => handleRebook(appt.venue_id, appt.venue_name)}
-                    />
-                  </AnimatedListItem>
+                {upcoming.map((appt) => (
+                  <UpcomingCard
+                    key={appt.id}
+                    appt={appt}
+                    onViewDetails={() => handleViewDetails(appt.id)}
+                    onRebook={() => handleRebook(appt.venue_id, appt.venue_name)}
+                  />
                 ))}
               </View>
             )}
@@ -429,7 +421,6 @@ export default function BookingsScreen() {
                     <PastCard
                       appt={appt}
                       onRebook={() => handleRebook(appt.venue_id, appt.venue_name)}
-                      onMessage={() => handleMessage(appt.venue_id, appt.venue_name)}
                     />
                   </AnimatedListItem>
                 ))}
@@ -557,99 +548,6 @@ const styles = StyleSheet.create({
   scrollContent: { paddingHorizontal: 20 },
   section: { marginBottom: 24 },
   sectionTitle: { fontSize: 20, fontWeight: '700', color: MADAR_COLORS.text, marginBottom: 16, letterSpacing: -0.3 },
-
-  // Past card (image-first)
-  pastCard: {
-    backgroundColor: MADAR_COLORS.surface,
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginBottom: 16,
-  },
-  pastImageContainer: {
-    position: 'relative',
-    height: 160,
-  },
-  pastCoverImage: {
-    width: '100%',
-    height: 160,
-    resizeMode: 'cover',
-  },
-  completedBadge: {
-    position: 'absolute',
-    top: 12,
-    left: 12,
-    backgroundColor: MADAR_COLORS.success,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  completedBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  pastVenueName: {
-    position: 'absolute',
-    bottom: 12,
-    left: 12,
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  pastInfo: {
-    padding: 14,
-    gap: 0,
-  },
-  pastDateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  pastDateText: {
-    fontSize: 13,
-    color: MADAR_COLORS.textSecondary,
-  },
-  ratingQuestion: {
-    fontSize: 13,
-    color: MADAR_COLORS.text,
-    marginTop: 8,
-  },
-  starsRow: {
-    flexDirection: 'row',
-    gap: 6,
-    marginTop: 8,
-  },
-  pastActions: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 12,
-  },
-  bookAgainBtn: {
-    flex: 1,
-    backgroundColor: MADAR_COLORS.gold,
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  bookAgainBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0A0A0F',
-  },
-  sendMessageBtn: {
-    flex: 1,
-    backgroundColor: MADAR_COLORS.surface,
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: MADAR_COLORS.border,
-  },
-  sendMessageBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: MADAR_COLORS.text,
-  },
 
   // Empty state
   emptyState: { alignItems: 'center', paddingVertical: 60, gap: 12 },

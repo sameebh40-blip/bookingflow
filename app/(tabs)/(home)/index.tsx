@@ -338,7 +338,7 @@ export default function HomeScreen() {
 
         <AnimatedPressable onPress={handleSearchPress} style={styles.searchBar}>
           <Search size={18} color={MADAR_COLORS.textTertiary} />
-          <Text style={styles.searchPlaceholder}>Browse all treatments</Text>
+          <Text style={styles.searchPlaceholder}>Any treatments, venues or professionals</Text>
         </AnimatedPressable>
       </View>
 
