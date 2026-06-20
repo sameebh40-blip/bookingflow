@@ -13,16 +13,16 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { WebView } from 'react-native-webview';
-import { Search, SlidersHorizontal, ArrowLeft, Heart, Star, MapPin, Clock } from 'lucide-react-native';
+import { Search, SlidersHorizontal, Heart, Star, MapPin, Clock } from 'lucide-react-native';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { supabase } from '@/utils/supabase';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
-const MAP_HEIGHT = screenHeight * 0.42;
+const MAP_HEIGHT = screenHeight * 0.55;
 const SNAP_COLLAPSED = 80;
-const SNAP_HALF = screenHeight * 0.42;
+const SNAP_HALF = screenHeight * 0.45;
 const SNAP_FULL = screenHeight * 0.82;
 
 interface Venue {
@@ -271,11 +271,6 @@ export default function MapSearchScreen() {
     }
   }, [router]);
 
-  const handleBack = useCallback(() => {
-    console.log('[MapSearch] Back pressed');
-    router.back();
-  }, [router]);
-
   const handleSearchPress = useCallback(() => {
     console.log('[MapSearch] Search bar pressed');
     router.push('/search-modal');
@@ -304,17 +299,9 @@ export default function MapSearchScreen() {
         onPress={handleSearchPress}
         style={[styles.searchBar, { top: insets.top + 12 }]}
       >
-        <Search size={16} color={MADAR_COLORS.gold} />
+        <Search size={16} color='#666' />
         <Text style={styles.searchText}>All treatments · Map area</Text>
-        <SlidersHorizontal size={16} color={MADAR_COLORS.textSecondary} />
-      </AnimatedPressable>
-
-      {/* Back button */}
-      <AnimatedPressable
-        onPress={handleBack}
-        style={[styles.backBtn, { top: insets.top + 68 }]}
-      >
-        <ArrowLeft size={18} color={MADAR_COLORS.text} />
+        <SlidersHorizontal size={16} color='#666' />
       </AnimatedPressable>
 
       {/* Bottom sheet */}
@@ -332,6 +319,12 @@ export default function MapSearchScreen() {
           contentContainerStyle={styles.filterChipsContent}
           style={styles.filterChipsScroll}
         >
+          <AnimatedPressable
+            onPress={() => console.log('[MapSearch] Filter icon pressed')}
+            style={styles.filterIconBtn}
+          >
+            <SlidersHorizontal size={16} color={MADAR_COLORS.text} />
+          </AnimatedPressable>
           {FILTER_CHIPS.map((chip) => (
             <AnimatedPressable
               key={chip.id}
@@ -442,30 +435,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: 'rgba(13,13,20,0.95)',
+    backgroundColor: 'rgba(255,255,255,0.97)',
     borderRadius: 28,
-    borderWidth: 1,
-    borderColor: 'rgba(201,168,76,0.3)',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 13,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
   },
   searchText: {
     flex: 1,
-    fontSize: 14,
-    color: MADAR_COLORS.textSecondary,
+    fontSize: 15,
+    color: '#1a1a1a',
     fontWeight: '500',
-  },
-  backBtn: {
-    position: 'absolute',
-    left: 16,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(13,13,20,0.9)',
-    borderWidth: 1,
-    borderColor: MADAR_COLORS.border,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   bottomSheet: {
     position: 'absolute',
@@ -504,6 +488,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     gap: 8,
   },
+  filterIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: MADAR_COLORS.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: MADAR_COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   filterChip: {
     backgroundColor: MADAR_COLORS.surfaceSecondary,
     borderRadius: 20,
@@ -535,7 +529,7 @@ const styles = StyleSheet.create({
   },
   venueImage: {
     width: '100%',
-    height: 200,
+    height: 220,
     borderRadius: 16,
   },
   heartBtn: {

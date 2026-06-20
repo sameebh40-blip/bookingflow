@@ -88,7 +88,7 @@ const MOCK_REVIEWS: Review[] = [
   { id: '3', name: 'Khalid S', initials: 'KS', rating: 4, comment: 'Great haircut, very professional staff.', date: 'Mon, Jun 14, 2026 at 3:22 PM' },
 ];
 
-const VENUE_IMAGES = [
+const VENUE_IMAGES_FALLBACK = [
   'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800',
   'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800',
   'https://images.unsplash.com/photo-1599351431202-1e0f0137899a?w=800',
@@ -222,66 +222,79 @@ export default function VenueDetailScreen() {
         contentContainerStyle={{ paddingBottom: 120 }}
       >
         {/* ── PHOTO CAROUSEL ── */}
-        <View style={{ height: 300, position: 'relative' }}>
-          <FlatList
-            data={VENUE_IMAGES}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onMomentumScrollEnd={(e) => {
-              const index = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
-              setCurrentImage(index);
-            }}
-            renderItem={({ item }) => (
-              <Image
-                source={resolveImageSource(item)}
-                style={{ width: screenWidth, height: 300 }}
-                resizeMode="cover"
+        {(() => {
+          const venueImages = venue.image_url
+            ? [venue.image_url, ...VENUE_IMAGES_FALLBACK.filter(u => u !== venue.image_url).slice(0, 2)]
+            : VENUE_IMAGES_FALLBACK;
+          return (
+            <View style={{ height: 300, position: 'relative' }}>
+              <FlatList
+                data={venueImages}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onMomentumScrollEnd={(e) => {
+                  const index = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
+                  console.log('[VenueDetail] Photo swiped to index:', index);
+                  setCurrentImage(index);
+                }}
+                renderItem={({ item }) => (
+                  <Image
+                    source={resolveImageSource(item)}
+                    style={{ width: screenWidth, height: 300 }}
+                    resizeMode="cover"
+                  />
+                )}
+                keyExtractor={(_, i) => String(i)}
               />
-            )}
-            keyExtractor={(_, i) => String(i)}
-          />
-          <LinearGradient
-            colors={['rgba(0,0,0,0.45)', 'transparent']}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 100 }}
-          />
-          {/* Back */}
-          <AnimatedPressable
-            onPress={() => {
-              console.log('[VenueDetail] Back pressed');
-              router.back();
-            }}
-            style={[styles.carouselBtn, { top: insets.top + 12, left: 16 }]}
-          >
-            <ArrowLeft size={20} color="#fff" />
-          </AnimatedPressable>
-          {/* Share + Heart */}
-          <View style={{ position: 'absolute', top: insets.top + 12, right: 16, flexDirection: 'row', gap: 8 }}>
-            <AnimatedPressable
-              onPress={() => console.log('[VenueDetail] Share pressed')}
-              style={styles.carouselBtn}
-            >
-              <Share2 size={18} color="#fff" />
-            </AnimatedPressable>
-            <AnimatedPressable
-              onPress={() => {
-                console.log('[VenueDetail] Favourite toggled:', !isFavourite);
-                setIsFavourite(f => !f);
-              }}
-              style={styles.carouselBtn}
-            >
-              <Heart
-                size={18}
-                color={isFavourite ? MADAR_COLORS.danger : '#fff'}
-                fill={isFavourite ? MADAR_COLORS.danger : 'transparent'}
+              <LinearGradient
+                colors={['rgba(0,0,0,0.45)', 'transparent']}
+                style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 100 }}
               />
-            </AnimatedPressable>
-          </View>
-          {/* Counter */}
-          <View style={styles.imageCounter}>
-            <Text style={styles.imageCounterText}>{currentImage + 1}/{VENUE_IMAGES.length}</Text>
-          </View>
-        </View>
+              {/* Back */}
+              <AnimatedPressable
+                onPress={() => {
+                  console.log('[VenueDetail] Back pressed');
+                  router.back();
+                }}
+                style={[styles.carouselBtn, { top: insets.top + 12, left: 16 }]}
+              >
+                <ArrowLeft size={20} color="#fff" />
+              </AnimatedPressable>
+              {/* Share + Heart */}
+              <View style={{ position: 'absolute', top: insets.top + 12, right: 16, flexDirection: 'row', gap: 8 }}>
+                <AnimatedPressable
+                  onPress={() => console.log('[VenueDetail] Share pressed')}
+                  style={styles.carouselBtn}
+                >
+                  <Share2 size={18} color="#fff" />
+                </AnimatedPressable>
+                <AnimatedPressable
+                  onPress={() => {
+                    console.log('[VenueDetail] Favourite toggled:', !isFavourite);
+                    setIsFavourite(f => !f);
+                  }}
+                  style={styles.carouselBtn}
+                >
+                  <Heart
+                    size={18}
+                    color={isFavourite ? MADAR_COLORS.danger : '#fff'}
+                    fill={isFavourite ? MADAR_COLORS.danger : 'transparent'}
+                  />
+                </AnimatedPressable>
+              </View>
+              {/* Dot indicators */}
+              <View style={styles.dotRow}>
+                {venueImages.map((_, i) => (
+                  <View
+                    key={i}
+                    style={[styles.dot, i === currentImage && styles.dotActive]}
+                  />
+                ))}
+              </View>
+            </View>
+          );
+        })()}
 
         {/* ── VENUE INFO CARD ── */}
         <View style={styles.infoCard}>
@@ -291,7 +304,7 @@ export default function VenueDetailScreen() {
             <Star size={14} color={MADAR_COLORS.gold} fill={MADAR_COLORS.gold} />
             <Text style={styles.ratingText}>{ratingFixed}</Text>
             <Text style={styles.reviewCount}>({reviewCountText})</Text>
-            <Text style={styles.dot}>·</Text>
+            <Text style={styles.separatorDot}>·</Text>
             <Clock size={13} color={openStatusColor} />
             <Text style={[styles.openText, { color: openStatusColor }]}>{openStatusText}</Text>
           </View>
@@ -558,16 +571,25 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.15)',
   },
-  imageCounter: {
+  dotRow: {
     position: 'absolute',
     bottom: 12,
-    right: 12,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
   },
-  imageCounterText: { fontSize: 12, color: '#fff', fontWeight: '600' },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+  },
+  dotActive: {
+    backgroundColor: '#fff',
+    width: 18,
+  },
   infoCard: {
     backgroundColor: MADAR_COLORS.surface,
     paddingHorizontal: 20,
@@ -580,7 +602,7 @@ const styles = StyleSheet.create({
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 8 },
   ratingText: { fontSize: 14, fontWeight: '700', color: MADAR_COLORS.gold },
   reviewCount: { fontSize: 13, color: MADAR_COLORS.textSecondary },
-  dot: { fontSize: 13, color: MADAR_COLORS.textTertiary },
+  separatorDot: { fontSize: 13, color: MADAR_COLORS.textTertiary },
   openText: { fontSize: 13, fontWeight: '500' },
   addressPill: {
     flexDirection: 'row',

@@ -32,7 +32,6 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
-import { NotificationBell } from "@/components/NotificationBell";
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/utils/supabase';
 
@@ -101,11 +100,6 @@ const CATEGORIES = [
   { id: 'home', label: 'Home service', Icon: HomeIcon },
 ];
 
-const RANK_COLORS: Record<number, string> = {
-  1: '#C9A84C',
-  2: '#A8A8A8',
-  3: '#CD7F32',
-};
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: '' };
@@ -184,40 +178,22 @@ function CarouselVenueCard({ venue, onPress }: { venue: Venue; onPress: () => vo
   );
 }
 
-function BarberRectCard({ barber, onPress }: { barber: Barber; onPress: () => void }) {
-  const rankColor = RANK_COLORS[barber.rank] ?? MADAR_COLORS.textSecondary;
-  const borderWidth = barber.rank === 1 ? 3 : 2;
-  const ratingStr = Number(barber.rating).toFixed(1);
-  const bookingsText = `${barber.bookings} bookings`;
-
+function SimpleBarberCard({ barber, onPress }: { barber: Barber; onPress: () => void }) {
   return (
-    <AnimatedPressable onPress={onPress} style={styles.barberRectCard}>
-      {/* Avatar with rank badge */}
-      <View style={{ position: 'relative' }}>
-        <Image
-          source={resolveImageSource(barber.avatar)}
-          style={[styles.barberRectAvatar, { borderWidth, borderColor: rankColor }]}
-        />
-        <View style={[styles.barberRankBadge, { backgroundColor: rankColor }]}>
-          <Text style={styles.barberRankBadgeText}>{barber.rank}</Text>
-        </View>
-      </View>
-      {/* Star + rating */}
-      <View style={styles.barberRectRatingRow}>
-        <Star size={12} color={MADAR_COLORS.gold} fill={MADAR_COLORS.gold} />
-        <Text style={styles.barberRectRating}>{ratingStr}</Text>
-      </View>
-      {/* TOP BARBER pill */}
-      <View style={styles.topBarberPill}>
-        <Text style={styles.topBarberPillText}>TOP BARBER</Text>
-      </View>
-      {/* Name */}
-      <Text style={styles.barberRectName} numberOfLines={1}>{barber.name}</Text>
-      {/* Bookings */}
-      <Text style={styles.barberRectBookings}>{bookingsText}</Text>
+    <AnimatedPressable onPress={onPress} style={simpleBarberStyles.card}>
+      <Image source={resolveImageSource(barber.avatar)} style={simpleBarberStyles.avatar} />
+      <Text style={simpleBarberStyles.name} numberOfLines={1}>{barber.name}</Text>
+      <Text style={simpleBarberStyles.specialty} numberOfLines={1}>{barber.specialty ?? 'Barber'}</Text>
     </AnimatedPressable>
   );
 }
+
+const simpleBarberStyles = StyleSheet.create({
+  card: { width: 80, alignItems: 'center', gap: 6 },
+  avatar: { width: 64, height: 64, borderRadius: 32, borderWidth: 2, borderColor: MADAR_COLORS.border },
+  name: { fontSize: 12, fontWeight: '700', color: MADAR_COLORS.text, textAlign: 'center' },
+  specialty: { fontSize: 10, color: MADAR_COLORS.textSecondary, textAlign: 'center' },
+});
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -375,7 +351,6 @@ export default function HomeScreen() {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Book again</Text>
-          <NotificationBell />
           <AnimatedPressable onPress={() => console.log('[Home] See all rebook pressed')}>
             <Text style={styles.seeAll}>See all</Text>
           </AnimatedPressable>
@@ -462,15 +437,15 @@ export default function HomeScreen() {
         </View>
 
         <FlatList
-          data={barbers.slice(0, 5)}
+          data={barbers.slice(0, 10)}
           keyExtractor={(item) => item.id}
           horizontal
           showsHorizontalScrollIndicator={false}
-          snapToInterval={152}
+          snapToInterval={92}
           decelerationRate="fast"
           contentContainerStyle={styles.barbersListContent}
           renderItem={({ item }) => (
-            <BarberRectCard
+            <SimpleBarberCard
               barber={item}
               onPress={() => handleBarberPress(item.id, item.name)}
             />
@@ -738,73 +713,10 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     backgroundColor: MADAR_COLORS.surfaceSecondary,
   },
-  // Barber rect cards (horizontal FlatList)
+  // Barber simple cards (horizontal FlatList)
   barbersListContent: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     gap: 12,
-  },
-  barberRectCard: {
-    width: 140,
-    backgroundColor: MADAR_COLORS.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: MADAR_COLORS.border,
-    padding: 12,
-    alignItems: 'center',
-    gap: 8,
-  },
-  barberRectAvatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-  },
-  barberRankBadge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  barberRankBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#fff',
-  },
-  barberRectRatingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  barberRectRating: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: MADAR_COLORS.gold,
-  },
-  topBarberPill: {
-    backgroundColor: MADAR_COLORS.goldMuted,
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderWidth: 1,
-    borderColor: MADAR_COLORS.goldBorder,
-  },
-  topBarberPillText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: MADAR_COLORS.gold,
-  },
-  barberRectName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: MADAR_COLORS.text,
-    textAlign: 'center',
-  },
-  barberRectBookings: {
-    fontSize: 11,
-    color: MADAR_COLORS.textSecondary,
   },
   // Reels
   reelCard: {

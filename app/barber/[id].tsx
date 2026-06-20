@@ -196,7 +196,7 @@ export default function BarberProfileScreen() {
         {/* Back button */}
         <AnimatedPressable
           onPress={handleBack}
-          style={[styles.heroBtn, { top: insets.top + 12, left: 16 }]}
+          style={[styles.heroBtn, { position: 'absolute', top: insets.top + 12, left: 16 }]}
         >
           <ArrowLeft size={20} color={MADAR_COLORS.text} />
         </AnimatedPressable>
@@ -380,7 +380,6 @@ const styles = StyleSheet.create({
     height: 160,
   },
   heroBtn: {
-    position: 'absolute',
     width: 40,
     height: 40,
     borderRadius: 20,
