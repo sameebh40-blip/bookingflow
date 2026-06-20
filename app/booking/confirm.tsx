@@ -9,7 +9,17 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, CheckCircle, Calendar, Clock, User } from 'lucide-react-native';
+import {
+  ArrowLeft,
+  Check,
+  Calendar,
+  Clock,
+  Scissors,
+  DollarSign,
+  MapPin,
+  MessageSquare,
+  BookOpen,
+} from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
@@ -37,16 +47,31 @@ const MOCK_SERVICES: Record<string, { name: string; price: number }> = {
   '2': { name: 'Fade + Beard Trim', price: 8 },
   '3': { name: 'Hot Towel Shave', price: 7 },
   '4': { name: 'Hair + Beard Combo', price: 12 },
-  '5': { name: 'Kids Haircut', price: 4 },
+  '5': { name: 'kids', price: 0 },
   '6': { name: 'Beard Styling', price: 5 },
 };
 
-const MOCK_STAFF: Record<string, string> = {
-  'any': 'Any available',
-  '1': 'Ahmed Al-Rashid',
-  '2': 'Khalid Hassan',
-  '3': 'Omar Saleh',
+const MOCK_STAFF: Record<string, { name: string; avatar: string }> = {
+  'any': { name: 'Any available', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200' },
+  '1': { name: 'majed barber', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200' },
+  '2': { name: 'Khalid Hassan', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200' },
+  '3': { name: 'Omar Saleh', avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200' },
 };
+
+const STAR_PARTICLES = [
+  { top: '8%', left: '10%', size: 6, opacity: 0.6, char: '✦' },
+  { top: '12%', left: '80%', size: 8, opacity: 0.4, char: '✦' },
+  { top: '5%', left: '55%', size: 5, opacity: 0.5, char: '·' },
+  { top: '20%', left: '25%', size: 4, opacity: 0.3, char: '✦' },
+  { top: '18%', left: '70%', size: 6, opacity: 0.5, char: '·' },
+  { top: '30%', left: '5%', size: 5, opacity: 0.4, char: '✦' },
+  { top: '35%', left: '90%', size: 7, opacity: 0.3, char: '·' },
+  { top: '25%', left: '45%', size: 4, opacity: 0.6, char: '✦' },
+  { top: '40%', left: '15%', size: 6, opacity: 0.3, char: '·' },
+  { top: '45%', left: '75%', size: 5, opacity: 0.5, char: '✦' },
+  { top: '55%', left: '30%', size: 4, opacity: 0.4, char: '·' },
+  { top: '60%', left: '85%', size: 6, opacity: 0.3, char: '✦' },
+];
 
 export default function BookingConfirmScreen() {
   const insets = useSafeAreaInsets();
@@ -66,10 +91,16 @@ export default function BookingConfirmScreen() {
   const serviceIds = (services ?? '').split(',').filter(Boolean);
   const selectedServices = serviceIds.map(id => MOCK_SERVICES[id]).filter(Boolean);
   const totalPrice = selectedServices.reduce((sum, s) => sum + s.price, 0);
-  const staffName = MOCK_STAFF[staffId ?? 'any'] ?? 'Any available';
+  const staffInfo = MOCK_STAFF[staffId ?? 'any'] ?? MOCK_STAFF['any'];
+  const staffName = staffInfo.name;
+  const staffAvatar = staffInfo.avatar;
+
+  const serviceNameDisplay = selectedServices.length > 0 ? selectedServices[0].name : 'kids';
 
   const dateObj = date ? new Date(date) : new Date();
-  const dateDisplay = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+  const dateDisplay = dateObj.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
+  const priceDisplay = `${totalPrice.toFixed(3)} BHD`;
+  const timeDisplay = time ?? '17:30';
 
   const handleConfirm = useCallback(async () => {
     console.log('[Booking/Confirm] Confirm booking pressed, venueId:', venueId, 'services:', serviceIds, 'staff:', staffId, 'date:', date, 'time:', time);
@@ -101,10 +132,28 @@ export default function BookingConfirmScreen() {
     }
   }, [user, venueId, serviceIds, staffId, date, time, totalPrice]);
 
-  const handleDone = useCallback(() => {
-    console.log('[Booking/Confirm] Done pressed, navigating to bookings');
+  const handleViewBookings = useCallback(() => {
+    console.log('[Booking/Confirm] View Booking pressed, navigating to bookings');
     router.replace('/(tabs)/bookings');
   }, [router]);
+
+  const handleAddCalendar = useCallback(() => {
+    console.log('[Booking/Confirm] Add to Calendar pressed');
+  }, []);
+
+  const handleGetDirections = useCallback(() => {
+    console.log('[Booking/Confirm] Get Directions pressed');
+  }, []);
+
+  const handleViewBookingCard = useCallback(() => {
+    console.log('[Booking/Confirm] View Booking card pressed');
+    router.replace('/(tabs)/bookings');
+  }, [router]);
+
+  const handleMessageShop = useCallback(() => {
+    console.log('[Booking/Confirm] Message Shop pressed');
+    router.push(`/chat/${venueId}`);
+  }, [router, venueId]);
 
   const handleBack = useCallback(() => {
     console.log('[Booking/Confirm] Back pressed');
@@ -113,24 +162,105 @@ export default function BookingConfirmScreen() {
 
   if (confirmed) {
     return (
-      <View style={[styles.container, styles.successContainer, { paddingTop: insets.top }]}>
-        <View style={styles.successIcon}>
-          <CheckCircle size={64} color={MADAR_COLORS.success} />
-        </View>
-        <Text style={styles.successTitle}>Booking confirmed!</Text>
-        <Text style={styles.successSubtitle}>
-          Your appointment has been booked successfully. We'll send you a reminder before your visit.
-        </Text>
-        <AnimatedPressable onPress={handleDone} style={styles.doneBtn}>
-          <LinearGradient
-            colors={['#C9A84C', '#E8C96A']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.doneBtnGradient}
+      <View style={[styles.confirmedContainer, { paddingTop: insets.top }]}>
+        {/* Star particles */}
+        {STAR_PARTICLES.map((p, i) => (
+          <Text
+            key={i}
+            style={{
+              position: 'absolute',
+              top: p.top as any,
+              left: p.left as any,
+              fontSize: p.size,
+              color: i % 3 === 0 ? MADAR_COLORS.gold : '#fff',
+              opacity: p.opacity,
+            }}
           >
-            <Text style={styles.doneBtnText}>View my bookings</Text>
-          </LinearGradient>
-        </AnimatedPressable>
+            {p.char}
+          </Text>
+        ))}
+
+        <ScrollView
+          contentContainerStyle={[styles.confirmedContent, { paddingBottom: insets.bottom + 24 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Gold checkmark */}
+          <View style={styles.checkCircle}>
+            <Check size={40} color="#000" strokeWidth={3} />
+          </View>
+
+          <Text style={styles.confirmedTitle}>Booking Confirmed!</Text>
+          <Text style={styles.confirmedSubtitle}>Your appointment is all set.</Text>
+
+          {/* Barber card */}
+          <View style={styles.barberCard}>
+            <Image source={resolveImageSource(staffAvatar)} style={styles.barberAvatar} />
+            <View style={styles.barberInfo}>
+              <Text style={styles.barberName}>{staffName}</Text>
+              <Text style={styles.barberSpecialty}>Fade Specialist</Text>
+            </View>
+          </View>
+
+          {/* Details card */}
+          <View style={styles.detailsCard}>
+            <View style={styles.detailRow}>
+              <Scissors size={16} color={MADAR_COLORS.gold} />
+              <Text style={styles.detailLabel}>Service</Text>
+              <Text style={styles.detailValue}>{serviceNameDisplay}</Text>
+            </View>
+            <View style={styles.detailDivider} />
+            <View style={styles.detailRow}>
+              <Calendar size={16} color={MADAR_COLORS.gold} />
+              <Text style={styles.detailLabel}>Date</Text>
+              <Text style={styles.detailValue}>{dateDisplay}</Text>
+            </View>
+            <View style={styles.detailDivider} />
+            <View style={styles.detailRow}>
+              <Clock size={16} color={MADAR_COLORS.gold} />
+              <Text style={styles.detailLabel}>Time</Text>
+              <Text style={styles.detailValue}>{timeDisplay}</Text>
+            </View>
+            <View style={styles.detailDivider} />
+            <View style={styles.detailRow}>
+              <DollarSign size={16} color={MADAR_COLORS.gold} />
+              <Text style={styles.detailLabel}>Price</Text>
+              <Text style={styles.detailValue}>{priceDisplay}</Text>
+            </View>
+          </View>
+
+          {/* 2x2 action grid */}
+          <View style={styles.actionGrid}>
+            <AnimatedPressable onPress={handleAddCalendar} style={styles.actionCard}>
+              <Calendar size={20} color={MADAR_COLORS.gold} />
+              <Text style={styles.actionLabel}>Add to Calendar</Text>
+            </AnimatedPressable>
+            <AnimatedPressable onPress={handleGetDirections} style={styles.actionCard}>
+              <MapPin size={20} color={MADAR_COLORS.gold} />
+              <Text style={styles.actionLabel}>Get Directions</Text>
+            </AnimatedPressable>
+            <AnimatedPressable onPress={handleViewBookingCard} style={styles.actionCard}>
+              <BookOpen size={20} color={MADAR_COLORS.gold} />
+              <Text style={styles.actionLabel}>View Booking</Text>
+            </AnimatedPressable>
+            <AnimatedPressable onPress={handleMessageShop} style={styles.actionCard}>
+              <MessageSquare size={20} color={MADAR_COLORS.gold} />
+              <Text style={styles.actionLabel}>Message Shop</Text>
+            </AnimatedPressable>
+          </View>
+
+          {/* View Booking button */}
+          <AnimatedPressable onPress={handleViewBookings} style={styles.viewBookingBtn}>
+            <LinearGradient
+              colors={['#C9A84C', '#E8C96A']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.viewBookingGradient}
+            >
+              <BookOpen size={18} color={MADAR_COLORS.background} />
+              <Text style={styles.viewBookingText}>View Booking</Text>
+            </LinearGradient>
+          </AnimatedPressable>
+        </ScrollView>
       </View>
     );
   }
@@ -170,15 +300,15 @@ export default function BookingConfirmScreen() {
             <Text style={styles.detailLabel}>Date</Text>
             <Text style={styles.detailValue}>{dateDisplay}</Text>
           </View>
-          <View style={styles.divider} />
+          <View style={styles.detailDivider} />
           <View style={styles.detailRow}>
             <Clock size={16} color={MADAR_COLORS.gold} />
             <Text style={styles.detailLabel}>Time</Text>
-            <Text style={styles.detailValue}>{time ?? 'N/A'}</Text>
+            <Text style={styles.detailValue}>{timeDisplay}</Text>
           </View>
-          <View style={styles.divider} />
+          <View style={styles.detailDivider} />
           <View style={styles.detailRow}>
-            <User size={16} color={MADAR_COLORS.gold} />
+            <Scissors size={16} color={MADAR_COLORS.gold} />
             <Text style={styles.detailLabel}>Specialist</Text>
             <Text style={styles.detailValue}>{staffName}</Text>
           </View>
@@ -227,18 +357,139 @@ export default function BookingConfirmScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: MADAR_COLORS.background },
-  successContainer: { justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32, gap: 16 },
-  successIcon: {
-    width: 120, height: 120, borderRadius: 30,
-    backgroundColor: 'rgba(76,175,125,0.1)',
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 8,
+  // Confirmed state
+  confirmedContainer: {
+    flex: 1,
+    backgroundColor: MADAR_COLORS.background,
   },
-  successTitle: { fontSize: 28, fontWeight: '800', color: MADAR_COLORS.text, letterSpacing: -0.5 },
-  successSubtitle: { fontSize: 15, color: MADAR_COLORS.textSecondary, textAlign: 'center', lineHeight: 22 },
-  doneBtn: { marginTop: 16, width: '100%', borderRadius: 12 },
-  doneBtnGradient: { paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
-  doneBtnText: { fontSize: 16, fontWeight: '700', color: MADAR_COLORS.background },
+  confirmedContent: {
+    paddingHorizontal: 24,
+    paddingTop: 40,
+    alignItems: 'center',
+    gap: 16,
+  },
+  checkCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: MADAR_COLORS.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  confirmedTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: MADAR_COLORS.text,
+    letterSpacing: -0.5,
+    textAlign: 'center',
+  },
+  confirmedSubtitle: {
+    fontSize: 14,
+    color: MADAR_COLORS.textSecondary,
+    textAlign: 'center',
+  },
+  barberCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: MADAR_COLORS.surface,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: MADAR_COLORS.border,
+    width: '100%',
+  },
+  barberAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  barberInfo: {
+    gap: 3,
+  },
+  barberName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: MADAR_COLORS.text,
+  },
+  barberSpecialty: {
+    fontSize: 13,
+    color: MADAR_COLORS.textSecondary,
+  },
+  detailsCard: {
+    backgroundColor: MADAR_COLORS.surface,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: MADAR_COLORS.border,
+    width: '100%',
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+  },
+  detailLabel: {
+    fontSize: 14,
+    color: MADAR_COLORS.textSecondary,
+    flex: 1,
+  },
+  detailValue: {
+    fontSize: 14,
+    color: MADAR_COLORS.text,
+    fontWeight: '600',
+    textAlign: 'right',
+    flexShrink: 1,
+  },
+  detailDivider: {
+    height: 1,
+    backgroundColor: MADAR_COLORS.divider,
+  },
+  actionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    width: '100%',
+  },
+  actionCard: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: MADAR_COLORS.surface,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: MADAR_COLORS.border,
+  },
+  actionLabel: {
+    fontSize: 13,
+    color: MADAR_COLORS.text,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  viewBookingBtn: {
+    width: '100%',
+    borderRadius: 28,
+    overflow: 'hidden',
+    marginTop: 4,
+  },
+  viewBookingGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 16,
+    borderRadius: 28,
+  },
+  viewBookingText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: MADAR_COLORS.background,
+  },
+  // Pre-confirm state
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16 },
   backBtn: {
     width: 40, height: 40, borderRadius: 20,
@@ -267,17 +518,6 @@ const styles = StyleSheet.create({
   venueInfo: { flex: 1, gap: 4 },
   venueName: { fontSize: 16, fontWeight: '700', color: MADAR_COLORS.text },
   venueAddress: { fontSize: 12, color: MADAR_COLORS.textSecondary },
-  detailsCard: {
-    backgroundColor: MADAR_COLORS.surface,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: MADAR_COLORS.border,
-  },
-  detailRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
-  detailLabel: { fontSize: 14, color: MADAR_COLORS.textSecondary, flex: 1 },
-  detailValue: { fontSize: 14, color: MADAR_COLORS.text, fontWeight: '600' },
-  divider: { height: 1, backgroundColor: MADAR_COLORS.divider },
   servicesCard: {
     backgroundColor: MADAR_COLORS.surface,
     borderRadius: 16,
@@ -299,7 +539,7 @@ const styles = StyleSheet.create({
     backgroundColor: MADAR_COLORS.surface,
     borderTopWidth: 1, borderTopColor: MADAR_COLORS.border,
   },
-  confirmBtn: { borderRadius: 12 },
-  confirmBtnGradient: { paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
+  confirmBtn: { borderRadius: 28 },
+  confirmBtnGradient: { paddingVertical: 16, borderRadius: 28, alignItems: 'center' },
   confirmBtnText: { fontSize: 16, fontWeight: '700', color: MADAR_COLORS.background },
 });

@@ -24,7 +24,7 @@ export default function TabLayout() {
         <Stack.Screen name="messages/index" />
         <Stack.Screen name="profile/index" />
       </Stack>
-      <FloatingTabBar tabs={TABS} containerWidth={screenWidth - 48} />
+      <FloatingTabBar tabs={TABS} containerWidth={screenWidth - 32} />
     </View>
   );
 }

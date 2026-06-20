@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft } from 'lucide-react-native';
+import { ArrowLeft, User, ChevronDown, Plus, Check } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
@@ -39,26 +39,26 @@ function generateDates(count: number): DateItem[] {
 }
 
 const TIME_SLOTS = [
-  { time: '9:00 AM', available: true },
-  { time: '9:30 AM', available: true },
-  { time: '10:00 AM', available: false },
-  { time: '10:30 AM', available: true },
-  { time: '11:00 AM', available: true },
-  { time: '11:30 AM', available: false },
-  { time: '12:00 PM', available: true },
-  { time: '12:30 PM', available: true },
-  { time: '1:00 PM', available: false },
-  { time: '1:30 PM', available: true },
-  { time: '2:00 PM', available: true },
-  { time: '2:30 PM', available: true },
-  { time: '3:00 PM', available: false },
-  { time: '3:30 PM', available: true },
-  { time: '4:00 PM', available: true },
-  { time: '4:30 PM', available: true },
-  { time: '5:00 PM', available: true },
-  { time: '5:30 PM', available: false },
-  { time: '6:00 PM', available: true },
-  { time: '6:30 PM', available: true },
+  { time: '09:00', available: true, booked: false },
+  { time: '09:30', available: true, booked: false },
+  { time: '10:00', available: true, booked: true },
+  { time: '10:30', available: true, booked: false },
+  { time: '11:00', available: true, booked: false },
+  { time: '11:30', available: true, booked: true },
+  { time: '12:00', available: true, booked: false },
+  { time: '12:30', available: true, booked: false },
+  { time: '13:00', available: true, booked: true },
+  { time: '13:30', available: true, booked: false },
+  { time: '14:00', available: true, booked: false },
+  { time: '14:30', available: true, booked: false },
+  { time: '15:00', available: true, booked: false },
+  { time: '15:30', available: true, booked: false },
+  { time: '16:00', available: true, booked: false },
+  { time: '16:30', available: true, booked: false },
+  { time: '17:00', available: true, booked: false },
+  { time: '17:30', available: true, booked: false },
+  { time: '18:00', available: true, booked: false },
+  { time: '18:30', available: true, booked: false },
 ];
 
 function ProgressDots({ step }: { step: number }) {
@@ -78,6 +78,8 @@ export default function BookingDatetimeScreen() {
   const dates = generateDates(14);
   const [selectedDate, setSelectedDate] = useState(0);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
+
+  const staffName = staffId && staffId !== 'any' ? 'Barber selected' : 'Any barber';
 
   const handleDateSelect = useCallback((index: number, day: string) => {
     console.log('[Booking/DateTime] Date selected:', index, day);
@@ -109,7 +111,7 @@ export default function BookingDatetimeScreen() {
           <ArrowLeft size={20} color={MADAR_COLORS.text} />
         </AnimatedPressable>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Pick a date & time</Text>
+          <Text style={styles.headerTitle}>Select date and time</Text>
         </View>
         <View style={{ width: 40 }} />
       </View>
@@ -117,8 +119,18 @@ export default function BookingDatetimeScreen() {
       <ProgressDots step={3} />
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Barber pill */}
+        <AnimatedPressable
+          onPress={() => console.log('[Booking/DateTime] Barber pill pressed')}
+          style={styles.barberPill}
+        >
+          <User size={14} color={MADAR_COLORS.textSecondary} />
+          <Text style={styles.barberPillText}>{staffName}</Text>
+          <ChevronDown size={14} color={MADAR_COLORS.textSecondary} />
+        </AnimatedPressable>
+
         {/* Date strip */}
-        <Text style={styles.sectionLabel}>Select date</Text>
+        <Text style={styles.sectionLabel}>Select a date</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateStrip}>
           {dates.map((d, index) => {
             const isSelected = selectedDate === index;
@@ -128,37 +140,48 @@ export default function BookingDatetimeScreen() {
                 onPress={() => handleDateSelect(index, d.day)}
                 style={[styles.dateItem, isSelected && styles.dateItemSelected]}
               >
-                <Text style={[styles.dateDayName, isSelected && styles.dateTextSelected]}>{d.day}</Text>
+                <Text style={[styles.dateDayName, isSelected && styles.dateTextSelected]}>{d.day.toUpperCase()}</Text>
                 <Text style={[styles.dateNumber, isSelected && styles.dateTextSelected]}>{d.date}</Text>
-                <Text style={[styles.dateMonth, isSelected && styles.dateTextSelected]}>{d.month}</Text>
+                <Text style={[styles.dateMonth, isSelected && styles.dateTextSelected]}>{d.month.toUpperCase()}</Text>
               </AnimatedPressable>
             );
           })}
         </ScrollView>
 
         {/* Time slots */}
-        <Text style={[styles.sectionLabel, { marginTop: 24 }]}>Select time</Text>
-        <View style={styles.timeGrid}>
+        <Text style={[styles.sectionLabel, { marginTop: 24 }]}>Pick a time</Text>
+        <View style={styles.timeList}>
           {TIME_SLOTS.map((slot) => {
             const isSelected = selectedTime === slot.time;
+            const isBooked = slot.booked;
+
+            if (isBooked) {
+              return (
+                <View key={slot.time} style={styles.timeRowBooked}>
+                  <Text style={styles.timeTextBooked}>{slot.time}</Text>
+                  <Text style={styles.bookedLabel}>Booked</Text>
+                </View>
+              );
+            }
+
             return (
               <AnimatedPressable
                 key={slot.time}
-                onPress={() => slot.available && handleTimeSelect(slot.time)}
-                disabled={!slot.available}
-                style={[
-                  styles.timeSlot,
-                  isSelected && styles.timeSlotSelected,
-                  !slot.available && styles.timeSlotUnavailable,
-                ]}
+                onPress={() => handleTimeSelect(slot.time)}
+                style={[styles.timeRow, isSelected && styles.timeRowSelected]}
               >
-                <Text style={[
-                  styles.timeSlotText,
-                  isSelected && styles.timeSlotTextSelected,
-                  !slot.available && styles.timeSlotTextUnavailable,
-                ]}>
+                <Text style={[styles.timeText, isSelected && styles.timeTextSelected]}>
                   {slot.time}
                 </Text>
+                {isSelected ? (
+                  <View style={styles.checkCircle}>
+                    <Check size={14} color="#000" strokeWidth={3} />
+                  </View>
+                ) : (
+                  <View style={styles.plusCircle}>
+                    <Plus size={14} color={MADAR_COLORS.textSecondary} strokeWidth={2} />
+                  </View>
+                )}
               </AnimatedPressable>
             );
           })}
@@ -167,16 +190,11 @@ export default function BookingDatetimeScreen() {
         <View style={{ height: 120 }} />
       </ScrollView>
 
+      {/* Full-width continue button */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
-        <View style={styles.bottomLeft}>
-          {selectedTime ? (
-            <Text style={styles.selectedInfo}>
-              {dates[selectedDate].day}, {dates[selectedDate].date} {dates[selectedDate].month} · {selectedTime}
-            </Text>
-          ) : (
-            <Text style={styles.noSelection}>Select a time slot</Text>
-          )}
-        </View>
+        {!selectedTime && (
+          <Text style={styles.noSelection}>Select a time slot</Text>
+        )}
         <AnimatedPressable
           onPress={handleContinue}
           disabled={!selectedTime}
@@ -214,6 +232,24 @@ const styles = StyleSheet.create({
   dotDone: { backgroundColor: MADAR_COLORS.goldMuted },
   scrollView: { flex: 1 },
   scrollContent: { paddingHorizontal: 20 },
+  barberPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: MADAR_COLORS.surface,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: MADAR_COLORS.border,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginBottom: 20,
+  },
+  barberPillText: {
+    fontSize: 14,
+    color: MADAR_COLORS.textSecondary,
+    fontWeight: '500',
+  },
   sectionLabel: { fontSize: 15, fontWeight: '700', color: MADAR_COLORS.text, marginBottom: 12 },
   dateStrip: { gap: 8, paddingBottom: 4 },
   dateItem: {
@@ -227,35 +263,89 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   dateItemSelected: { backgroundColor: MADAR_COLORS.gold, borderColor: MADAR_COLORS.gold },
-  dateDayName: { fontSize: 11, color: MADAR_COLORS.textSecondary, fontWeight: '500' },
-  dateNumber: { fontSize: 20, fontWeight: '800', color: MADAR_COLORS.text },
-  dateMonth: { fontSize: 10, color: MADAR_COLORS.textTertiary },
+  dateDayName: { fontSize: 10, color: MADAR_COLORS.textSecondary, fontWeight: '600', letterSpacing: 0.5 },
+  dateNumber: { fontSize: 22, fontWeight: '800', color: MADAR_COLORS.text },
+  dateMonth: { fontSize: 9, color: MADAR_COLORS.textTertiary, fontWeight: '600', letterSpacing: 0.5 },
   dateTextSelected: { color: MADAR_COLORS.background },
-  timeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  timeSlot: {
-    width: '30%',
-    paddingVertical: 12,
+  timeList: {
+    gap: 10,
+  },
+  timeRow: {
+    height: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
     borderRadius: 12,
     backgroundColor: MADAR_COLORS.surface,
     borderWidth: 1,
     borderColor: MADAR_COLORS.border,
+  },
+  timeRowSelected: {
+    backgroundColor: MADAR_COLORS.goldMuted,
+    borderColor: MADAR_COLORS.gold,
+  },
+  timeRowBooked: {
+    height: 56,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: 'rgba(232,84,84,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(232,84,84,0.3)',
   },
-  timeSlotSelected: { borderColor: MADAR_COLORS.gold, backgroundColor: MADAR_COLORS.goldMuted },
-  timeSlotUnavailable: { opacity: 0.35 },
-  timeSlotText: { fontSize: 13, color: MADAR_COLORS.text, fontWeight: '500' },
-  timeSlotTextSelected: { color: MADAR_COLORS.gold, fontWeight: '700' },
-  timeSlotTextUnavailable: { textDecorationLine: 'line-through', color: MADAR_COLORS.textTertiary },
+  timeText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: MADAR_COLORS.text,
+  },
+  timeTextSelected: {
+    color: MADAR_COLORS.gold,
+  },
+  timeTextBooked: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: MADAR_COLORS.danger,
+    textDecorationLine: 'line-through',
+  },
+  bookedLabel: {
+    fontSize: 13,
+    color: MADAR_COLORS.danger,
+    fontWeight: '600',
+  },
+  plusCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: MADAR_COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: MADAR_COLORS.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   bottomBar: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingTop: 16,
+    paddingHorizontal: 20,
+    paddingTop: 16,
     backgroundColor: MADAR_COLORS.surface,
-    borderTopWidth: 1, borderTopColor: MADAR_COLORS.border,
+    borderTopWidth: 1,
+    borderTopColor: MADAR_COLORS.border,
+    gap: 8,
   },
-  bottomLeft: { flex: 1 },
-  selectedInfo: { fontSize: 13, color: MADAR_COLORS.gold, fontWeight: '600' },
-  noSelection: { fontSize: 13, color: MADAR_COLORS.textTertiary },
-  continueBtn: { borderRadius: 12 },
-  continueBtnGradient: { paddingHorizontal: 28, paddingVertical: 14, borderRadius: 12 },
-  continueBtnText: { fontSize: 15, fontWeight: '700', color: MADAR_COLORS.background },
+  noSelection: {
+    fontSize: 13,
+    color: MADAR_COLORS.textTertiary,
+    textAlign: 'center',
+  },
+  continueBtn: { borderRadius: 28 },
+  continueBtnGradient: { paddingVertical: 16, borderRadius: 28, alignItems: 'center' },
+  continueBtnText: { fontSize: 16, fontWeight: '700', color: MADAR_COLORS.background },
 });

@@ -47,7 +47,7 @@ interface FloatingTabBarProps {
 
 export default function FloatingTabBar({
   tabs,
-  containerWidth = screenWidth - 48,
+  containerWidth = screenWidth - 32,
   borderRadius = 32,
   bottomMargin,
 }: FloatingTabBarProps) {
@@ -110,7 +110,7 @@ export default function FloatingTabBar({
       <View
         style={[
           styles.container,
-          { width: containerWidth, marginBottom: bottomMargin ?? 16 },
+          { width: containerWidth, marginBottom: bottomMargin ?? 8 },
         ]}
       >
         <BlurView
@@ -197,7 +197,7 @@ function TabItem({
     >
       <Animated.View style={[styles.tabContent, { transform: [{ scale: scaleAnim }] }]}>
         <IconComponent size={22} color={iconColor} strokeWidth={isActive ? 2.5 : 2} />
-        <Text style={[styles.tabLabel, { color: labelColor, fontWeight: isActive ? '600' : '400' }]}>
+        <Text style={[styles.tabLabel, { color: labelColor, fontWeight: isActive ? '600' : '400' }]} numberOfLines={1}>
           {tab.label}
         </Text>
       </Animated.View>
@@ -271,7 +271,7 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   tabLabel: {
-    fontSize: 10,
+    fontSize: 9,
     letterSpacing: 0.2,
   },
 });
