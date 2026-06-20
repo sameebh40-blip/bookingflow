@@ -110,6 +110,8 @@ export default function VenueDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [venue, setVenue] = useState<Venue | null>(null);
   const [services, setServices] = useState<Service[]>([]);
+  const [reviews, setReviews] = useState<Review[]>(MOCK_REVIEWS);
+  const [staff, setStaff] = useState<Staff[]>(MOCK_STAFF);
   const [isFavourite, setIsFavourite] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
   const [currentImage, setCurrentImage] = useState(0);
@@ -128,17 +130,33 @@ export default function VenueDetailScreen() {
   }, [id]);
 
   const fetchVenueData = async () => {
-    console.log('[VenueDetail] Fetching venue:', id);
+    console.log('[VenueDetail] Fetching venue data for id:', id);
     try {
-      const { data, error } = await supabase.from('venues').select('*').eq('id', id).single();
-      setVenue(error || !data ? (MOCK_VENUES[id ?? '1'] ?? MOCK_VENUES['1']) : data);
-    } catch {
+      const [venueRes, servicesRes, reviewsRes, staffRes] = await Promise.all([
+        supabase.from('venues').select('*').eq('id', id).single(),
+        supabase.from('venue_services').select('*').eq('venue_id', id),
+        supabase.from('venue_reviews').select('*').eq('venue_id', id).order('created_at', { ascending: false }),
+        supabase.from('staff').select('*').eq('venue_id', id),
+      ]);
+
+      console.log('[VenueDetail] Venue fetch result:', venueRes.error?.message ?? 'ok');
+      setVenue(venueRes.error || !venueRes.data ? (MOCK_VENUES[id ?? '1'] ?? MOCK_VENUES['1']) : venueRes.data);
+
+      console.log('[VenueDetail] Services fetch result:', servicesRes.error?.message ?? 'ok', 'count:', servicesRes.data?.length ?? 0);
+      setServices(servicesRes.error || !servicesRes.data || servicesRes.data.length === 0 ? MOCK_SERVICES : servicesRes.data);
+
+      console.log('[VenueDetail] Reviews fetch result:', reviewsRes.error?.message ?? 'ok', 'count:', reviewsRes.data?.length ?? 0);
+      if (reviewsRes.data && reviewsRes.data.length > 0) {
+        setReviews(reviewsRes.data);
+      }
+
+      console.log('[VenueDetail] Staff fetch result:', staffRes.error?.message ?? 'ok', 'count:', staffRes.data?.length ?? 0);
+      if (staffRes.data && staffRes.data.length > 0) {
+        setStaff(staffRes.data);
+      }
+    } catch (err) {
+      console.log('[VenueDetail] Exception fetching venue data:', err);
       setVenue(MOCK_VENUES[id ?? '1'] ?? MOCK_VENUES['1']);
-    }
-    try {
-      const { data, error } = await supabase.from('services').select('*').eq('venue_id', id);
-      setServices(error || !data || data.length === 0 ? MOCK_SERVICES : data);
-    } catch {
       setServices(MOCK_SERVICES);
     }
   };
@@ -393,27 +411,28 @@ export default function VenueDetailScreen() {
             </AnimatedPressable>
           </View>
           <View style={{ flexDirection: 'row', gap: 20 }}>
-            {MOCK_STAFF.map((staff) => {
-              const staffRating = staff.rating.toFixed(1);
+            {staff.map((member) => {
+              const memberRating = Number(member.rating).toFixed(1);
+              const memberAvatar = member.avatar ?? member.avatar_url ?? '';
               return (
                 <AnimatedPressable
-                  key={staff.id}
+                  key={member.id}
                   onPress={() => {
-                    console.log('[VenueDetail] Staff pressed:', staff.id, staff.name);
-                    router.push(`/barber/${staff.id}`);
+                    console.log('[VenueDetail] Staff pressed:', member.id, member.name);
+                    router.push(`/barber/${member.id}`);
                   }}
                   style={{ alignItems: 'center', gap: 6 }}
                 >
                   <Image
-                    source={resolveImageSource(staff.avatar)}
+                    source={resolveImageSource(memberAvatar)}
                     style={{ width: 72, height: 72, borderRadius: 36 }}
                     resizeMode="cover"
                   />
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
                     <Star size={11} color={MADAR_COLORS.gold} fill={MADAR_COLORS.gold} />
-                    <Text style={{ fontSize: 11, color: MADAR_COLORS.gold, fontWeight: '700' }}>{staffRating}</Text>
+                    <Text style={{ fontSize: 11, color: MADAR_COLORS.gold, fontWeight: '700' }}>{memberRating}</Text>
                   </View>
-                  <Text style={{ fontSize: 12, color: MADAR_COLORS.text, fontWeight: '600' }}>{staff.name}</Text>
+                  <Text style={{ fontSize: 12, color: MADAR_COLORS.text, fontWeight: '600' }}>{member.name}</Text>
                 </AnimatedPressable>
               );
             })}
@@ -442,17 +461,21 @@ export default function VenueDetailScreen() {
             <Text style={{ fontSize: 14, color: MADAR_COLORS.textSecondary }}>({reviewCountText})</Text>
           </View>
           {/* Review cards */}
-          {MOCK_REVIEWS.map((review) => {
-            const reviewStarsFilled = review.rating;
+          {reviews.map((review) => {
+            const reviewStarsFilled = Number(review.rating);
+            const reviewName = review.name ?? review.reviewer_name ?? 'Anonymous';
+            const reviewInitials = review.initials ?? reviewName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
+            const reviewDate = review.date ?? (review.created_at ? new Date(review.created_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '');
+            const reviewComment = review.comment ?? review.text ?? '';
             return (
               <View key={review.id} style={styles.reviewCard}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                   <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: MADAR_COLORS.surfaceSecondary, alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: MADAR_COLORS.textSecondary }}>{review.initials}</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: MADAR_COLORS.textSecondary }}>{reviewInitials}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: MADAR_COLORS.text }}>{review.name}</Text>
-                    <Text style={{ fontSize: 11, color: MADAR_COLORS.textTertiary }}>{review.date}</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: MADAR_COLORS.text }}>{reviewName}</Text>
+                    <Text style={{ fontSize: 11, color: MADAR_COLORS.textTertiary }}>{reviewDate}</Text>
                   </View>
                 </View>
                 <View style={{ flexDirection: 'row', gap: 2, marginBottom: 6 }}>
@@ -465,7 +488,7 @@ export default function VenueDetailScreen() {
                     />
                   ))}
                 </View>
-                <Text style={{ fontSize: 13, color: MADAR_COLORS.textSecondary, lineHeight: 20 }}>{review.comment}</Text>
+                <Text style={{ fontSize: 13, color: MADAR_COLORS.textSecondary, lineHeight: 20 }}>{reviewComment}</Text>
               </View>
             );
           })}

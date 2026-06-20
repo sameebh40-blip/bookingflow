@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,11 +11,12 @@ import {
   ImageSourcePropType,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { Search, SlidersHorizontal, ArrowLeft, Heart, Star, MapPin, Clock } from 'lucide-react-native';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { supabase } from '@/utils/supabase';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -159,20 +160,47 @@ const MAP_HTML_TEMPLATE = `<!DOCTYPE html>
 </body>
 </html>`;
 
+function generateMapHtml(venues: Venue[]): string {
+  const venueData = venues
+    .filter(v => v.latitude && v.longitude)
+    .map(v => ({ id: v.id, rating: v.rating, lat: v.latitude, lng: v.longitude }));
+  return MAP_HTML_TEMPLATE.replace('VENUES_JSON_PLACEHOLDER', JSON.stringify(venueData));
+}
+
 export default function MapSearchScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const params = useLocalSearchParams<{ query?: string }>();
   const webViewRef = useRef<WebView>(null);
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
   const [sheetAtFull, setSheetAtFull] = useState(false);
   const sheetHeight = useRef(new Animated.Value(SNAP_HALF)).current;
   const lastHeight = useRef(SNAP_HALF);
   const venueListRef = useRef<ScrollView>(null);
+  const [venues, setVenues] = useState<Venue[]>(MOCK_VENUES);
+  const [mapKey, setMapKey] = useState(0);
+  const [searchQuery, setSearchQuery] = useState(params.query ?? '');
 
-  const mapHtml = MAP_HTML_TEMPLATE.replace(
-    'VENUES_JSON_PLACEHOLDER',
-    JSON.stringify(MOCK_VENUES.map(v => ({ id: v.id, rating: v.rating, lat: v.latitude, lng: v.longitude })))
-  );
+  useEffect(() => {
+    const fetchVenues = async () => {
+      console.log('[MapSearch] Fetching venues from Supabase');
+      try {
+        const { data, error } = await supabase.from('venues').select('*');
+        if (!error && data && data.length > 0) {
+          console.log('[MapSearch] Loaded', data.length, 'venues');
+          setVenues(data);
+          setMapKey(k => k + 1);
+        } else {
+          console.log('[MapSearch] Using mock venues:', error?.message);
+        }
+      } catch (err) {
+        console.log('[MapSearch] Exception fetching venues:', err);
+      }
+    };
+    fetchVenues();
+  }, []);
+
+  const mapHtml = generateMapHtml(venues);
 
   const snapToPoint = useCallback((target: number) => {
     lastHeight.current = target;
@@ -261,6 +289,7 @@ export default function MapSearchScreen() {
     <View style={styles.container}>
       {/* WebView Map */}
       <WebView
+        key={mapKey}
         ref={webViewRef}
         source={{ html: mapHtml }}
         style={[styles.map, { height: MAP_HEIGHT }]}
@@ -327,7 +356,11 @@ export default function MapSearchScreen() {
             if (!sheetAtFull) snapToPoint(SNAP_FULL);
           }}
         >
-          {MOCK_VENUES.map((venue) => {
+          {venues.filter(v =>
+            !searchQuery ||
+            v.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            v.category.toLowerCase().includes(searchQuery.toLowerCase())
+          ).map((venue) => {
             const isSelected = selectedVenueId === venue.id;
             const ratingStr = Number(venue.rating).toFixed(1);
             const distanceStr = venue.distance_km < 1

@@ -321,9 +321,19 @@ export default function BookingsScreen() {
       } else {
         console.log('[Bookings] Loaded', data.length, 'appointments');
         const mapped = data.map((row: any) => ({
-          ...row,
-          venue_name: row.venues?.name ?? row.venue_name ?? '',
-          venue_image: row.venues?.image_url ?? row.venue_image ?? '',
+          id: row.id,
+          venue_id: row.venue_id,
+          venue_name: row.venues?.name ?? 'Unknown Venue',
+          venue_image: row.venues?.image_url ?? '',
+          date: row.scheduled_at
+            ? new Date(row.scheduled_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) +
+              ' at ' +
+              new Date(row.scheduled_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+            : row.date ?? '',
+          price: Number(row.total_price ?? row.price ?? 0),
+          items: Array.isArray(row.services) ? row.services.length : (row.items ?? 1),
+          status: row.status ?? 'upcoming',
+          services: row.services ?? [],
         }));
         setAppointments(mapped);
       }

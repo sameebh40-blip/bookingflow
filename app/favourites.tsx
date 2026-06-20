@@ -100,9 +100,25 @@ export default function FavouritesScreen() {
     }
   };
 
-  const handleRemove = (id: string, name: string) => {
+  const handleRemove = async (id: string, name: string) => {
     console.log('[Favourites] Remove favourite pressed:', id, name);
     setFavs(prev => prev.filter(f => f.id !== id));
+    if (user) {
+      try {
+        const { error } = await supabase
+          .from('favourites')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('venue_id', id);
+        if (error) {
+          console.log('[Favourites] Error removing favourite:', error.message);
+        } else {
+          console.log('[Favourites] Removed favourite from Supabase:', id);
+        }
+      } catch (err) {
+        console.log('[Favourites] Exception removing favourite:', err);
+      }
+    }
   };
 
   const handleBook = (id: string, name: string) => {

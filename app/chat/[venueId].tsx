@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,82 +7,153 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Send } from 'lucide-react-native';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { supabase } from '@/utils/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Message {
   id: string;
   text: string;
-  isUser: boolean;
-  timestamp: string;
+  is_from_venue: boolean;
+  created_at: string;
 }
-
-const MOCK_MESSAGES: Message[] = [
-  { id: '1', text: 'Hello! How can we help you today?', isUser: false, timestamp: '10:00 AM' },
-  { id: '2', text: 'Hi, I wanted to ask about your availability this weekend.', isUser: true, timestamp: '10:02 AM' },
-  { id: '3', text: 'We have slots available on Saturday from 10 AM to 6 PM. Would you like to book?', isUser: false, timestamp: '10:03 AM' },
-  { id: '4', text: 'Yes, I\'d like to book a Classic Haircut for Saturday at 2 PM.', isUser: true, timestamp: '10:05 AM' },
-  { id: '5', text: 'Your appointment is confirmed for Saturday at 2:00 PM. See you then!', isUser: false, timestamp: '10:06 AM' },
-];
-
-const VENUE_NAMES: Record<string, string> = {
-  '1': 'Level Barber Shop',
-  '2': 'The Groom Room',
-  '3': 'Luxe Spa & Wellness',
-  '4': 'Nail Studio Pro',
-};
 
 export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { venueId } = useLocalSearchParams<{ venueId: string }>();
-  const [messages, setMessages] = useState<Message[]>(MOCK_MESSAGES);
+  const { user } = useAuth();
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
+  const [venueName, setVenueName] = useState('Venue');
+  const [venueImage, setVenueImage] = useState('');
   const flatListRef = useRef<FlatList>(null);
 
-  const venueName = VENUE_NAMES[venueId ?? '1'] ?? 'Venue';
+  useEffect(() => {
+    fetchVenueInfo();
+    fetchMessages();
 
-  const handleSend = useCallback(() => {
-    if (!inputText.trim()) return;
-    console.log('[Chat] Message sent:', inputText.trim(), 'to venue:', venueId);
-    const newMessage: Message = {
-      id: String(Date.now()),
-      text: inputText.trim(),
-      isUser: true,
-      timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+    // Subscribe to realtime inserts
+    const channel = supabase
+      .channel(`messages:${venueId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `venue_id=eq.${venueId}` },
+        (payload) => {
+          console.log('[Chat] Realtime message received:', payload.new);
+          setMessages(prev => [...prev, payload.new as Message]);
+          setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
     };
-    setMessages(prev => [...prev, newMessage]);
+  }, [venueId]);
+
+  const fetchVenueInfo = async () => {
+    console.log('[Chat] Fetching venue info for:', venueId);
+    try {
+      const { data } = await supabase.from('venues').select('name, image_url').eq('id', venueId).single();
+      if (data) {
+        setVenueName(data.name ?? 'Venue');
+        setVenueImage(data.image_url ?? '');
+      }
+    } catch (err) {
+      console.log('[Chat] Could not fetch venue info:', err);
+    }
+  };
+
+  const fetchMessages = async () => {
+    console.log('[Chat] Fetching messages for venue:', venueId);
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('venue_id', venueId)
+        .order('created_at', { ascending: true });
+
+      if (!error && data && data.length > 0) {
+        console.log('[Chat] Loaded', data.length, 'messages');
+        setMessages(data);
+        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 100);
+      } else {
+        console.log('[Chat] No messages found, showing welcome');
+        setMessages([{
+          id: '0',
+          text: 'Welcome! How can we help you today?',
+          is_from_venue: true,
+          created_at: new Date().toISOString(),
+        }]);
+      }
+    } catch (err) {
+      console.log('[Chat] Exception fetching messages:', err);
+    }
+  };
+
+  const handleSend = useCallback(async () => {
+    if (!inputText.trim()) return;
+    const text = inputText.trim();
+    console.log('[Chat] Sending message:', text, 'to venue:', venueId);
     setInputText('');
 
-    // Simulate reply
-    setTimeout(() => {
-      const reply: Message = {
-        id: String(Date.now() + 1),
-        text: 'Thank you for your message! We\'ll get back to you shortly.',
-        isUser: false,
-        timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-      };
-      setMessages(prev => [...prev, reply]);
-    }, 1500);
-  }, [inputText, venueId]);
+    // Optimistic update
+    const optimistic: Message = {
+      id: String(Date.now()),
+      text,
+      is_from_venue: false,
+      created_at: new Date().toISOString(),
+    };
+    setMessages(prev => [...prev, optimistic]);
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+
+    try {
+      const { error } = await supabase.from('messages').insert({
+        venue_id: venueId,
+        sender_id: user?.id ?? null,
+        text,
+        is_from_venue: false,
+      });
+      if (error) {
+        console.log('[Chat] Error inserting message:', error.message);
+      }
+    } catch (err) {
+      console.log('[Chat] Exception sending message:', err);
+    }
+  }, [inputText, venueId, user]);
 
   const handleBack = useCallback(() => {
     console.log('[Chat] Back pressed');
     router.back();
   }, [router]);
 
-  const renderMessage = ({ item }: { item: Message }) => (
-    <View style={[styles.messageRow, item.isUser && styles.messageRowUser]}>
-      <View style={[styles.messageBubble, item.isUser ? styles.messageBubbleUser : styles.messageBubbleVenue]}>
-        <Text style={[styles.messageText, item.isUser && styles.messageTextUser]}>{item.text}</Text>
-        <Text style={[styles.messageTime, item.isUser && styles.messageTimeUser]}>{item.timestamp}</Text>
+  const formatTime = (iso: string) => {
+    try {
+      return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return '';
+    }
+  };
+
+  const renderMessage = ({ item }: { item: Message }) => {
+    const isUser = !item.is_from_venue;
+    const timeStr = formatTime(item.created_at);
+    return (
+      <View style={[styles.messageRow, isUser && styles.messageRowUser]}>
+        <View style={[styles.messageBubble, isUser ? styles.messageBubbleUser : styles.messageBubbleVenue]}>
+          <Text style={[styles.messageText, isUser && styles.messageTextUser]}>{item.text}</Text>
+          <Text style={[styles.messageTime, isUser && styles.messageTimeUser]}>{timeStr}</Text>
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <KeyboardAvoidingView
@@ -95,8 +166,13 @@ export default function ChatScreen() {
         <AnimatedPressable onPress={handleBack} style={styles.backBtn}>
           <ArrowLeft size={20} color={MADAR_COLORS.text} />
         </AnimatedPressable>
-        <Text style={styles.headerTitle} numberOfLines={1}>{venueName}</Text>
-        <View style={{ width: 40 }} />
+        {venueImage ? (
+          <Image source={{ uri: venueImage }} style={styles.venueAvatar} resizeMode="cover" />
+        ) : null}
+        <View style={{ flex: 1 }}>
+          <Text style={styles.headerTitle} numberOfLines={1}>{venueName}</Text>
+          <Text style={styles.onlineText}>● Online</Text>
+        </View>
       </View>
 
       <FlatList
@@ -124,9 +200,9 @@ export default function ChatScreen() {
         <AnimatedPressable
           onPress={handleSend}
           disabled={!inputText.trim()}
-          style={[styles.sendBtn, !inputText.trim() && { opacity: 0.4 }]}
+          style={[styles.sendBtn, !inputText.trim() && { opacity: 0.4, backgroundColor: MADAR_COLORS.surfaceSecondary }]}
         >
-          <Send size={18} color={MADAR_COLORS.background} />
+          <Send size={18} color={inputText.trim() ? MADAR_COLORS.background : MADAR_COLORS.textTertiary} />
         </AnimatedPressable>
       </View>
     </KeyboardAvoidingView>
@@ -138,17 +214,20 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: MADAR_COLORS.border,
+    gap: 10,
   },
   backBtn: {
     width: 40, height: 40, borderRadius: 20,
     backgroundColor: MADAR_COLORS.surface, alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: MADAR_COLORS.border,
   },
-  headerTitle: { flex: 1, fontSize: 17, fontWeight: '700', color: MADAR_COLORS.text, textAlign: 'center' },
+  venueAvatar: { width: 36, height: 36, borderRadius: 18 },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: MADAR_COLORS.text },
+  onlineText: { fontSize: 12, color: MADAR_COLORS.success, marginTop: 1 },
   messagesList: { paddingHorizontal: 16, paddingVertical: 16, gap: 12 },
   messageRow: { flexDirection: 'row', justifyContent: 'flex-start' },
   messageRowUser: { justifyContent: 'flex-end' },
@@ -169,7 +248,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 4,
   },
   messageText: { fontSize: 14, color: MADAR_COLORS.text, lineHeight: 20 },
-  messageTextUser: { color: MADAR_COLORS.background },
+  messageTextUser: { color: '#0A0A0F' },
   messageTime: { fontSize: 10, color: MADAR_COLORS.textTertiary, alignSelf: 'flex-end' },
   messageTimeUser: { color: 'rgba(10,10,15,0.6)' },
   inputBar: {
