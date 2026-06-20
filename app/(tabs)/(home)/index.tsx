@@ -37,7 +37,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/utils/supabase';
 
 const { width: screenWidth } = Dimensions.get('window');
-const CARD_WIDTH = (screenWidth - 52) / 2;
+const CAROUSEL_CARD_WIDTH = screenWidth * 0.44;
 
 interface Venue {
   id: string;
@@ -64,15 +64,15 @@ interface Barber {
 
 const MOCK_VENUES: Venue[] = [
   { id: '1', name: 'Level Barber Shop', category: 'Barber', rating: 5.0, review_count: 1336, distance_km: 0.75, address: 'Bu Ashira', image_url: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800', starting_price: 5, is_open: true },
-  { id: '2', name: 'test account', category: 'Barber', rating: 0.0, review_count: 0, distance_km: 0, address: 'Location unavailable', image_url: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800', starting_price: 8, is_open: true },
+  { id: '2', name: 'The Groom Room', category: 'Barber', rating: 4.7, review_count: 210, distance_km: 1.2, address: 'Seef District', image_url: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800', starting_price: 8, is_open: true },
   { id: '3', name: 'Luxe Spa & Wellness', category: 'Spa', rating: 4.8, review_count: 287, distance_km: 2.1, address: 'Seef District', image_url: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=800', starting_price: 25, is_open: false },
   { id: '4', name: 'Nail Studio Pro', category: 'Nails', rating: 4.9, review_count: 412, distance_km: 1.3, address: 'Adliya', image_url: 'https://images.unsplash.com/photo-1604654894610-df63bc536371?w=800', starting_price: 12, is_open: true },
 ];
 
 const MOCK_BARBERS: Barber[] = [
-  { id: '1', name: 'majed barber', rating: 5.0, bookings: 6, avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200', rank: 1 },
-  { id: '2', name: 'alili barber', rating: 0.0, bookings: 0, avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200', rank: 2 },
-  { id: '3', name: 'majed', rating: 0.0, bookings: 0, avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200', rank: 3 },
+  { id: '1', name: 'Majed Al-Rashid', rating: 5.0, bookings: 6, avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200', rank: 1 },
+  { id: '2', name: 'Ali Hassan', rating: 4.9, bookings: 45, avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200', rank: 2 },
+  { id: '3', name: 'Khalid Nasser', rating: 4.8, bookings: 38, avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200', rank: 3 },
 ];
 
 const MOCK_REELS = [
@@ -99,6 +99,12 @@ const CATEGORIES = [
   { id: 'home', label: 'Home service', Icon: HomeIcon },
 ];
 
+const RANK_COLORS: Record<number, string> = {
+  1: '#C9A84C',
+  2: '#A8A8A8',
+  3: '#CD7F32',
+};
+
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: '' };
   if (typeof source === 'string') return { uri: source };
@@ -121,7 +127,7 @@ function AnimatedListItem({ index, children }: { index: number; children: React.
   );
 }
 
-function SkeletonCard() {
+function SkeletonCarouselCard() {
   const opacity = useRef(new Animated.Value(0.3)).current;
   useEffect(() => {
     Animated.loop(
@@ -132,9 +138,9 @@ function SkeletonCard() {
     ).start();
   }, []);
   return (
-    <Animated.View style={[styles.skeletonCard, { opacity }]}>
-      <View style={styles.skeletonImage} />
-      <View style={{ padding: 10, gap: 6 }}>
+    <Animated.View style={[styles.carouselCard, { opacity }]}>
+      <View style={styles.carouselSkeletonImage} />
+      <View style={{ padding: 8, gap: 6 }}>
         <View style={[styles.skeletonLine, { width: '70%' }]} />
         <View style={[styles.skeletonLine, { width: '50%', height: 10 }]} />
       </View>
@@ -142,18 +148,18 @@ function SkeletonCard() {
   );
 }
 
-function CompactVenueCard({ venue, onPress }: { venue: Venue; onPress: () => void }) {
+function CarouselVenueCard({ venue, onPress }: { venue: Venue; onPress: () => void }) {
   const distanceStr = venue.distance_km < 1
     ? `${Math.round(venue.distance_km * 1000)}m`
     : `${venue.distance_km.toFixed(1)} km`;
   const ratingStr = Number(venue.rating).toFixed(1);
 
   return (
-    <AnimatedPressable onPress={onPress} style={styles.compactCard}>
-      <View style={styles.compactImageContainer}>
+    <AnimatedPressable onPress={onPress} style={styles.carouselCard}>
+      <View style={styles.carouselImageContainer}>
         <Image
           source={resolveImageSource(venue.image_url)}
-          style={styles.compactImage}
+          style={styles.carouselImage}
           resizeMode="cover"
         />
         {venue.is_open && (
@@ -162,59 +168,45 @@ function CompactVenueCard({ venue, onPress }: { venue: Venue; onPress: () => voi
           </View>
         )}
       </View>
-      <View style={styles.compactInfo}>
-        <Text style={styles.compactName} numberOfLines={1}>{venue.name}</Text>
-        <View style={styles.compactRatingRow}>
+      <View style={styles.carouselInfo}>
+        <Text style={styles.carouselName} numberOfLines={1}>{venue.name}</Text>
+        <Text style={styles.carouselCategory} numberOfLines={1}>{venue.category}</Text>
+        <View style={styles.carouselRatingRow}>
           <Star size={11} color={MADAR_COLORS.gold} fill={MADAR_COLORS.gold} />
-          <Text style={styles.compactRating}>{ratingStr}</Text>
-          <Text style={styles.compactReviews}>({venue.review_count})</Text>
-        </View>
-        <View style={styles.compactLocationRow}>
+          <Text style={styles.carouselRating}>{ratingStr}</Text>
           <MapPin size={10} color={MADAR_COLORS.textTertiary} />
-          <Text style={styles.compactLocation} numberOfLines={1}>
-            {venue.address}
-            {venue.distance_km > 0 ? `, ${distanceStr}` : ''}
-          </Text>
+          <Text style={styles.carouselDistance}>{distanceStr}</Text>
         </View>
       </View>
     </AnimatedPressable>
   );
 }
 
-const RANK_COLORS: Record<number, string> = {
-  1: '#C9A84C',
-  2: '#A8A8A8',
-  3: '#CD7F32',
-};
-
-function BarberPodiumCard({ barber, elevated }: { barber: Barber; elevated: boolean }) {
-  const avatarSize = elevated ? 72 : 60;
+function BarberCircleCard({ barber, onPress }: { barber: Barber; onPress: () => void }) {
   const rankColor = RANK_COLORS[barber.rank] ?? MADAR_COLORS.textSecondary;
+  const borderWidth = barber.rank === 1 ? 3 : 2;
   const ratingStr = Number(barber.rating).toFixed(1);
-  const bookingsText = `${barber.bookings} bookings`;
 
   return (
-    <View style={[styles.podiumCard, elevated && styles.podiumCardElevated]}>
-      <View style={{ position: 'relative', alignSelf: 'center' }}>
+    <AnimatedPressable onPress={onPress} style={styles.barberCircleContainer}>
+      <View style={{ position: 'relative' }}>
         <Image
           source={resolveImageSource(barber.avatar)}
-          style={[styles.podiumAvatar, { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }]}
+          style={[styles.barberCircleAvatar, { borderWidth, borderColor: rankColor }]}
         />
-        <View style={[styles.rankBadge, { backgroundColor: rankColor }]}>
-          <Text style={styles.rankBadgeText}>{barber.rank}</Text>
+        <View style={[styles.barberRankBadge, { backgroundColor: rankColor }]}>
+          <Text style={styles.barberRankBadgeText}>{barber.rank}</Text>
         </View>
       </View>
-      <View style={styles.topBarberBadge}>
-        <Scissors size={9} color={MADAR_COLORS.background} />
-        <Text style={styles.topBarberBadgeText}>TOP BARBER</Text>
+      <Text style={styles.barberCircleName} numberOfLines={1}>{barber.name}</Text>
+      <View style={styles.barberCircleRatingRow}>
+        <Star size={10} color={MADAR_COLORS.gold} fill={MADAR_COLORS.gold} />
+        <Text style={styles.barberCircleRating}>{ratingStr}</Text>
       </View>
-      <View style={styles.podiumRatingRow}>
-        <Star size={11} color={MADAR_COLORS.gold} fill={MADAR_COLORS.gold} />
-        <Text style={styles.podiumRating}>{ratingStr}</Text>
+      <View style={styles.topBarberPill}>
+        <Text style={styles.topBarberPillText}>TOP BARBER</Text>
       </View>
-      <Text style={styles.podiumName} numberOfLines={1}>{barber.name}</Text>
-      <Text style={styles.podiumBookings}>{bookingsText}</Text>
-    </View>
+    </AnimatedPressable>
   );
 }
 
@@ -314,10 +306,10 @@ export default function HomeScreen() {
     router.push('/(tabs)/discover');
   }, [router]);
 
-  // Arrange barbers for podium: rank2, rank1, rank3
-  const rank1 = barbers.find(b => b.rank === 1);
-  const rank2 = barbers.find(b => b.rank === 2);
-  const rank3 = barbers.find(b => b.rank === 3);
+  const handleBarberPress = useCallback((id: string, name: string) => {
+    console.log('[Home] Barber circle pressed:', id, name);
+    router.push(`/barber/${id}`);
+  }, [router]);
 
   return (
     <ScrollView
@@ -374,9 +366,8 @@ export default function HomeScreen() {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Book again</Text>
-                    <NotificationBell />
-          
-<AnimatedPressable onPress={() => console.log('[Home] See all rebook pressed')}>
+          <NotificationBell />
+          <AnimatedPressable onPress={() => console.log('[Home] See all rebook pressed')}>
             <Text style={styles.seeAll}>See all</Text>
           </AnimatedPressable>
         </View>
@@ -415,7 +406,7 @@ export default function HomeScreen() {
         </ScrollView>
       </View>
 
-      {/* Nearby Shops — 2-column grid */}
+      {/* Nearby Shops — horizontal carousel */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Nearby shops</Text>
@@ -425,25 +416,33 @@ export default function HomeScreen() {
         </View>
 
         {loading ? (
-          <View style={styles.gridRow}>
-            <SkeletonCard />
-            <SkeletonCard />
+          <View style={{ flexDirection: 'row', gap: 12, paddingHorizontal: 16 }}>
+            <SkeletonCarouselCard />
+            <SkeletonCarouselCard />
           </View>
         ) : (
-          <View style={styles.venueGrid}>
-            {venues.slice(0, 4).map((venue, index) => (
-              <AnimatedListItem key={venue.id} index={index}>
-                <CompactVenueCard
-                  venue={venue}
-                  onPress={() => handleVenuePress(venue.id, venue.name)}
+          <FlatList
+            data={venues}
+            keyExtractor={(item) => item.id}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            snapToInterval={CAROUSEL_CARD_WIDTH + 12}
+            decelerationRate="fast"
+            pagingEnabled={false}
+            contentContainerStyle={styles.carouselContent}
+            renderItem={({ item, index }) => (
+              <AnimatedListItem index={index}>
+                <CarouselVenueCard
+                  venue={item}
+                  onPress={() => handleVenuePress(item.id, item.name)}
                 />
               </AnimatedListItem>
-            ))}
-          </View>
+            )}
+          />
         )}
       </View>
 
-      {/* Top Barbers — podium layout */}
+      {/* Top Barbers — 3 equal circle cards */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Top Barbers</Text>
@@ -452,10 +451,14 @@ export default function HomeScreen() {
           </AnimatedPressable>
         </View>
 
-        <View style={styles.podiumContainer}>
-          {rank2 && <BarberPodiumCard barber={rank2} elevated={false} />}
-          {rank1 && <BarberPodiumCard barber={rank1} elevated={true} />}
-          {rank3 && <BarberPodiumCard barber={rank3} elevated={false} />}
+        <View style={styles.barbersRow}>
+          {barbers.slice(0, 3).map((barber) => (
+            <BarberCircleCard
+              key={barber.id}
+              barber={barber}
+              onPress={() => handleBarberPress(barber.id, barber.name)}
+            />
+          ))}
         </View>
       </View>
 
@@ -547,7 +550,7 @@ const styles = StyleSheet.create({
   },
   categoriesScroll: {
     marginHorizontal: -20,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   categoriesContainer: {
     paddingHorizontal: 20,
@@ -578,13 +581,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   section: {
-    marginBottom: 28,
+    marginBottom: 20,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
+    paddingHorizontal: 0,
   },
   sectionTitle: {
     fontSize: 20,
@@ -641,30 +645,26 @@ const styles = StyleSheet.create({
     color: MADAR_COLORS.gold,
     fontWeight: '600',
   },
-  // 2-column grid
-  venueGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  // Carousel
+  carouselContent: {
+    paddingHorizontal: 16,
     gap: 12,
   },
-  gridRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  compactCard: {
-    width: CARD_WIDTH,
+  carouselCard: {
+    width: CAROUSEL_CARD_WIDTH,
+    height: 200,
     backgroundColor: MADAR_COLORS.surface,
     borderRadius: 12,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: MADAR_COLORS.border,
   },
-  compactImageContainer: {
+  carouselImageContainer: {
     position: 'relative',
   },
-  compactImage: {
+  carouselImage: {
     width: '100%',
-    height: 110,
+    height: 130,
     borderTopLeftRadius: 12,
     borderTopRightRadius: 12,
   },
@@ -672,60 +672,49 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 8,
     right: 8,
-    backgroundColor: MADAR_COLORS.success,
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    backgroundColor: '#4CAF7D',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
   },
   openBadgeText: {
     fontSize: 10,
     color: '#fff',
     fontWeight: '700',
   },
-  compactInfo: {
-    padding: 10,
-    gap: 4,
+  carouselInfo: {
+    padding: 8,
+    backgroundColor: MADAR_COLORS.surface,
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+    gap: 3,
   },
-  compactName: {
+  carouselName: {
     fontSize: 13,
     fontWeight: '700',
     color: MADAR_COLORS.text,
   },
-  compactRatingRow: {
+  carouselCategory: {
+    fontSize: 11,
+    color: MADAR_COLORS.textSecondary,
+  },
+  carouselRatingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
   },
-  compactRating: {
+  carouselRating: {
     fontSize: 11,
     color: MADAR_COLORS.gold,
     fontWeight: '600',
   },
-  compactReviews: {
-    fontSize: 11,
-    color: MADAR_COLORS.textTertiary,
-  },
-  compactLocationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  compactLocation: {
+  carouselDistance: {
     fontSize: 11,
     color: MADAR_COLORS.textSecondary,
-    flex: 1,
   },
-  skeletonCard: {
-    width: CARD_WIDTH,
-    backgroundColor: MADAR_COLORS.surface,
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: MADAR_COLORS.border,
-  },
-  skeletonImage: {
+  carouselSkeletonImage: {
     width: '100%',
-    height: 110,
+    height: 130,
     backgroundColor: MADAR_COLORS.surfaceSecondary,
   },
   skeletonLine: {
@@ -733,83 +722,63 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     backgroundColor: MADAR_COLORS.surfaceSecondary,
   },
-  // Podium
-  podiumContainer: {
+  // Barber circle cards
+  barbersRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    gap: 8,
+    paddingHorizontal: 16,
+    gap: 12,
   },
-  podiumCard: {
+  barberCircleContainer: {
     flex: 1,
     alignItems: 'center',
-    backgroundColor: MADAR_COLORS.surface,
-    borderRadius: 16,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: MADAR_COLORS.border,
-    gap: 6,
-    marginBottom: 0,
+    gap: 8,
   },
-  podiumCardElevated: {
-    marginBottom: 20,
-    borderColor: MADAR_COLORS.goldBorder,
-    backgroundColor: MADAR_COLORS.surfaceSecondary,
+  barberCircleAvatar: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
   },
-  podiumAvatar: {
-    borderWidth: 2,
-    borderColor: MADAR_COLORS.goldBorder,
-  },
-  rankBadge: {
+  barberRankBadge: {
     position: 'absolute',
-    top: -4,
-    right: -4,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    top: -2,
+    right: -2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rankBadgeText: {
-    fontSize: 11,
+  barberRankBadgeText: {
+    fontSize: 10,
     fontWeight: '800',
-    color: '#000',
+    color: '#fff',
   },
-  topBarberBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: MADAR_COLORS.gold,
-    borderRadius: 10,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-  },
-  topBarberBadgeText: {
-    fontSize: 8,
-    fontWeight: '800',
-    color: MADAR_COLORS.background,
-    letterSpacing: 0.5,
-  },
-  podiumRatingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  podiumRating: {
-    fontSize: 12,
-    color: MADAR_COLORS.gold,
-    fontWeight: '700',
-  },
-  podiumName: {
+  barberCircleName: {
     fontSize: 12,
     fontWeight: '700',
     color: MADAR_COLORS.text,
     textAlign: 'center',
   },
-  podiumBookings: {
-    fontSize: 10,
-    color: MADAR_COLORS.textSecondary,
-    textAlign: 'center',
+  barberCircleRatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  barberCircleRating: {
+    fontSize: 11,
+    color: MADAR_COLORS.gold,
+    fontWeight: '600',
+  },
+  topBarberPill: {
+    backgroundColor: MADAR_COLORS.goldMuted,
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  topBarberPillText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: MADAR_COLORS.gold,
   },
   // Reels
   reelCard: {

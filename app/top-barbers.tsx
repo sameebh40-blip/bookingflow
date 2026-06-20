@@ -1,34 +1,41 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
   Image,
+  Animated,
   ImageSourcePropType,
+  Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Info, Star, Scissors, MapPin, Award, Calendar } from 'lucide-react-native';
+import { ArrowLeft, Star, Award, MapPin, Calendar } from 'lucide-react-native';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { supabase } from '@/utils/supabase';
 
-interface Barber {
+const { width: screenWidth } = Dimensions.get('window');
+
+interface BarberProfile {
   id: string;
   name: string;
+  specialty: string;
   rating: number;
   bookings: number;
+  reviews: number;
   avatar: string;
+  cover: string;
   rank: number;
 }
 
-const ALL_BARBERS: Barber[] = [
-  { id: '1', name: 'majed barber', rating: 5.0, bookings: 6, avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200', rank: 1 },
-  { id: '2', name: 'alili barber', rating: 0.0, bookings: 0, avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200', rank: 2 },
-  { id: '3', name: 'majed', rating: 0.0, bookings: 0, avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200', rank: 3 },
-  { id: '4', name: 'Ahmed Al-Rashid', rating: 4.9, bookings: 45, avatar: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=200', rank: 4 },
-  { id: '5', name: 'Khalid Hassan', rating: 4.8, bookings: 38, avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200', rank: 5 },
+const ALL_BARBERS: BarberProfile[] = [
+  { id: '1', name: 'Majed Al-Rashid', specialty: 'Fade Specialist', rating: 5.0, bookings: 6, reviews: 12, avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200', cover: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800', rank: 1 },
+  { id: '2', name: 'Ali Hassan', specialty: 'Classic Cuts', rating: 4.9, bookings: 45, reviews: 89, avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200', cover: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800', rank: 2 },
+  { id: '3', name: 'Khalid Nasser', specialty: 'Beard Styling', rating: 4.8, bookings: 38, reviews: 67, avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200', cover: 'https://images.unsplash.com/photo-1599351431202-1e0f0137899a?w=800', rank: 3 },
+  { id: '4', name: 'Omar Saleh', specialty: 'Hot Towel Shave', rating: 4.8, bookings: 32, reviews: 54, avatar: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=200', cover: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800', rank: 4 },
+  { id: '5', name: 'Faisal Al-Mansoori', specialty: 'Skin Fade', rating: 4.7, bookings: 28, reviews: 41, avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200', cover: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800', rank: 5 },
 ];
 
 const RANK_COLORS: Record<number, string> = {
@@ -50,41 +57,85 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
   return source as ImageSourcePropType;
 }
 
-function PodiumCard({ barber, elevated }: { barber: Barber; elevated: boolean }) {
-  const avatarSize = elevated ? 80 : 64;
+function BarberCard({ barber, index, onPress, onBook }: {
+  barber: BarberProfile;
+  index: number;
+  onPress: () => void;
+  onBook: () => void;
+}) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(24)).current;
   const rankColor = RANK_COLORS[barber.rank] ?? MADAR_COLORS.textSecondary;
   const ratingStr = Number(barber.rating).toFixed(1);
-  const bookingsText = `${barber.bookings} bookings`;
+  const isRank1 = barber.rank === 1;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, { toValue: 1, duration: 400, delay: index * 80, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: 0, duration: 400, delay: index * 80, useNativeDriver: true }),
+    ]).start();
+  }, []);
 
   return (
-    <View style={[styles.podiumCard, elevated && styles.podiumCardElevated]}>
-      <View style={{ position: 'relative', alignSelf: 'center' }}>
-        <Image
-          source={resolveImageSource(barber.avatar)}
-          style={[
-            styles.podiumAvatar,
-            { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 },
-            elevated && styles.podiumAvatarElevated,
-          ]}
-        />
-        <View style={[styles.rankBadge, { backgroundColor: rankColor }]}>
-          <Text style={styles.rankBadgeText}>{barber.rank}</Text>
+    <Animated.View style={[styles.barberCardWrapper, { opacity, transform: [{ translateY }] }]}>
+      <AnimatedPressable onPress={onPress} style={styles.barberCard}>
+        {/* Cover photo */}
+        <View style={styles.coverContainer}>
+          <Image
+            source={resolveImageSource(barber.cover)}
+            style={styles.coverImage}
+            resizeMode="cover"
+          />
+          {/* Rank badge */}
+          <View style={[styles.rankBadge, { backgroundColor: rankColor }]}>
+            <Text style={styles.rankBadgeText}>{barber.rank}</Text>
+          </View>
         </View>
-      </View>
-      <Text style={[styles.podiumName, elevated && styles.podiumNameElevated]} numberOfLines={1}>
-        {barber.name}
-      </Text>
-      <View style={styles.topBarberBadge}>
-        <Scissors size={9} color={MADAR_COLORS.background} />
-        <Text style={styles.topBarberBadgeText}>TOP BARBER</Text>
-      </View>
-      <View style={styles.podiumRatingRow}>
-        <Star size={12} color={MADAR_COLORS.gold} fill={MADAR_COLORS.gold} />
-        <Text style={styles.podiumRating}>{ratingStr}</Text>
-        <Text style={styles.podiumRatingCount}>(0)</Text>
-      </View>
-      <Text style={styles.podiumBookings}>{bookingsText}</Text>
-    </View>
+
+        {/* Avatar overlapping cover */}
+        <View style={styles.avatarContainer}>
+          <Image
+            source={resolveImageSource(barber.avatar)}
+            style={[
+              styles.avatar,
+              { borderColor: isRank1 ? '#C9A84C' : MADAR_COLORS.surface },
+            ]}
+          />
+        </View>
+
+        {/* Info */}
+        <View style={styles.barberInfo}>
+          <Text style={styles.barberName}>{barber.name}</Text>
+          <View style={styles.topBarberBadge}>
+            <Text style={styles.topBarberBadgeText}>TOP BARBER</Text>
+          </View>
+          <Text style={styles.barberSpecialty}>{barber.specialty}</Text>
+
+          {/* Stats row */}
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{barber.bookings}</Text>
+              <Text style={styles.statLabel}>Bookings</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{ratingStr}</Text>
+              <Text style={styles.statLabel}>Rating</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{barber.reviews}</Text>
+              <Text style={styles.statLabel}>Reviews</Text>
+            </View>
+          </View>
+
+          {/* Book button */}
+          <AnimatedPressable onPress={onBook} style={styles.bookBtn}>
+            <Text style={styles.bookBtnText}>Book Now</Text>
+          </AnimatedPressable>
+        </View>
+      </AnimatedPressable>
+    </Animated.View>
   );
 }
 
@@ -92,7 +143,7 @@ export default function TopBarbersScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [activeFilter, setActiveFilter] = useState('all');
-  const [barbers, setBarbers] = useState<Barber[]>(ALL_BARBERS);
+  const [barbers, setBarbers] = useState<BarberProfile[]>(ALL_BARBERS);
 
   useEffect(() => {
     fetchBarbers();
@@ -111,7 +162,7 @@ export default function TopBarbersScreen() {
         setBarbers(ALL_BARBERS);
       } else {
         console.log('[TopBarbers] Loaded', data.length, 'barbers');
-        setBarbers(data.map((b: Barber, i: number) => ({ ...b, rank: i + 1 })));
+        setBarbers(data.map((b: BarberProfile, i: number) => ({ ...b, rank: i + 1 })));
       }
     } catch (err) {
       console.log('[TopBarbers] Exception, using mock:', err);
@@ -130,13 +181,14 @@ export default function TopBarbersScreen() {
   }, []);
 
   const handleBarberPress = useCallback((id: string, name: string) => {
-    console.log('[TopBarbers] Barber pressed:', id, name);
-  }, []);
+    console.log('[TopBarbers] Barber card pressed:', id, name);
+    router.push(`/barber/${id}`);
+  }, [router]);
 
-  const rank1 = barbers.find(b => b.rank === 1);
-  const rank2 = barbers.find(b => b.rank === 2);
-  const rank3 = barbers.find(b => b.rank === 3);
-  const restBarbers = barbers.filter(b => b.rank > 3);
+  const handleBookPress = useCallback((id: string, name: string) => {
+    console.log('[TopBarbers] Book pressed for barber:', id, name);
+    router.push(`/booking/services?barberId=${id}`);
+  }, [router]);
 
   return (
     <ScrollView
@@ -151,14 +203,9 @@ export default function TopBarbersScreen() {
         </AnimatedPressable>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>Top Barbers</Text>
-          <Text style={styles.headerSubtitle}>Ranked by ratings, bookings and reviews</Text>
+          <Text style={styles.headerSubtitle}>Ranked by ratings, bookings & reviews</Text>
         </View>
-        <AnimatedPressable
-          onPress={() => console.log('[TopBarbers] Info pressed')}
-          style={styles.infoBtn}
-        >
-          <Info size={20} color={MADAR_COLORS.textSecondary} />
-        </AnimatedPressable>
+        <View style={{ width: 40 }} />
       </View>
 
       {/* Filter chips */}
@@ -189,52 +236,16 @@ export default function TopBarbersScreen() {
         })}
       </ScrollView>
 
-      {/* Podium */}
-      <View style={styles.podiumContainer}>
-        {rank2 && <PodiumCard barber={rank2} elevated={false} />}
-        {rank1 && <PodiumCard barber={rank1} elevated={true} />}
-        {rank3 && <PodiumCard barber={rank3} elevated={false} />}
-      </View>
-
-      {/* Rankings note */}
-      <Text style={styles.rankingsNote}>
-        Rankings update from live ratings, reviews and completed bookings.
-      </Text>
-
-      {/* Ranked list (4+) */}
-      {restBarbers.length > 0 && (
-        <View style={styles.rankedList}>
-          {restBarbers.map((barber, index) => {
-            const ratingStr = Number(barber.rating).toFixed(1);
-            return (
-              <React.Fragment key={barber.id}>
-                <AnimatedPressable
-                  onPress={() => handleBarberPress(barber.id, barber.name)}
-                  style={styles.rankedRow}
-                >
-                  <Text style={styles.rankedNumber}>{barber.rank}</Text>
-                  <Image source={resolveImageSource(barber.avatar)} style={styles.rankedAvatar} />
-                  <View style={styles.rankedInfo}>
-                    <Text style={styles.rankedName} numberOfLines={1}>{barber.name}</Text>
-                    <View style={styles.topBarberBadgeSmall}>
-                      <Scissors size={8} color={MADAR_COLORS.background} />
-                      <Text style={styles.topBarberBadgeTextSmall}>TOP BARBER</Text>
-                    </View>
-                  </View>
-                  <View style={styles.rankedRight}>
-                    <View style={styles.rankedRatingRow}>
-                      <Star size={11} color={MADAR_COLORS.gold} fill={MADAR_COLORS.gold} />
-                      <Text style={styles.rankedRating}>{ratingStr}</Text>
-                    </View>
-                    <Text style={styles.rankedBookings}>{barber.bookings} bookings</Text>
-                  </View>
-                </AnimatedPressable>
-                {index < restBarbers.length - 1 && <View style={styles.rowDivider} />}
-              </React.Fragment>
-            );
-          })}
-        </View>
-      )}
+      {/* Barber cards */}
+      {barbers.map((barber, index) => (
+        <BarberCard
+          key={barber.id}
+          barber={barber}
+          index={index}
+          onPress={() => handleBarberPress(barber.id, barber.name)}
+          onBook={() => handleBookPress(barber.id, barber.name)}
+        />
+      ))}
     </ScrollView>
   );
 }
@@ -245,7 +256,7 @@ const styles = StyleSheet.create({
     backgroundColor: MADAR_COLORS.background,
   },
   content: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
   },
   header: {
     flexDirection: 'row',
@@ -269,7 +280,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: '800',
     color: MADAR_COLORS.text,
     letterSpacing: -0.3,
   },
@@ -278,18 +289,12 @@ const styles = StyleSheet.create({
     color: MADAR_COLORS.textSecondary,
     textAlign: 'center',
   },
-  infoBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   filtersScroll: {
-    marginHorizontal: -20,
-    marginBottom: 24,
+    marginHorizontal: -16,
+    marginBottom: 20,
   },
   filtersContainer: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     gap: 8,
   },
   filterChip: {
@@ -316,173 +321,120 @@ const styles = StyleSheet.create({
     color: MADAR_COLORS.background,
     fontWeight: '600',
   },
-  podiumContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    gap: 8,
+  barberCardWrapper: {
     marginBottom: 16,
   },
-  podiumCard: {
-    flex: 1,
-    alignItems: 'center',
-    backgroundColor: MADAR_COLORS.surface,
-    borderRadius: 16,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: MADAR_COLORS.border,
-    gap: 6,
-  },
-  podiumCardElevated: {
-    marginBottom: 20,
-    borderColor: MADAR_COLORS.goldBorder,
-    backgroundColor: MADAR_COLORS.surfaceSecondary,
-  },
-  podiumAvatar: {
-    borderWidth: 2,
-    borderColor: MADAR_COLORS.border,
-  },
-  podiumAvatarElevated: {
-    borderColor: MADAR_COLORS.gold,
-  },
-  rankBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rankBadgeText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#000',
-  },
-  podiumName: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: MADAR_COLORS.text,
-    textAlign: 'center',
-  },
-  podiumNameElevated: {
-    fontSize: 14,
-  },
-  topBarberBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: MADAR_COLORS.gold,
-    borderRadius: 10,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-  },
-  topBarberBadgeText: {
-    fontSize: 8,
-    fontWeight: '800',
-    color: MADAR_COLORS.background,
-    letterSpacing: 0.5,
-  },
-  podiumRatingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  podiumRating: {
-    fontSize: 12,
-    color: MADAR_COLORS.gold,
-    fontWeight: '700',
-  },
-  podiumRatingCount: {
-    fontSize: 11,
-    color: MADAR_COLORS.textTertiary,
-  },
-  podiumBookings: {
-    fontSize: 10,
-    color: MADAR_COLORS.textSecondary,
-    textAlign: 'center',
-  },
-  rankingsNote: {
-    fontSize: 12,
-    color: MADAR_COLORS.textTertiary,
-    textAlign: 'center',
-    fontStyle: 'italic',
-    marginBottom: 24,
-    lineHeight: 18,
-  },
-  rankedList: {
+  barberCard: {
     backgroundColor: MADAR_COLORS.surface,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: MADAR_COLORS.border,
     overflow: 'hidden',
   },
-  rankedRow: {
-    flexDirection: 'row',
+  coverContainer: {
+    position: 'relative',
+  },
+  coverImage: {
+    width: '100%',
+    height: 120,
+    resizeMode: 'cover',
+  },
+  rankBadge: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rankBadgeText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#fff',
+  },
+  avatarContainer: {
+    alignItems: 'center',
+    marginTop: -32,
+    marginBottom: 8,
+  },
+  avatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 3,
+  },
+  barberInfo: {
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 12,
+    paddingBottom: 16,
+    gap: 6,
   },
-  rankedNumber: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: MADAR_COLORS.gold,
-    width: 28,
+  barberName: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: MADAR_COLORS.text,
     textAlign: 'center',
   },
-  rankedAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-  },
-  rankedInfo: {
-    flex: 1,
-    gap: 4,
-  },
-  rankedName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: MADAR_COLORS.text,
-  },
-  topBarberBadgeSmall: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: MADAR_COLORS.gold,
+  topBarberBadge: {
+    backgroundColor: MADAR_COLORS.goldMuted,
     borderRadius: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: MADAR_COLORS.goldBorder,
   },
-  topBarberBadgeTextSmall: {
-    fontSize: 7,
-    fontWeight: '800',
-    color: MADAR_COLORS.background,
+  topBarberBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: MADAR_COLORS.gold,
     letterSpacing: 0.5,
   },
-  rankedRight: {
-    alignItems: 'flex-end',
-    gap: 3,
+  barberSpecialty: {
+    fontSize: 14,
+    color: MADAR_COLORS.textSecondary,
+    textAlign: 'center',
   },
-  rankedRatingRow: {
+  statsRow: {
     flexDirection: 'row',
+    width: '100%',
+    backgroundColor: MADAR_COLORS.surfaceSecondary,
+    borderRadius: 12,
+    marginTop: 4,
+    overflow: 'hidden',
+  },
+  statItem: {
+    flex: 1,
     alignItems: 'center',
-    gap: 3,
+    paddingVertical: 14,
+    gap: 2,
   },
-  rankedRating: {
-    fontSize: 13,
+  statDivider: {
+    width: 1,
+    backgroundColor: MADAR_COLORS.divider,
+    marginVertical: 10,
+  },
+  statNumber: {
+    fontSize: 18,
+    fontWeight: '800',
     color: MADAR_COLORS.gold,
-    fontWeight: '700',
   },
-  rankedBookings: {
+  statLabel: {
     fontSize: 11,
     color: MADAR_COLORS.textSecondary,
   },
-  rowDivider: {
-    height: 1,
-    backgroundColor: MADAR_COLORS.divider,
-    marginHorizontal: 16,
+  bookBtn: {
+    backgroundColor: MADAR_COLORS.gold,
+    borderRadius: 12,
+    paddingVertical: 12,
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  bookBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0A0A0F',
   },
 });

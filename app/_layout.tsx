@@ -94,6 +94,7 @@ export default function RootLayout() {
                   <Stack.Screen name="filter-service-type" options={{ headerShown: false, presentation: 'formSheet' }} />
                   <Stack.Screen name="map-search" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
                   <Stack.Screen name="top-barbers" options={{ headerShown: false }} />
+                  <Stack.Screen name="barber/[id]" options={{ headerShown: false }} />
                 </Stack>
                 <SystemBars style="light" />
               </GestureHandlerRootView>

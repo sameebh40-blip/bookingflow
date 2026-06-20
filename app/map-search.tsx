@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,58 +9,20 @@ import {
   ScrollView,
   Image,
   ImageSourcePropType,
-  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import {
-  Search,
-  SlidersHorizontal,
-  ArrowLeft,
-  Heart,
-  Star,
-  MapPin,
-  Clock,
-  ChevronDown,
-} from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { WebView } from 'react-native-webview';
+import { Search, SlidersHorizontal, ArrowLeft, Heart, Star, MapPin, Clock } from 'lucide-react-native';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
-const SNAP_COLLAPSED = screenHeight * 0.12;
-const SNAP_HALF = screenHeight * 0.45;
-const SNAP_FULL = screenHeight * 0.85;
-
-const DARK_MAP_STYLE = [
-  { elementType: 'geometry', stylers: [{ color: '#1d2c4d' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#8ec3b9' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#1a3646' }] },
-  { featureType: 'administrative.country', elementType: 'geometry.stroke', stylers: [{ color: '#4b6878' }] },
-  { featureType: 'administrative.land_parcel', elementType: 'labels.text.fill', stylers: [{ color: '#64779e' }] },
-  { featureType: 'administrative.province', elementType: 'geometry.stroke', stylers: [{ color: '#4b6878' }] },
-  { featureType: 'landscape.man_made', elementType: 'geometry.stroke', stylers: [{ color: '#334e87' }] },
-  { featureType: 'landscape.natural', elementType: 'geometry', stylers: [{ color: '#023e58' }] },
-  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#283d6a' }] },
-  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#6f9ba5' }] },
-  { featureType: 'poi', elementType: 'labels.text.stroke', stylers: [{ color: '#1d2c4d' }] },
-  { featureType: 'poi.park', elementType: 'geometry.fill', stylers: [{ color: '#023e58' }] },
-  { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: '#3C7680' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#304a7d' }] },
-  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#98a5be' }] },
-  { featureType: 'road', elementType: 'labels.text.stroke', stylers: [{ color: '#1d2c4d' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#2c6675' }] },
-  { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#255763' }] },
-  { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#b0d5ce' }] },
-  { featureType: 'road.highway', elementType: 'labels.text.stroke', stylers: [{ color: '#023e58' }] },
-  { featureType: 'transit', elementType: 'labels.text.fill', stylers: [{ color: '#98a5be' }] },
-  { featureType: 'transit', elementType: 'labels.text.stroke', stylers: [{ color: '#1d2c4d' }] },
-  { featureType: 'transit.line', elementType: 'geometry.fill', stylers: [{ color: '#283d6a' }] },
-  { featureType: 'transit.station', elementType: 'geometry', stylers: [{ color: '#3a4762' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0e1626' }] },
-  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#4e6d70' }] },
-];
+const MAP_HEIGHT = screenHeight * 0.42;
+const SNAP_COLLAPSED = 80;
+const SNAP_HALF = screenHeight * 0.42;
+const SNAP_FULL = screenHeight * 0.82;
 
 interface Venue {
   id: string;
@@ -72,19 +34,30 @@ interface Venue {
   address: string;
   image_url: string;
   starting_price: number;
+  is_open: boolean;
+  next_slot: string;
   latitude: number;
   longitude: number;
-  is_open?: boolean;
+  is_top_rated?: boolean;
+  men_only?: boolean;
 }
 
 const MOCK_VENUES: Venue[] = [
-  { id: '1', name: 'Level Barber Shop', category: 'Barber', rating: 5.0, review_count: 1336, distance_km: 0.75, address: 'Avenue 11, Tubli', image_url: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800', starting_price: 5, latitude: 26.2235, longitude: 50.5876, is_open: true },
-  { id: '2', name: 'The Groom Room', category: 'Barber', rating: 5.0, review_count: 513, distance_km: 14.6, address: 'Mall of Dilmunia', image_url: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800', starting_price: 8, latitude: 26.2335, longitude: 50.5976, is_open: true },
-  { id: '3', name: 'Luxe Spa & Wellness', category: 'Spa', rating: 4.8, review_count: 287, distance_km: 2.1, address: 'Seef District, Manama', image_url: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=800', starting_price: 25, latitude: 26.2135, longitude: 50.5776, is_open: false },
-  { id: '4', name: 'Nail Studio Pro', category: 'Nails', rating: 4.9, review_count: 412, distance_km: 1.3, address: 'Adliya, Manama', image_url: 'https://images.unsplash.com/photo-1604654894610-df63bc536371?w=800', starting_price: 12, latitude: 26.2185, longitude: 50.5826, is_open: true },
+  { id: '1', name: 'Level Barber Shop', category: 'Hair Salon', rating: 5.0, review_count: 1336, distance_km: 0.75, address: 'Level Barber Shop Avenue 11, Tubli', image_url: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800', starting_price: 5, is_open: true, next_slot: '6:30 PM', latitude: 26.2235, longitude: 50.5876, is_top_rated: true, men_only: true },
+  { id: '2', name: 'The Groom Room', category: 'Barber', rating: 4.9, review_count: 892, distance_km: 1.2, address: 'Seef District, Manama', image_url: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800', starting_price: 8, is_open: true, next_slot: '7:00 PM', latitude: 26.2310, longitude: 50.5950, is_top_rated: false, men_only: false },
+  { id: '3', name: 'Luxe Spa & Wellness', category: 'Spa', rating: 4.8, review_count: 287, distance_km: 2.1, address: 'Adliya, Manama', image_url: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=800', starting_price: 25, is_open: false, next_slot: '10:00 AM', latitude: 26.2150, longitude: 50.5800, is_top_rated: true, men_only: false },
+  { id: '4', name: 'Nail Studio Pro', category: 'Nails', rating: 4.9, review_count: 412, distance_km: 1.3, address: 'Juffair, Manama', image_url: 'https://images.unsplash.com/photo-1604654894610-df63bc536371?w=800', starting_price: 12, is_open: true, next_slot: '5:45 PM', latitude: 26.2180, longitude: 50.6020, is_top_rated: false, men_only: false },
+  { id: '5', name: 'Fade Masters', category: 'Barber', rating: 4.7, review_count: 156, distance_km: 0.9, address: 'Gudaibiya, Manama', image_url: 'https://images.unsplash.com/photo-1599351431202-1e0f0137899a?w=800', starting_price: 6, is_open: true, next_slot: '8:00 PM', latitude: 26.2260, longitude: 50.5820, is_top_rated: false, men_only: true },
 ];
 
-const FILTERS = ['Amenities', 'Options', 'Service type', 'Price', 'Rating', 'Distance', 'Open now'];
+const FILTER_CHIPS = [
+  { id: 'venues', label: 'Venues ▾', route: null },
+  { id: 'best', label: 'Best match ▾', route: null },
+  { id: 'price', label: 'Price ▾', route: null },
+  { id: 'amenities', label: 'Amenities ▾', route: '/filter-amenities' },
+  { id: 'options', label: 'Options ▾', route: '/filter-options' },
+  { id: 'service', label: 'Service type ▾', route: '/filter-service-type' },
+];
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: '' };
@@ -92,92 +65,164 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
   return source as ImageSourcePropType;
 }
 
-// Lazy-load react-native-maps to avoid web crashes
-let MapView: React.ComponentType<any> | null = null;
-let Marker: React.ComponentType<any> | null = null;
-let PROVIDER_GOOGLE: string | null = null;
-
-if (Platform.OS !== 'web') {
-  try {
-    const maps = require('react-native-maps');
-    MapView = maps.default;
-    Marker = maps.Marker;
-    PROVIDER_GOOGLE = maps.PROVIDER_GOOGLE;
-  } catch (e) {
-    console.log('[MapSearch] react-native-maps not available:', e);
-  }
-}
+const MAP_HTML_TEMPLATE = `<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body, #map { width: 100%; height: 100%; background: #0A0A0F; }
+    .rating-marker {
+      background: #1C1C26;
+      border: 2px solid #C9A84C;
+      border-radius: 20px;
+      padding: 4px 10px;
+      color: #C9A84C;
+      font-size: 13px;
+      font-weight: 700;
+      font-family: -apple-system, sans-serif;
+      white-space: nowrap;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    }
+    .rating-marker.selected {
+      background: #C9A84C;
+      color: #0A0A0F;
+      border-color: #E8C96A;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    var map = L.map('map', { zoomControl: false, attributionControl: false }).setView([26.2235, 50.5876], 13);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      maxZoom: 19
+    }).addTo(map);
+    
+    var venues = VENUES_JSON_PLACEHOLDER;
+    var markers = {};
+    var selectedId = null;
+    
+    venues.forEach(function(venue) {
+      var icon = L.divIcon({
+        className: '',
+        html: '<div class="rating-marker" id="marker-' + venue.id + '">' + venue.rating.toFixed(1) + '</div>',
+        iconSize: null,
+        iconAnchor: [20, 15]
+      });
+      var marker = L.marker([venue.lat, venue.lng], { icon: icon }).addTo(map);
+      marker.on('click', function() {
+        if (selectedId && document.getElementById('marker-' + selectedId)) {
+          document.getElementById('marker-' + selectedId).classList.remove('selected');
+        }
+        selectedId = venue.id;
+        document.getElementById('marker-' + venue.id).classList.add('selected');
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'markerPress', venueId: venue.id }));
+      });
+      markers[venue.id] = marker;
+    });
+    
+    map.on('moveend', function() {
+      var center = map.getCenter();
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'mapMove', lat: center.lat, lng: center.lng }));
+    });
+    
+    window.selectMarker = function(id) {
+      if (selectedId && document.getElementById('marker-' + selectedId)) {
+        document.getElementById('marker-' + selectedId).classList.remove('selected');
+      }
+      selectedId = id;
+      if (document.getElementById('marker-' + id)) {
+        document.getElementById('marker-' + id).classList.add('selected');
+      }
+    };
+  </script>
+</body>
+</html>`;
 
 export default function MapSearchScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const webViewRef = useRef<WebView>(null);
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
-  const [favourites, setFavourites] = useState<Set<string>>(new Set());
-
   const sheetHeight = useRef(new Animated.Value(SNAP_HALF)).current;
   const lastHeight = useRef(SNAP_HALF);
+  const venueListRef = useRef<ScrollView>(null);
 
-  const snapToPoint = useCallback((point: number) => {
-    lastHeight.current = point;
+  const mapHtml = MAP_HTML_TEMPLATE.replace(
+    'VENUES_JSON_PLACEHOLDER',
+    JSON.stringify(MOCK_VENUES.map(v => ({ id: v.id, rating: v.rating, lat: v.latitude, lng: v.longitude })))
+  );
+
+  const snapToPoint = useCallback((target: number) => {
+    lastHeight.current = target;
     Animated.spring(sheetHeight, {
-      toValue: point,
+      toValue: target,
       useNativeDriver: false,
-      damping: 20,
-      stiffness: 200,
+      tension: 60,
+      friction: 12,
     }).start();
   }, [sheetHeight]);
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 5,
-      onPanResponderMove: (_, gestureState) => {
-        const newHeight = lastHeight.current - gestureState.dy;
-        const clamped = Math.max(SNAP_COLLAPSED, Math.min(SNAP_FULL, newHeight));
-        sheetHeight.setValue(clamped);
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        const currentHeight = lastHeight.current - gestureState.dy;
-        const velocity = -gestureState.vy;
-        let target: number;
-        if (velocity > 0.5) {
-          target = currentHeight > SNAP_HALF ? SNAP_FULL : SNAP_HALF;
-        } else if (velocity < -0.5) {
-          target = currentHeight < SNAP_HALF ? SNAP_COLLAPSED : SNAP_HALF;
-        } else {
-          const distToCollapsed = Math.abs(currentHeight - SNAP_COLLAPSED);
-          const distToHalf = Math.abs(currentHeight - SNAP_HALF);
-          const distToFull = Math.abs(currentHeight - SNAP_FULL);
-          const minDist = Math.min(distToCollapsed, distToHalf, distToFull);
-          if (minDist === distToCollapsed) target = SNAP_COLLAPSED;
-          else if (minDist === distToHalf) target = SNAP_HALF;
-          else target = SNAP_FULL;
-        }
-        snapToPoint(target);
-      },
-    })
-  ).current;
+  const panResponder = useRef(PanResponder.create({
+    onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dy) > 8,
+    onPanResponderMove: (_, gs) => {
+      const newH = lastHeight.current - gs.dy;
+      sheetHeight.setValue(Math.max(SNAP_COLLAPSED, Math.min(SNAP_FULL, newH)));
+    },
+    onPanResponderRelease: (_, gs) => {
+      const cur = lastHeight.current - gs.dy;
+      const vel = -gs.vy;
+      let target: number;
+      if (vel > 0.5) {
+        target = cur > SNAP_HALF ? SNAP_FULL : SNAP_HALF;
+      } else if (vel < -0.5) {
+        target = cur < SNAP_HALF ? SNAP_COLLAPSED : SNAP_HALF;
+      } else {
+        const dists = [SNAP_COLLAPSED, SNAP_HALF, SNAP_FULL].map(s => Math.abs(cur - s));
+        const minIdx = dists.indexOf(Math.min(...dists));
+        target = [SNAP_COLLAPSED, SNAP_HALF, SNAP_FULL][minIdx];
+      }
+      snapToPoint(target);
+    },
+  })).current;
 
-  const handleMarkerPress = useCallback((venueId: string, venueName: string) => {
-    console.log('[MapSearch] Marker pressed:', venueId, venueName);
-    setSelectedVenueId(venueId);
-    snapToPoint(SNAP_HALF);
+  const selectMarkerOnMap = useCallback((id: string) => {
+    webViewRef.current?.injectJavaScript(`window.selectMarker('${id}'); true;`);
+  }, []);
+
+  const handleWebViewMessage = useCallback((event: { nativeEvent: { data: string } }) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === 'markerPress') {
+        console.log('[MapSearch] Marker pressed for venue:', data.venueId);
+        setSelectedVenueId(data.venueId);
+        snapToPoint(SNAP_HALF);
+      } else if (data.type === 'mapMove') {
+        console.log('[MapSearch] Map moved to:', data.lat, data.lng);
+      }
+    } catch (e) {}
   }, [snapToPoint]);
 
-  const handleVenuePress = useCallback((id: string, name: string) => {
+  const handleVenueCardPress = useCallback((id: string, name: string) => {
     console.log('[MapSearch] Venue card pressed:', id, name);
     router.push(`/venue/${id}`);
   }, [router]);
 
-  const handleFilterPress = useCallback((filter: string) => {
-    console.log('[MapSearch] Filter pressed:', filter);
-    if (filter === 'Amenities') router.push('/filter-amenities');
-    else if (filter === 'Options') router.push('/filter-options');
-    else if (filter === 'Service type') router.push('/filter-service-type');
-  }, [router]);
+  const handleVenueCardSelect = useCallback((id: string) => {
+    console.log('[MapSearch] Venue card selected on map:', id);
+    setSelectedVenueId(id);
+    selectMarkerOnMap(id);
+  }, [selectMarkerOnMap]);
 
-  const handleSearchPress = useCallback(() => {
-    console.log('[MapSearch] Search bar pressed');
-    router.push('/search-modal');
+  const handleFilterChip = useCallback((chip: typeof FILTER_CHIPS[0]) => {
+    console.log('[MapSearch] Filter chip pressed:', chip.id);
+    if (chip.route) {
+      router.push(chip.route as any);
+    }
   }, [router]);
 
   const handleBack = useCallback(() => {
@@ -185,130 +230,94 @@ export default function MapSearchScreen() {
     router.back();
   }, [router]);
 
-  const toggleFavourite = useCallback((id: string) => {
-    console.log('[MapSearch] Toggle favourite:', id);
-    setFavourites(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const handleSearchPress = useCallback(() => {
+    console.log('[MapSearch] Search bar pressed');
+    router.push('/search-modal');
+  }, [router]);
+
+  const handleHeartPress = useCallback((id: string, name: string) => {
+    console.log('[MapSearch] Heart pressed for venue:', id, name);
   }, []);
-
-  const distanceText = (km: number) => {
-    if (km < 1) return `${Math.round(km * 1000)}m`;
-    return `${km.toFixed(1)}km`;
-  };
-
-  const topOffset = insets.top + 12;
 
   return (
     <View style={styles.container}>
-      {/* Map */}
-      {MapView && Marker ? (
-        <MapView
-          style={styles.map}
-          provider={PROVIDER_GOOGLE as any}
-          customMapStyle={DARK_MAP_STYLE}
-          initialRegion={{
-            latitude: 26.2235,
-            longitude: 50.5876,
-            latitudeDelta: 0.05,
-            longitudeDelta: 0.05,
-          }}
-        >
-          {MOCK_VENUES.map((venue) => {
-            const isSelected = selectedVenueId === venue.id;
-            const ratingStr = Number(venue.rating).toFixed(1);
-            return (
-              <Marker
-                key={venue.id}
-                coordinate={{ latitude: venue.latitude, longitude: venue.longitude }}
-                onPress={() => handleMarkerPress(venue.id, venue.name)}
-              >
-                <View style={[styles.markerBubble, isSelected && styles.markerBubbleSelected]}>
-                  <Text style={[styles.markerText, isSelected && styles.markerTextSelected]}>
-                    {ratingStr}
-                  </Text>
-                </View>
-              </Marker>
-            );
-          })}
-        </MapView>
-      ) : (
-        <View style={styles.mapFallback}>
-          <Text style={styles.mapFallbackText}>Map view</Text>
-          <Text style={styles.mapFallbackSub}>Bahrain · 77 venues</Text>
-        </View>
-      )}
+      {/* WebView Map */}
+      <WebView
+        ref={webViewRef}
+        source={{ html: mapHtml }}
+        style={[styles.map, { height: MAP_HEIGHT }]}
+        originWhitelist={['*']}
+        onMessage={handleWebViewMessage}
+        scrollEnabled={false}
+        javaScriptEnabled
+      />
 
-      {/* Top search bar */}
-      <View style={[styles.topBar, { top: topOffset }]}>
-        <AnimatedPressable onPress={handleSearchPress} style={styles.searchPill}>
-          <Search size={16} color={MADAR_COLORS.gold} />
-          <Text style={styles.searchPillText}>All treatments · Map area</Text>
-          <View style={styles.filterCircle}>
-            <SlidersHorizontal size={14} color={MADAR_COLORS.textSecondary} />
-          </View>
-        </AnimatedPressable>
-      </View>
+      {/* Floating search bar */}
+      <AnimatedPressable
+        onPress={handleSearchPress}
+        style={[styles.searchBar, { top: insets.top + 12 }]}
+      >
+        <Search size={16} color={MADAR_COLORS.gold} />
+        <Text style={styles.searchText}>All treatments · Map area</Text>
+        <SlidersHorizontal size={16} color={MADAR_COLORS.textSecondary} />
+      </AnimatedPressable>
 
       {/* Back button */}
       <AnimatedPressable
         onPress={handleBack}
-        style={[styles.backBtn, { top: topOffset + 60 }]}
+        style={[styles.backBtn, { top: insets.top + 68 }]}
       >
-        <ArrowLeft size={20} color={MADAR_COLORS.text} />
+        <ArrowLeft size={18} color={MADAR_COLORS.text} />
       </AnimatedPressable>
 
       {/* Bottom sheet */}
-      <Animated.View style={[styles.sheet, { height: sheetHeight }]}>
+      <Animated.View style={[styles.bottomSheet, { height: sheetHeight }]}>
         {/* Drag handle */}
         <View {...panResponder.panHandlers} style={styles.dragArea}>
           <View style={styles.dragHandle} />
-          <Text style={styles.venueCountText}>77 venues in map area</Text>
+          <Text style={styles.venueCount}>77 venues in map area</Text>
         </View>
 
         {/* Filter chips */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filtersContainer}
-          style={styles.filtersScroll}
+          contentContainerStyle={styles.filterChipsContent}
+          style={styles.filterChipsScroll}
         >
-          {FILTERS.map((filter) => (
+          {FILTER_CHIPS.map((chip) => (
             <AnimatedPressable
-              key={filter}
-              onPress={() => handleFilterPress(filter)}
+              key={chip.id}
+              onPress={() => handleFilterChip(chip)}
               style={styles.filterChip}
             >
-              <Text style={styles.filterChipText}>{filter}</Text>
-              <ChevronDown size={11} color={MADAR_COLORS.textSecondary} />
+              <Text style={styles.filterChipText}>{chip.label}</Text>
             </AnimatedPressable>
           ))}
         </ScrollView>
 
         {/* Venue list */}
         <ScrollView
+          ref={venueListRef}
           style={styles.venueList}
           contentContainerStyle={styles.venueListContent}
           showsVerticalScrollIndicator={false}
           nestedScrollEnabled
         >
-          {MOCK_VENUES.map((venue, index) => {
+          {MOCK_VENUES.map((venue) => {
             const isSelected = selectedVenueId === venue.id;
-            const nextSlot = index % 2 === 0 ? '6:30 PM' : '7:00 PM';
-            const badges = index === 0
-              ? ['Top rated', 'Open now']
-              : index === 1
-              ? ['Open now', 'Men only']
-              : ['Open now'];
             const ratingStr = Number(venue.rating).toFixed(1);
+            const distanceStr = venue.distance_km < 1
+              ? `${Math.round(venue.distance_km * 1000)}m`
+              : `${venue.distance_km.toFixed(1)} km`;
 
             return (
               <AnimatedPressable
                 key={venue.id}
-                onPress={() => handleVenuePress(venue.id, venue.name)}
+                onPress={() => {
+                  handleVenueCardSelect(venue.id);
+                  handleVenueCardPress(venue.id, venue.name);
+                }}
                 style={[styles.venueCard, isSelected && styles.venueCardSelected]}
               >
                 <View style={styles.venueImageContainer}>
@@ -317,57 +326,48 @@ export default function MapSearchScreen() {
                     style={styles.venueImage}
                     resizeMode="cover"
                   />
-                  <LinearGradient
-                    colors={['transparent', 'rgba(0,0,0,0.5)']}
-                    style={styles.venueImageGradient}
-                  />
                   <AnimatedPressable
-                    onPress={() => toggleFavourite(venue.id)}
-                    style={styles.heartButton}
+                    onPress={() => handleHeartPress(venue.id, venue.name)}
+                    style={styles.heartBtn}
                   >
-                    <Heart
-                      size={18}
-                      color={favourites.has(venue.id) ? MADAR_COLORS.danger : '#fff'}
-                      fill={favourites.has(venue.id) ? MADAR_COLORS.danger : 'transparent'}
-                    />
+                    <Heart size={16} color={MADAR_COLORS.danger} />
                   </AnimatedPressable>
                   <View style={styles.badgesRow}>
-                    {badges.map(b => (
-                      <View
-                        key={b}
-                        style={[
-                          styles.badge,
-                          b === 'Top rated' && styles.badgeGold,
-                          b === 'Men only' && styles.badgeBlue,
-                        ]}
-                      >
-                        <Text style={[styles.badgeText, b === 'Top rated' && styles.badgeTextDark]}>
-                          {b}
-                        </Text>
+                    {venue.is_top_rated && (
+                      <View style={styles.badgeGold}>
+                        <Text style={styles.badgeGoldText}>Top rated</Text>
                       </View>
-                    ))}
+                    )}
+                    {venue.is_open && (
+                      <View style={styles.badgeGreen}>
+                        <Text style={styles.badgeGreenText}>Open now</Text>
+                      </View>
+                    )}
+                    {venue.men_only && (
+                      <View style={styles.badgeBlue}>
+                        <Text style={styles.badgeBlueText}>Men only</Text>
+                      </View>
+                    )}
                   </View>
                 </View>
                 <View style={styles.venueInfo}>
-                  <View style={styles.venueRow}>
-                    <Text style={styles.venueName} numberOfLines={1}>{venue.name}</Text>
-                    <View style={styles.ratingBadge}>
-                      <Star size={11} color={MADAR_COLORS.gold} fill={MADAR_COLORS.gold} />
-                      <Text style={styles.ratingText}>{ratingStr}</Text>
-                    </View>
+                  <Text style={styles.venueName}>{venue.name}</Text>
+                  <Text style={styles.venueCategory}>
+                    {venue.category} · {venue.address}
+                  </Text>
+                  <View style={styles.venueRatingRow}>
+                    <Star size={12} color={MADAR_COLORS.gold} fill={MADAR_COLORS.gold} />
+                    <Text style={styles.venueRating}>{ratingStr}</Text>
+                    <Text style={styles.venueReviews}>({venue.review_count})</Text>
+                    <View style={{ flex: 1 }} />
+                    <MapPin size={11} color={MADAR_COLORS.textTertiary} />
+                    <Text style={styles.venueDistance}>{distanceStr}</Text>
                   </View>
-                  <Text style={styles.venueMeta}>{venue.category} · {venue.address}</Text>
-                  <View style={styles.venueFooter}>
-                    <View style={styles.venueFooterLeft}>
-                      <MapPin size={12} color={MADAR_COLORS.textTertiary} />
-                      <Text style={styles.distanceText}>{distanceText(venue.distance_km)}</Text>
-                      <Text style={styles.reviewCount}>· {venue.review_count.toLocaleString()} reviews</Text>
-                    </View>
+                  <View style={styles.venuePriceRow}>
                     <Text style={styles.venuePrice}>From BHD {venue.starting_price}</Text>
-                  </View>
-                  <View style={styles.nextSlotRow}>
-                    <Clock size={12} color={MADAR_COLORS.success} />
-                    <Text style={styles.nextSlotText}>Next: {nextSlot}</Text>
+                    <View style={{ flex: 1 }} />
+                    <Clock size={11} color={MADAR_COLORS.success} />
+                    <Text style={styles.venueNextSlot}>Next: {venue.next_slot}</Text>
                   </View>
                 </View>
               </AnimatedPressable>
@@ -386,137 +386,91 @@ const styles = StyleSheet.create({
     backgroundColor: MADAR_COLORS.background,
   },
   map: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
   },
-  mapFallback: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#0e1626',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  mapFallbackText: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#8ec3b9',
-  },
-  mapFallbackSub: {
-    fontSize: 14,
-    color: '#4e6d70',
-  },
-  topBar: {
+  searchBar: {
     position: 'absolute',
     left: 16,
     right: 16,
-    zIndex: 10,
-  },
-  searchPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: 'rgba(13,13,20,0.9)',
+    backgroundColor: 'rgba(13,13,20,0.95)',
     borderRadius: 28,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
     borderWidth: 1,
-    borderColor: MADAR_COLORS.goldBorder,
+    borderColor: 'rgba(201,168,76,0.3)',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  searchPillText: {
+  searchText: {
     flex: 1,
     fontSize: 14,
     color: MADAR_COLORS.textSecondary,
     fontWeight: '500',
   },
-  filterCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: MADAR_COLORS.surfaceSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   backBtn: {
     position: 'absolute',
     left: 16,
-    zIndex: 10,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: 'rgba(13,13,20,0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
     borderWidth: 1,
     borderColor: MADAR_COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  markerBubble: {
-    backgroundColor: '#1C1C26',
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderWidth: 1.5,
-    borderColor: '#C9A84C',
-  },
-  markerBubbleSelected: {
-    backgroundColor: '#C9A84C',
-  },
-  markerText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#C9A84C',
-  },
-  markerTextSelected: {
-    color: '#000',
-  },
-  sheet: {
+  bottomSheet: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: MADAR_COLORS.surface,
+    backgroundColor: '#13131A',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     borderTopWidth: 1,
-    borderColor: MADAR_COLORS.border,
+    borderTopColor: 'rgba(201,168,76,0.15)',
     overflow: 'hidden',
   },
   dragArea: {
     alignItems: 'center',
     paddingTop: 12,
-    paddingBottom: 8,
+    paddingBottom: 4,
   },
   dragHandle: {
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: MADAR_COLORS.textTertiary,
+    backgroundColor: '#5C5855',
     marginBottom: 8,
   },
-  venueCountText: {
+  venueCount: {
     fontSize: 13,
     color: MADAR_COLORS.textSecondary,
-    fontWeight: '500',
+    marginBottom: 12,
   },
-  filtersScroll: {
-    marginBottom: 8,
+  filterChipsScroll: {
+    flexGrow: 0,
+    marginBottom: 12,
   },
-  filtersContainer: {
+  filterChipsContent: {
     paddingHorizontal: 16,
     gap: 8,
   },
   filterChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
     backgroundColor: MADAR_COLORS.surfaceSecondary,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderWidth: 1,
     borderColor: MADAR_COLORS.border,
   },
   filterChipText: {
-    fontSize: 12,
-    color: MADAR_COLORS.textSecondary,
+    fontSize: 13,
+    color: MADAR_COLORS.text,
     fontWeight: '500',
   },
   venueList: {
@@ -524,13 +478,13 @@ const styles = StyleSheet.create({
   },
   venueListContent: {
     paddingHorizontal: 16,
-    gap: 16,
-    paddingTop: 8,
+    paddingBottom: 120,
   },
   venueCard: {
-    backgroundColor: MADAR_COLORS.surfaceSecondary,
+    backgroundColor: MADAR_COLORS.surface,
     borderRadius: 16,
     overflow: 'hidden',
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: MADAR_COLORS.border,
   },
@@ -542,16 +496,10 @@ const styles = StyleSheet.create({
   },
   venueImage: {
     width: '100%',
-    height: 160,
+    height: 180,
+    borderRadius: 16,
   },
-  venueImageGradient: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 80,
-  },
-  heartButton: {
+  heartBtn: {
     position: 'absolute',
     top: 12,
     right: 12,
@@ -569,91 +517,89 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 6,
   },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    backgroundColor: 'rgba(76,175,125,0.9)',
-  },
   badgeGold: {
-    backgroundColor: MADAR_COLORS.gold,
-  },
-  badgeBlue: {
-    backgroundColor: 'rgba(123,94,167,0.9)',
-  },
-  badgeText: {
-    fontSize: 10,
-    color: '#fff',
-    fontWeight: '700',
-  },
-  badgeTextDark: {
-    color: MADAR_COLORS.background,
-  },
-  venueInfo: {
-    padding: 14,
-    gap: 6,
-  },
-  venueRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  venueName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: MADAR_COLORS.text,
-    flex: 1,
-    letterSpacing: -0.2,
-  },
-  ratingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
     backgroundColor: MADAR_COLORS.goldMuted,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
     borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: MADAR_COLORS.goldBorder,
   },
-  ratingText: {
-    fontSize: 12,
+  badgeGoldText: {
+    fontSize: 11,
     color: MADAR_COLORS.gold,
     fontWeight: '700',
   },
-  venueMeta: {
+  badgeGreen: {
+    backgroundColor: 'rgba(76,175,125,0.2)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  badgeGreenText: {
+    fontSize: 11,
+    color: MADAR_COLORS.success,
+    fontWeight: '700',
+  },
+  badgeBlue: {
+    backgroundColor: 'rgba(100,149,237,0.2)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  badgeBlueText: {
+    fontSize: 11,
+    color: '#6495ED',
+    fontWeight: '700',
+  },
+  venueInfo: {
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 14,
+    gap: 4,
+  },
+  venueName: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: MADAR_COLORS.text,
+  },
+  venueCategory: {
     fontSize: 13,
     color: MADAR_COLORS.textSecondary,
   },
-  venueFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  venueFooterLeft: {
+  venueRatingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    marginTop: 2,
   },
-  distanceText: {
+  venueRating: {
+    fontSize: 13,
+    color: MADAR_COLORS.gold,
+    fontWeight: '700',
+  },
+  venueReviews: {
     fontSize: 12,
     color: MADAR_COLORS.textTertiary,
   },
-  reviewCount: {
+  venueDistance: {
     fontSize: 12,
-    color: MADAR_COLORS.textTertiary,
+    color: MADAR_COLORS.textSecondary,
+  },
+  venuePriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
   },
   venuePrice: {
     fontSize: 13,
-    color: MADAR_COLORS.gold,
+    color: MADAR_COLORS.text,
     fontWeight: '600',
   },
-  nextSlotRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  nextSlotText: {
+  venueNextSlot: {
     fontSize: 12,
     color: MADAR_COLORS.success,
-    fontWeight: '500',
+    fontWeight: '600',
   },
 });
