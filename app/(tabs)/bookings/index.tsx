@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Search, RefreshCw, CreditCard, Award, Star, Calendar } from 'lucide-react-native';
+import { Search, RefreshCw, CreditCard, Award, Star, Calendar, Clock } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
@@ -104,56 +104,125 @@ function UpcomingCard({ appt, onViewDetails, onRebook }: {
   onViewDetails: () => void;
   onRebook: () => void;
 }) {
-  const services = appt.services ?? [{ name: 'Service', price: appt.price }];
+  const totalDuration = (appt.services?.length ?? 1) * 30;
   const totalStr = `BHD ${Number(appt.price).toFixed(3)}`;
+  const itemCount = appt.services?.length ?? appt.items;
+  const durationText = `${totalDuration} min · ${totalStr} · ${itemCount} ${itemCount === 1 ? 'item' : 'items'}`;
+
+  const handleCancelPress = useCallback(() => {
+    console.log('[Bookings] Cancel pressed for appointment:', appt.id);
+  }, [appt.id]);
 
   return (
-    <View style={styles.upcomingCard}>
-      {/* Top row: thumbnail + venue + date */}
-      <View style={styles.upcomingTopRow}>
-        <Image source={resolveImageSource(appt.venue_image)} style={styles.upcomingThumb} resizeMode="cover" />
-        <View style={styles.upcomingTopInfo}>
-          <Text style={styles.upcomingVenueName} numberOfLines={1}>{appt.venue_name}</Text>
-          <Text style={styles.upcomingDate}>{appt.date}</Text>
+    <View style={upcomingCardStyles.card}>
+      {/* Cover image with gradient */}
+      <View style={{ height: 180, borderTopLeftRadius: 16, borderTopRightRadius: 16, overflow: 'hidden' }}>
+        <Image
+          source={resolveImageSource(appt.venue_image)}
+          style={{ width: '100%', height: '100%' }}
+          resizeMode="cover"
+        />
+        <LinearGradient
+          colors={['transparent', 'rgba(10,10,15,0.92)']}
+          style={StyleSheet.absoluteFillObject}
+        />
+        {/* "In X hours" badge */}
+        <View style={upcomingCardStyles.countdownBadge}>
+          <Text style={upcomingCardStyles.countdownText}>In 3 hours</Text>
         </View>
+        {/* Venue name overlay */}
+        <Text style={upcomingCardStyles.venueNameOverlay} numberOfLines={1}>
+          {appt.venue_name}
+        </Text>
       </View>
-      {/* Divider */}
-      <View style={styles.divider} />
-      {/* Service rows */}
-      {services.map((svc, i) => {
-        const svcPrice = `BHD ${Number(svc.price).toFixed(3)}`;
-        return (
-          <View key={i} style={styles.serviceLineRow}>
-            <Text style={styles.serviceLineName}>{svc.name}</Text>
-            <Text style={styles.serviceLinePrice}>{svcPrice}</Text>
-          </View>
-        );
-      })}
-      {/* Divider */}
-      <View style={styles.divider} />
-      {/* Total row */}
-      <View style={styles.totalRow}>
-        <Text style={styles.totalLabel}>Total</Text>
-        <Text style={styles.totalPrice}>{totalStr}</Text>
-      </View>
-      {/* Paid badge */}
-      <View style={styles.paidBadge}>
-        <Text style={styles.paidBadgeText}>Paid by Card</Text>
-      </View>
-      {/* Divider */}
-      <View style={styles.divider} />
-      {/* Bottom actions */}
-      <View style={styles.upcomingActions}>
+
+      {/* Info section */}
+      <View style={upcomingCardStyles.infoSection}>
+        {/* Date row */}
+        <View style={upcomingCardStyles.infoRow}>
+          <Calendar size={14} color={MADAR_COLORS.gold} />
+          <Text style={upcomingCardStyles.infoText}>{appt.date}</Text>
+        </View>
+        {/* Duration + price row */}
+        <View style={upcomingCardStyles.infoRow}>
+          <Clock size={14} color={MADAR_COLORS.textSecondary} />
+          <Text style={upcomingCardStyles.infoText}>{durationText}</Text>
+        </View>
+        {/* Get directions */}
         <AnimatedPressable onPress={onViewDetails}>
-          <Text style={styles.viewDetailsText}>View details</Text>
+          <Text style={upcomingCardStyles.directionsText}>Get directions</Text>
         </AnimatedPressable>
-        <AnimatedPressable onPress={onRebook} style={styles.rebookFilledBtn}>
-          <Text style={styles.rebookFilledBtnText}>Rebook</Text>
-        </AnimatedPressable>
+
+        <View style={upcomingCardStyles.divider} />
+
+        {/* Action buttons */}
+        <View style={upcomingCardStyles.actionsRow}>
+          <AnimatedPressable style={upcomingCardStyles.cancelBtn} onPress={handleCancelPress}>
+            <Text style={upcomingCardStyles.cancelBtnText}>Cancel</Text>
+          </AnimatedPressable>
+          <AnimatedPressable style={upcomingCardStyles.rescheduleBtn} onPress={onRebook}>
+            <Text style={upcomingCardStyles.rescheduleBtnText}>Reschedule</Text>
+          </AnimatedPressable>
+        </View>
       </View>
     </View>
   );
 }
+
+const upcomingCardStyles = StyleSheet.create({
+  card: {
+    backgroundColor: MADAR_COLORS.surface,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: MADAR_COLORS.border,
+  },
+  countdownBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    backgroundColor: 'rgba(13,13,20,0.85)',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: MADAR_COLORS.border,
+  },
+  countdownText: { fontSize: 12, color: MADAR_COLORS.text, fontWeight: '600' },
+  venueNameOverlay: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    right: 12,
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#fff',
+  },
+  infoSection: { padding: 14, gap: 8 },
+  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  infoText: { fontSize: 13, color: MADAR_COLORS.textSecondary, flex: 1 },
+  directionsText: { fontSize: 13, color: MADAR_COLORS.gold, fontWeight: '600', marginTop: 2 },
+  divider: { height: 1, backgroundColor: MADAR_COLORS.border, marginVertical: 4 },
+  actionsRow: { flexDirection: 'row', gap: 10 },
+  cancelBtn: {
+    flex: 1,
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: MADAR_COLORS.danger,
+  },
+  cancelBtnText: { fontSize: 14, fontWeight: '600', color: MADAR_COLORS.danger },
+  rescheduleBtn: {
+    flex: 1,
+    backgroundColor: MADAR_COLORS.gold,
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  rescheduleBtnText: { fontSize: 14, fontWeight: '700', color: '#0A0A0F' },
+});
 
 function PastCard({ appt, onRebook, onMessage }: {
   appt: Appointment;
@@ -242,16 +311,24 @@ export default function BookingsScreen() {
       }
       const { data, error } = await supabase
         .from('appointments')
-        .select('*')
+        .select(`
+          *,
+          venues (name, image_url)
+        `)
         .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+        .order('scheduled_at', { ascending: false });
 
       if (error || !data || data.length === 0) {
         console.log('[Bookings] Using mock appointments:', error?.message);
         setAppointments(MOCK_APPOINTMENTS);
       } else {
         console.log('[Bookings] Loaded', data.length, 'appointments');
-        setAppointments(data);
+        const mapped = data.map((row: any) => ({
+          ...row,
+          venue_name: row.venues?.name ?? row.venue_name ?? '',
+          venue_image: row.venues?.image_url ?? row.venue_image ?? '',
+        }));
+        setAppointments(mapped);
       }
     } catch (err) {
       console.log('[Bookings] Exception, using mock:', err);
@@ -480,107 +557,6 @@ const styles = StyleSheet.create({
   scrollContent: { paddingHorizontal: 20 },
   section: { marginBottom: 24 },
   sectionTitle: { fontSize: 20, fontWeight: '700', color: MADAR_COLORS.text, marginBottom: 16, letterSpacing: -0.3 },
-
-  // Upcoming card (receipt style)
-  upcomingCard: {
-    backgroundColor: MADAR_COLORS.surface,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: MADAR_COLORS.border,
-    marginBottom: 12,
-    gap: 12,
-  },
-  upcomingTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  upcomingThumb: {
-    width: 56,
-    height: 56,
-    borderRadius: 10,
-  },
-  upcomingTopInfo: {
-    flex: 1,
-    gap: 4,
-  },
-  upcomingVenueName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: MADAR_COLORS.text,
-  },
-  upcomingDate: {
-    fontSize: 13,
-    color: MADAR_COLORS.textSecondary,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: MADAR_COLORS.border,
-  },
-  serviceLineRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  serviceLineName: {
-    fontSize: 14,
-    color: MADAR_COLORS.text,
-    flex: 1,
-  },
-  serviceLinePrice: {
-    fontSize: 14,
-    color: MADAR_COLORS.gold,
-    fontWeight: '600',
-  },
-  totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  totalLabel: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: MADAR_COLORS.text,
-  },
-  totalPrice: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: MADAR_COLORS.gold,
-  },
-  paidBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(76,175,125,0.15)',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  paidBadgeText: {
-    fontSize: 12,
-    color: MADAR_COLORS.success,
-    fontWeight: '600',
-  },
-  upcomingActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  viewDetailsText: {
-    fontSize: 14,
-    color: MADAR_COLORS.gold,
-    fontWeight: '600',
-  },
-  rebookFilledBtn: {
-    backgroundColor: MADAR_COLORS.gold,
-    borderRadius: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-  },
-  rebookFilledBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0A0A0F',
-  },
 
   // Past card (image-first)
   pastCard: {

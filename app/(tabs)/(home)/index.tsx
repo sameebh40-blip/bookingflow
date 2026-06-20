@@ -425,7 +425,7 @@ export default function HomeScreen() {
         </View>
 
         {loading ? (
-          <View style={{ flexDirection: 'row', gap: 12, paddingHorizontal: 16 }}>
+          <View style={{ flexDirection: 'row', gap: 12, marginHorizontal: -20, paddingHorizontal: 20 }}>
             <SkeletonCarouselCard />
             <SkeletonCarouselCard />
           </View>
@@ -438,6 +438,7 @@ export default function HomeScreen() {
             snapToInterval={CAROUSEL_CARD_WIDTH + 12}
             decelerationRate="fast"
             pagingEnabled={false}
+            style={{ marginHorizontal: -20 }}
             contentContainerStyle={styles.carouselContent}
             renderItem={({ item, index }) => (
               <AnimatedListItem index={index}>

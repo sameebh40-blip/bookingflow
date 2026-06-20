@@ -164,6 +164,7 @@ export default function MapSearchScreen() {
   const router = useRouter();
   const webViewRef = useRef<WebView>(null);
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
+  const [sheetAtFull, setSheetAtFull] = useState(false);
   const sheetHeight = useRef(new Animated.Value(SNAP_HALF)).current;
   const lastHeight = useRef(SNAP_HALF);
   const venueListRef = useRef<ScrollView>(null);
@@ -175,11 +176,12 @@ export default function MapSearchScreen() {
 
   const snapToPoint = useCallback((target: number) => {
     lastHeight.current = target;
+    setSheetAtFull(target === SNAP_FULL);
     Animated.spring(sheetHeight, {
       toValue: target,
       useNativeDriver: false,
-      tension: 60,
-      friction: 12,
+      tension: 65,
+      friction: 11,
     }).start();
   }, [sheetHeight]);
 
@@ -319,6 +321,11 @@ export default function MapSearchScreen() {
           contentContainerStyle={styles.venueListContent}
           showsVerticalScrollIndicator={false}
           nestedScrollEnabled
+          scrollEnabled={sheetAtFull}
+          onScrollBeginDrag={() => {
+            console.log('[MapSearch] Venue list scroll started, expanding sheet');
+            if (!sheetAtFull) snapToPoint(SNAP_FULL);
+          }}
         >
           {MOCK_VENUES.map((venue) => {
             const isSelected = selectedVenueId === venue.id;

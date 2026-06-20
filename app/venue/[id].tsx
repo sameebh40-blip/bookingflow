@@ -1,27 +1,19 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
   Dimensions,
-  Animated,
   Image,
   FlatList,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
   ImageSourcePropType,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import {
-  ArrowLeft,
-  Share2,
-  Heart,
-  Star,
-  MapPin,
-  Clock,
-  ChevronRight,
-  Plus,
-} from 'lucide-react-native';
+import { ArrowLeft, Share2, Heart, Star, MapPin, Clock } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
@@ -40,6 +32,8 @@ interface Venue {
   image_url: string;
   starting_price: number;
   description?: string;
+  is_open?: boolean;
+  open_until?: string;
 }
 
 interface Service {
@@ -58,11 +52,19 @@ interface Staff {
   avatar: string;
 }
 
+interface Review {
+  id: string;
+  name: string;
+  initials: string;
+  rating: number;
+  comment: string;
+  date: string;
+}
+
 const MOCK_VENUES: Record<string, Venue> = {
-  '1': { id: '1', name: 'Level Barber Shop', category: 'Barber', rating: 5.0, review_count: 1336, distance_km: 0.75, address: 'Avenue 11, Tubli, Bahrain', image_url: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800', starting_price: 5, description: 'Level Barber Shop is a premium barbershop offering the finest cuts and grooming services in Bahrain. Our skilled barbers are dedicated to providing an exceptional experience with every visit.' },
-  '2': { id: '2', name: 'The Groom Room', category: 'Barber', rating: 5.0, review_count: 513, distance_km: 14.6, address: 'Mall of Dilmunia, Shop 26, Building...', image_url: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800', starting_price: 8, description: 'The Groom Room Barber Shop is an upscale, bespoke gentleman\'s barber shop that offers today\'s progressive gentlemen a haven where he can sit back, relax and experience the finest grooming.' },
-  '3': { id: '3', name: 'Luxe Spa & Wellness', category: 'Spa', rating: 4.8, review_count: 287, distance_km: 2.1, address: 'Seef District, Manama', image_url: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=800', starting_price: 25, description: 'A sanctuary of relaxation and rejuvenation in the heart of Manama. Our expert therapists offer a range of treatments designed to restore balance and harmony.' },
-  '4': { id: '4', name: 'Nail Studio Pro', category: 'Nails', rating: 4.9, review_count: 412, distance_km: 1.3, address: 'Adliya, Manama', image_url: 'https://images.unsplash.com/photo-1604654894610-df63bc536371?w=800', starting_price: 12, description: 'Professional nail care and artistry. From classic manicures to intricate nail art, our technicians deliver flawless results every time.' },
+  '1': { id: '1', name: 'Level Barber Shop', category: 'Barber', rating: 5.0, review_count: 1336, distance_km: 0.75, address: 'Avenue 11, Tubli, Bahrain', image_url: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800', starting_price: 5, description: 'Level Barber Shop is a premium barbershop offering the finest cuts and grooming services in Bahrain. Our skilled barbers are dedicated to providing an exceptional experience with every visit. We specialize in modern fades, classic cuts, and beard grooming.', is_open: true, open_until: '9:00 PM' },
+  '2': { id: '2', name: 'The Groom Room', category: 'Barber', rating: 5.0, review_count: 513, distance_km: 14.6, address: 'Mall of Dilmunia, Shop 26', image_url: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800', starting_price: 8, description: "The Groom Room is an upscale gentleman's barber shop offering today's progressive gentlemen a haven where he can sit back, relax and experience the finest grooming.", is_open: true, open_until: '8:00 PM' },
+  '3': { id: '3', name: 'Luxe Spa & Wellness', category: 'Spa', rating: 4.8, review_count: 287, distance_km: 2.1, address: 'Seef District, Manama', image_url: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=800', starting_price: 25, description: 'A sanctuary of relaxation and rejuvenation in the heart of Manama.', is_open: false, open_until: '10:00 PM' },
 };
 
 const MOCK_SERVICES: Service[] = [
@@ -71,6 +73,7 @@ const MOCK_SERVICES: Service[] = [
   { id: '3', name: 'Hot Towel Shave', duration: 30, price: 7, category: 'Shaving' },
   { id: '4', name: 'Hair + Beard Combo', duration: 60, price: 12, category: 'Packages' },
   { id: '5', name: 'Kids Haircut', duration: 20, price: 4, category: 'Hair' },
+  { id: '6', name: 'Skin Fade', duration: 45, price: 10, category: 'Hair' },
 ];
 
 const MOCK_STAFF: Staff[] = [
@@ -79,11 +82,21 @@ const MOCK_STAFF: Staff[] = [
   { id: '3', name: 'Omar', specialty: 'Beard styling', rating: 4.8, avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200' },
 ];
 
+const MOCK_REVIEWS: Review[] = [
+  { id: '1', name: 'Sdiqa A', initials: 'SA', rating: 5, comment: 'Perfect experience 😍 arti the best', date: 'Fri, Jun 19, 2026 at 1:39 PM' },
+  { id: '2', name: 'Abrar M', initials: 'AM', rating: 5, comment: 'Amazing service, will definitely come back!', date: 'Tue, Jun 16, 2026 at 9:06 PM' },
+  { id: '3', name: 'Khalid S', initials: 'KS', rating: 4, comment: 'Great haircut, very professional staff.', date: 'Mon, Jun 14, 2026 at 3:22 PM' },
+];
+
 const VENUE_IMAGES = [
   'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800',
   'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800',
   'https://images.unsplash.com/photo-1599351431202-1e0f0137899a?w=800',
 ];
+
+const TABS = ['Photos', 'About', 'Services', 'Team', 'Reviews', 'Other'];
+
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: '' };
@@ -100,7 +113,15 @@ export default function VenueDetailScreen() {
   const [isFavourite, setIsFavourite] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
   const [currentImage, setCurrentImage] = useState(0);
-  const [selectedServices, setSelectedServices] = useState<Set<string>>(new Set());
+  const [activeTab, setActiveTab] = useState('Photos');
+  const scrollViewRef = useRef<ScrollView>(null);
+  const tabScrollRef = useRef<ScrollView>(null);
+
+  const aboutY = useRef(0);
+  const servicesY = useRef(0);
+  const teamY = useRef(0);
+  const reviewsY = useRef(0);
+  const otherY = useRef(0);
 
   useEffect(() => {
     fetchVenueData();
@@ -110,60 +131,41 @@ export default function VenueDetailScreen() {
     console.log('[VenueDetail] Fetching venue:', id);
     try {
       const { data, error } = await supabase.from('venues').select('*').eq('id', id).single();
-      if (error || !data) {
-        console.log('[VenueDetail] Using mock venue data');
-        setVenue(MOCK_VENUES[id ?? '1'] ?? MOCK_VENUES['1']);
-      } else {
-        setVenue(data);
-      }
+      setVenue(error || !data ? (MOCK_VENUES[id ?? '1'] ?? MOCK_VENUES['1']) : data);
     } catch {
       setVenue(MOCK_VENUES[id ?? '1'] ?? MOCK_VENUES['1']);
     }
-
     try {
       const { data, error } = await supabase.from('services').select('*').eq('venue_id', id);
-      if (error || !data || data.length === 0) {
-        setServices(MOCK_SERVICES);
-      } else {
-        setServices(data);
-      }
+      setServices(error || !data || data.length === 0 ? MOCK_SERVICES : data);
     } catch {
       setServices(MOCK_SERVICES);
     }
   };
 
-  const toggleService = useCallback((serviceId: string, serviceName: string) => {
-    console.log('[VenueDetail] Toggle service:', serviceId, serviceName);
-    setSelectedServices(prev => {
-      const next = new Set(prev);
-      if (next.has(serviceId)) next.delete(serviceId);
-      else next.add(serviceId);
-      return next;
-    });
-  }, []);
+  const handleTabPress = (tab: string) => {
+    console.log('[VenueDetail] Tab pressed:', tab);
+    setActiveTab(tab);
+    const yMap: Record<string, number> = {
+      Photos: 0,
+      About: aboutY.current,
+      Services: servicesY.current,
+      Team: teamY.current,
+      Reviews: reviewsY.current,
+      Other: otherY.current,
+    };
+    scrollViewRef.current?.scrollTo({ y: yMap[tab] ?? 0, animated: true });
+  };
 
-  const handleBookNow = useCallback(() => {
-    console.log('[VenueDetail] Book now pressed, venue:', id, 'selected services:', Array.from(selectedServices));
-    router.push(`/booking/services?venueId=${id}`);
-  }, [id, selectedServices, router]);
-
-  const handleBack = useCallback(() => {
-    console.log('[VenueDetail] Back pressed');
-    router.back();
-  }, [router]);
-
-  const handleShare = useCallback(() => {
-    console.log('[VenueDetail] Share pressed');
-  }, []);
-
-  const handleFavourite = useCallback(() => {
-    console.log('[VenueDetail] Favourite toggled:', !isFavourite);
-    setIsFavourite(f => !f);
-  }, [isFavourite]);
-
-  const totalPrice = services
-    .filter(s => selectedServices.has(s.id))
-    .reduce((sum, s) => sum + s.price, 0);
+  const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const y = e.nativeEvent.contentOffset.y;
+    if (y < aboutY.current - 60) setActiveTab('Photos');
+    else if (y < servicesY.current - 60) setActiveTab('About');
+    else if (y < teamY.current - 60) setActiveTab('Services');
+    else if (y < reviewsY.current - 60) setActiveTab('Team');
+    else if (y < otherY.current - 60) setActiveTab('Reviews');
+    else setActiveTab('Other');
+  };
 
   const servicesByCategory = services.reduce<Record<string, Service[]>>((acc, s) => {
     if (!acc[s.category]) acc[s.category] = [];
@@ -180,14 +182,29 @@ export default function VenueDetailScreen() {
   }
 
   const descText = venue.description ?? '';
-  const shortDesc = descText.slice(0, 120);
-  const hasMore = descText.length > 120;
+  const shortDesc = descText.slice(0, 140);
+  const hasMore = descText.length > 140;
+  const ratingFixed = Number(venue.rating).toFixed(1);
+  const distanceFixed = Number(venue.distance_km).toFixed(1);
+  const openStatusText = venue.is_open
+    ? `Open until ${venue.open_until ?? '9:00 PM'}`
+    : 'Closed';
+  const openStatusColor = venue.is_open ? MADAR_COLORS.success : MADAR_COLORS.danger;
+  const reviewCountText = venue.review_count.toLocaleString();
+  const servicesCountText = `${services.length} services available`;
+  const starsFilled = Math.round(venue.rating);
 
   return (
     <View style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
-        {/* Photo carousel */}
-        <View style={styles.carouselContainer}>
+      <ScrollView
+        ref={scrollViewRef}
+        showsVerticalScrollIndicator={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        contentContainerStyle={{ paddingBottom: 120 }}
+      >
+        {/* ── PHOTO CAROUSEL ── */}
+        <View style={{ height: 300, position: 'relative' }}>
           <FlatList
             data={VENUE_IMAGES}
             horizontal
@@ -198,27 +215,43 @@ export default function VenueDetailScreen() {
               setCurrentImage(index);
             }}
             renderItem={({ item }) => (
-              <Image source={resolveImageSource(item)} style={styles.carouselImage} resizeMode="cover" />
+              <Image
+                source={resolveImageSource(item)}
+                style={{ width: screenWidth, height: 300 }}
+                resizeMode="cover"
+              />
             )}
             keyExtractor={(_, i) => String(i)}
           />
           <LinearGradient
-            colors={['rgba(0,0,0,0.4)', 'transparent']}
-            style={styles.carouselTopGradient}
+            colors={['rgba(0,0,0,0.45)', 'transparent']}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 100 }}
           />
-          {/* Back button */}
+          {/* Back */}
           <AnimatedPressable
-            onPress={handleBack}
+            onPress={() => {
+              console.log('[VenueDetail] Back pressed');
+              router.back();
+            }}
             style={[styles.carouselBtn, { top: insets.top + 12, left: 16 }]}
           >
             <ArrowLeft size={20} color="#fff" />
           </AnimatedPressable>
           {/* Share + Heart */}
-          <View style={[styles.carouselBtnRow, { top: insets.top + 12, right: 16 }]}>
-            <AnimatedPressable onPress={handleShare} style={styles.carouselBtn}>
+          <View style={{ position: 'absolute', top: insets.top + 12, right: 16, flexDirection: 'row', gap: 8 }}>
+            <AnimatedPressable
+              onPress={() => console.log('[VenueDetail] Share pressed')}
+              style={styles.carouselBtn}
+            >
               <Share2 size={18} color="#fff" />
             </AnimatedPressable>
-            <AnimatedPressable onPress={handleFavourite} style={styles.carouselBtn}>
+            <AnimatedPressable
+              onPress={() => {
+                console.log('[VenueDetail] Favourite toggled:', !isFavourite);
+                setIsFavourite(f => !f);
+              }}
+              style={styles.carouselBtn}
+            >
               <Heart
                 size={18}
                 color={isFavourite ? MADAR_COLORS.danger : '#fff'}
@@ -226,126 +259,263 @@ export default function VenueDetailScreen() {
               />
             </AnimatedPressable>
           </View>
-          {/* Image counter */}
+          {/* Counter */}
           <View style={styles.imageCounter}>
             <Text style={styles.imageCounterText}>{currentImage + 1}/{VENUE_IMAGES.length}</Text>
           </View>
         </View>
 
-        {/* Info card */}
+        {/* ── VENUE INFO CARD ── */}
         <View style={styles.infoCard}>
-          <View style={styles.infoHeader}>
-            <Text style={styles.venueName}>{venue.name}</Text>
-            <View style={styles.categoryBadge}>
-              <Text style={styles.categoryBadgeText}>{venue.category}</Text>
-            </View>
-          </View>
-
+          <Text style={styles.venueName}>{venue.name}</Text>
+          <Text style={styles.categoryText}>{venue.category}</Text>
           <View style={styles.ratingRow}>
             <Star size={14} color={MADAR_COLORS.gold} fill={MADAR_COLORS.gold} />
-            <Text style={styles.ratingText}>{Number(venue.rating).toFixed(1)}</Text>
-            <Text style={styles.reviewCount}>({venue.review_count.toLocaleString()})</Text>
+            <Text style={styles.ratingText}>{ratingFixed}</Text>
+            <Text style={styles.reviewCount}>({reviewCountText})</Text>
             <Text style={styles.dot}>·</Text>
-            <Clock size={13} color={MADAR_COLORS.success} />
-            <Text style={styles.openText}>Open until 9:00 PM</Text>
+            <Clock size={13} color={openStatusColor} />
+            <Text style={[styles.openText, { color: openStatusColor }]}>{openStatusText}</Text>
           </View>
-
           <View style={styles.addressPill}>
             <MapPin size={14} color={MADAR_COLORS.gold} />
             <Text style={styles.addressText} numberOfLines={1}>
-              {Number(venue.distance_km).toFixed(1)} km · {venue.address}
+              {distanceFixed}
+            </Text>
+            <Text style={styles.addressText} numberOfLines={1}>
+              km ·
+            </Text>
+            <Text style={styles.addressText} numberOfLines={1}>
+              {venue.address}
             </Text>
           </View>
+        </View>
 
-          {/* About */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>About</Text>
-            <Text style={styles.descText}>
-              {descExpanded ? descText : shortDesc}
-              {hasMore && !descExpanded ? '...' : ''}
-            </Text>
-            {hasMore && (
-              <AnimatedPressable
-                onPress={() => {
-                  console.log('[VenueDetail] Read more pressed');
-                  setDescExpanded(e => !e);
-                }}
-              >
-                <Text style={styles.readMore}>{descExpanded ? 'Show less' : 'Read more'}</Text>
-              </AnimatedPressable>
-            )}
-          </View>
+        {/* ── STICKY TAB BAR ── */}
+        <View style={styles.tabBar}>
+          <ScrollView
+            ref={tabScrollRef}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 16 }}
+          >
+            {TABS.map((tab) => {
+              const isActive = activeTab === tab;
+              return (
+                <AnimatedPressable
+                  key={tab}
+                  onPress={() => handleTabPress(tab)}
+                  style={[styles.tabItem, isActive && styles.tabItemActive]}
+                >
+                  <Text style={[styles.tabText, isActive && styles.tabTextActive]}>{tab}</Text>
+                </AnimatedPressable>
+              );
+            })}
+          </ScrollView>
+        </View>
 
-          {/* Services */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Services ({services.length})</Text>
-            {Object.entries(servicesByCategory).map(([category, catServices]) => (
-              <View key={category} style={styles.serviceCategory}>
-                <Text style={styles.serviceCategoryTitle}>{category}</Text>
-                {catServices.map((service) => {
-                  const isSelected = selectedServices.has(service.id);
-                  return (
-                    <View key={service.id} style={styles.serviceRow}>
-                      <View style={styles.serviceInfo}>
-                        <Text style={styles.serviceName}>{service.name}</Text>
-                        <Text style={styles.serviceMeta}>{service.duration} min · BHD {service.price}</Text>
-                      </View>
+        {/* ── ABOUT SECTION ── */}
+        <View
+          style={styles.section}
+          onLayout={(e) => { aboutY.current = e.nativeEvent.layout.y; }}
+        >
+          <Text style={styles.sectionTitle}>About</Text>
+          <Text style={styles.descText}>
+            {descExpanded ? descText : shortDesc}
+            {hasMore && !descExpanded ? '...' : ''}
+          </Text>
+          {hasMore && (
+            <AnimatedPressable
+              onPress={() => {
+                console.log('[VenueDetail] Read more toggled');
+                setDescExpanded(e => !e);
+              }}
+            >
+              <Text style={styles.readMore}>{descExpanded ? 'Show less' : 'Read more'}</Text>
+            </AnimatedPressable>
+          )}
+        </View>
+
+        {/* ── SERVICES SECTION ── */}
+        <View
+          style={styles.section}
+          onLayout={(e) => { servicesY.current = e.nativeEvent.layout.y; }}
+        >
+          <Text style={styles.sectionTitle}>Services</Text>
+          {Object.entries(servicesByCategory).map(([cat, svcs]) => (
+            <View key={cat} style={{ marginBottom: 12 }}>
+              <Text style={styles.categoryHeader}>{cat}</Text>
+              {svcs.map((svc) => {
+                const priceFixed = svc.price.toFixed(2);
+                return (
+                  <View key={svc.id} style={styles.serviceRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.serviceName}>{svc.name}</Text>
+                      <Text style={styles.serviceDuration}>{svc.duration} min</Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                      <Text style={styles.servicePrice}>BHD {priceFixed}</Text>
                       <AnimatedPressable
-                        onPress={() => toggleService(service.id, service.name)}
-                        style={[styles.addBtn, isSelected && styles.addBtnSelected]}
+                        onPress={() => {
+                          console.log('[VenueDetail] Book service pressed:', svc.id, svc.name);
+                          router.push(`/booking/services?venueId=${id}`);
+                        }}
+                        style={styles.bookServiceBtn}
                       >
-                        <Plus size={16} color={isSelected ? MADAR_COLORS.background : MADAR_COLORS.gold} />
+                        <Text style={styles.bookServiceBtnText}>Book</Text>
                       </AnimatedPressable>
                     </View>
-                  );
-                })}
-              </View>
-            ))}
-          </View>
+                  </View>
+                );
+              })}
+            </View>
+          ))}
+          <AnimatedPressable
+            onPress={() => {
+              console.log('[VenueDetail] See all services pressed');
+              router.push(`/booking/services?venueId=${id}`);
+            }}
+            style={styles.seeAllBtn}
+          >
+            <Text style={styles.seeAllBtnText}>See all {services.length} services</Text>
+          </AnimatedPressable>
+        </View>
 
-          {/* Staff */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Our team</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
-              {MOCK_STAFF.map((staff) => (
+        {/* ── TEAM SECTION ── */}
+        <View
+          style={styles.section}
+          onLayout={(e) => { teamY.current = e.nativeEvent.layout.y; }}
+        >
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Team</Text>
+            <AnimatedPressable onPress={() => console.log('[VenueDetail] See all team pressed')}>
+              <Text style={styles.seeAllLink}>See all</Text>
+            </AnimatedPressable>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 20 }}>
+            {MOCK_STAFF.map((staff) => {
+              const staffRating = staff.rating.toFixed(1);
+              return (
                 <AnimatedPressable
                   key={staff.id}
-                  onPress={() => console.log('[VenueDetail] Staff pressed:', staff.id, staff.name)}
-                  style={styles.staffCard}
+                  onPress={() => {
+                    console.log('[VenueDetail] Staff pressed:', staff.id, staff.name);
+                    router.push(`/barber/${staff.id}`);
+                  }}
+                  style={{ alignItems: 'center', gap: 6 }}
                 >
-                  <Image source={resolveImageSource(staff.avatar)} style={styles.staffAvatar} />
-                  <Text style={styles.staffName}>{staff.name}</Text>
-                  <Text style={styles.staffSpecialty}>{staff.specialty}</Text>
-                  <View style={styles.staffRating}>
-                    <Star size={10} color={MADAR_COLORS.gold} fill={MADAR_COLORS.gold} />
-                    <Text style={styles.staffRatingText}>{staff.rating}</Text>
+                  <Image
+                    source={resolveImageSource(staff.avatar)}
+                    style={{ width: 72, height: 72, borderRadius: 36 }}
+                    resizeMode="cover"
+                  />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                    <Star size={11} color={MADAR_COLORS.gold} fill={MADAR_COLORS.gold} />
+                    <Text style={{ fontSize: 11, color: MADAR_COLORS.gold, fontWeight: '700' }}>{staffRating}</Text>
                   </View>
+                  <Text style={{ fontSize: 12, color: MADAR_COLORS.text, fontWeight: '600' }}>{staff.name}</Text>
                 </AnimatedPressable>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* ── REVIEWS SECTION ── */}
+        <View
+          style={styles.section}
+          onLayout={(e) => { reviewsY.current = e.nativeEvent.layout.y; }}
+        >
+          <Text style={styles.sectionTitle}>Reviews</Text>
+          {/* Summary */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', gap: 2 }}>
+              {[1, 2, 3, 4, 5].map(i => (
+                <Star
+                  key={i}
+                  size={20}
+                  color={MADAR_COLORS.gold}
+                  fill={i <= starsFilled ? MADAR_COLORS.gold : 'transparent'}
+                />
               ))}
-            </ScrollView>
+            </View>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: MADAR_COLORS.text }}>{ratingFixed}</Text>
+            <Text style={{ fontSize: 14, color: MADAR_COLORS.textSecondary }}>({reviewCountText})</Text>
+          </View>
+          {/* Review cards */}
+          {MOCK_REVIEWS.map((review) => {
+            const reviewStarsFilled = review.rating;
+            return (
+              <View key={review.id} style={styles.reviewCard}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: MADAR_COLORS.surfaceSecondary, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: MADAR_COLORS.textSecondary }}>{review.initials}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: MADAR_COLORS.text }}>{review.name}</Text>
+                    <Text style={{ fontSize: 11, color: MADAR_COLORS.textTertiary }}>{review.date}</Text>
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 2, marginBottom: 6 }}>
+                  {[1, 2, 3, 4, 5].map(i => (
+                    <Star
+                      key={i}
+                      size={14}
+                      color={MADAR_COLORS.gold}
+                      fill={i <= reviewStarsFilled ? MADAR_COLORS.gold : 'transparent'}
+                    />
+                  ))}
+                </View>
+                <Text style={{ fontSize: 13, color: MADAR_COLORS.textSecondary, lineHeight: 20 }}>{review.comment}</Text>
+              </View>
+            );
+          })}
+          <AnimatedPressable
+            style={styles.seeAllBtn}
+            onPress={() => console.log('[VenueDetail] See all reviews pressed')}
+          >
+            <Text style={styles.seeAllBtnText}>See all {reviewCountText} reviews</Text>
+          </AnimatedPressable>
+        </View>
+
+        {/* ── OTHER SECTION (Opening times) ── */}
+        <View
+          style={styles.section}
+          onLayout={(e) => { otherY.current = e.nativeEvent.layout.y; }}
+        >
+          <Text style={styles.sectionTitle}>Opening times</Text>
+          {DAYS.map((day) => (
+            <View
+              key={day}
+              style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: MADAR_COLORS.border }}
+            >
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: MADAR_COLORS.success, marginRight: 12 }} />
+              <Text style={{ flex: 1, fontSize: 14, color: MADAR_COLORS.text }}>{day}</Text>
+              <Text style={{ fontSize: 14, color: MADAR_COLORS.textSecondary }}>10:00 AM – 8:00 PM</Text>
+            </View>
+          ))}
+          <View style={{ marginTop: 20 }}>
+            <Text style={styles.sectionTitle}>Additional information</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
+              <View style={{ width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: MADAR_COLORS.success, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 12, color: MADAR_COLORS.success, fontWeight: '700' }}>✓</Text>
+              </View>
+              <Text style={{ fontSize: 14, color: MADAR_COLORS.textSecondary }}>Instant confirmation</Text>
+            </View>
           </View>
         </View>
       </ScrollView>
 
-      {/* Sticky bottom bar */}
+      {/* ── STICKY BOTTOM BAR ── */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
-        <View style={styles.bottomLeft}>
-          <Text style={styles.servicesAvailable}>{services.length} services available</Text>
-          {selectedServices.size > 0 && (
-            <Text style={styles.selectedTotal}>
-              {selectedServices.size} selected · BHD {totalPrice}
-            </Text>
-          )}
-        </View>
-        <AnimatedPressable onPress={handleBookNow} style={styles.bookNowBtn}>
-          <LinearGradient
-            colors={['#C9A84C', '#E8C96A']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.bookNowGradient}
-          >
-            <Text style={styles.bookNowText}>Book now</Text>
-          </LinearGradient>
+        <Text style={styles.bottomBarText}>{servicesCountText}</Text>
+        <AnimatedPressable
+          onPress={() => {
+            console.log('[VenueDetail] Book now pressed, venue:', id);
+            router.push(`/booking/services?venueId=${id}`);
+          }}
+          style={styles.bookNowBtn}
+        >
+          <Text style={styles.bookNowBtnText}>Book now</Text>
         </AnimatedPressable>
       </View>
     </View>
@@ -354,129 +524,147 @@ export default function VenueDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: MADAR_COLORS.background },
-  carouselContainer: { height: 300, position: 'relative' },
-  carouselImage: { width: screenWidth, height: 300 },
-  carouselTopGradient: { position: 'absolute', top: 0, left: 0, right: 0, height: 100 },
   carouselBtn: {
     position: 'absolute',
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(13,13,20,0.7)',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  carouselBtnRow: {
-    position: 'absolute',
-    flexDirection: 'row',
-    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
   },
   imageCounter: {
     position: 'absolute',
     bottom: 12,
     right: 12,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 12,
   },
   imageCounterText: { fontSize: 12, color: '#fff', fontWeight: '600' },
   infoCard: {
-    backgroundColor: MADAR_COLORS.background,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    marginTop: -20,
-    padding: 20,
+    backgroundColor: MADAR_COLORS.surface,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: MADAR_COLORS.border,
   },
-  infoHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
-  venueName: { fontSize: 24, fontWeight: '800', color: MADAR_COLORS.text, flex: 1, letterSpacing: -0.5 },
-  categoryBadge: {
-    backgroundColor: MADAR_COLORS.goldMuted,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: MADAR_COLORS.goldBorder,
-  },
-  categoryBadgeText: { fontSize: 12, color: MADAR_COLORS.gold, fontWeight: '700' },
-  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
-  ratingText: { fontSize: 14, color: MADAR_COLORS.gold, fontWeight: '700' },
+  venueName: { fontSize: 24, fontWeight: '800', color: MADAR_COLORS.text, letterSpacing: -0.3 },
+  categoryText: { fontSize: 14, color: MADAR_COLORS.textSecondary, marginTop: 2 },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 8 },
+  ratingText: { fontSize: 14, fontWeight: '700', color: MADAR_COLORS.gold },
   reviewCount: { fontSize: 13, color: MADAR_COLORS.textSecondary },
-  dot: { color: MADAR_COLORS.textTertiary },
-  openText: { fontSize: 13, color: MADAR_COLORS.success, fontWeight: '500' },
+  dot: { fontSize: 13, color: MADAR_COLORS.textTertiary },
+  openText: { fontSize: 13, fontWeight: '500' },
   addressPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: MADAR_COLORS.surface,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: MADAR_COLORS.border,
+    gap: 4,
+    marginTop: 10,
+    backgroundColor: MADAR_COLORS.surfaceSecondary,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    alignSelf: 'flex-start',
   },
-  addressText: { fontSize: 13, color: MADAR_COLORS.textSecondary, flex: 1 },
-  section: { marginBottom: 24 },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: MADAR_COLORS.text, marginBottom: 12, letterSpacing: -0.2 },
+  addressText: { fontSize: 13, color: MADAR_COLORS.textSecondary },
+  // Tab bar
+  tabBar: {
+    backgroundColor: MADAR_COLORS.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: MADAR_COLORS.border,
+  },
+  tabItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  tabItemActive: { borderBottomColor: MADAR_COLORS.gold },
+  tabText: { fontSize: 14, color: MADAR_COLORS.textSecondary, fontWeight: '500' },
+  tabTextActive: { color: MADAR_COLORS.gold, fontWeight: '700' },
+  // Sections
+  section: {
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: MADAR_COLORS.border,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sectionTitle: { fontSize: 18, fontWeight: '700', color: MADAR_COLORS.text, marginBottom: 12 },
+  categoryHeader: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: MADAR_COLORS.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
   descText: { fontSize: 14, color: MADAR_COLORS.textSecondary, lineHeight: 22 },
   readMore: { fontSize: 14, color: MADAR_COLORS.gold, fontWeight: '600', marginTop: 6 },
-  serviceCategory: { marginBottom: 16 },
-  serviceCategoryTitle: { fontSize: 13, color: MADAR_COLORS.gold, fontWeight: '700', marginBottom: 10, letterSpacing: 0.5, textTransform: 'uppercase' },
+  seeAllLink: { fontSize: 14, color: MADAR_COLORS.gold, fontWeight: '600' },
   serviceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: MADAR_COLORS.divider,
+    borderBottomColor: MADAR_COLORS.border,
   },
-  serviceInfo: { flex: 1, gap: 3 },
-  serviceName: { fontSize: 15, fontWeight: '600', color: MADAR_COLORS.text },
-  serviceMeta: { fontSize: 12, color: MADAR_COLORS.textSecondary },
-  addBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: MADAR_COLORS.goldBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addBtnSelected: { backgroundColor: MADAR_COLORS.gold, borderColor: MADAR_COLORS.gold },
-  staffCard: {
-    width: 100,
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: MADAR_COLORS.surface,
-    borderRadius: 16,
-    padding: 12,
+  serviceName: { fontSize: 14, fontWeight: '600', color: MADAR_COLORS.text },
+  serviceDuration: { fontSize: 12, color: MADAR_COLORS.textSecondary, marginTop: 2 },
+  servicePrice: { fontSize: 14, fontWeight: '700', color: MADAR_COLORS.text },
+  bookServiceBtn: {
     borderWidth: 1,
     borderColor: MADAR_COLORS.border,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 5,
   },
-  staffAvatar: { width: 56, height: 56, borderRadius: 28 },
-  staffName: { fontSize: 13, fontWeight: '700', color: MADAR_COLORS.text, textAlign: 'center' },
-  staffSpecialty: { fontSize: 10, color: MADAR_COLORS.textSecondary, textAlign: 'center' },
-  staffRating: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  staffRatingText: { fontSize: 11, color: MADAR_COLORS.gold, fontWeight: '600' },
+  bookServiceBtnText: { fontSize: 13, color: MADAR_COLORS.text, fontWeight: '600' },
+  seeAllBtn: {
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: MADAR_COLORS.border,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  seeAllBtnText: { fontSize: 14, color: MADAR_COLORS.textSecondary, fontWeight: '500' },
+  reviewCard: {
+    backgroundColor: MADAR_COLORS.surfaceSecondary,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+  },
+  // Bottom bar
   bottomBar: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
+    backgroundColor: MADAR_COLORS.surface,
+    borderTopWidth: 1,
+    borderTopColor: MADAR_COLORS.border,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 16,
-    backgroundColor: MADAR_COLORS.surface,
-    borderTopWidth: 1,
-    borderTopColor: MADAR_COLORS.border,
+    paddingTop: 12,
   },
-  bottomLeft: { gap: 2 },
-  servicesAvailable: { fontSize: 13, color: MADAR_COLORS.textSecondary },
-  selectedTotal: { fontSize: 14, color: MADAR_COLORS.gold, fontWeight: '700' },
-  bookNowBtn: { borderRadius: 24 },
-  bookNowGradient: { paddingHorizontal: 28, paddingVertical: 14, borderRadius: 24 },
-  bookNowText: { fontSize: 15, fontWeight: '700', color: MADAR_COLORS.background },
+  bottomBarText: { fontSize: 14, color: MADAR_COLORS.textSecondary },
+  bookNowBtn: {
+    backgroundColor: MADAR_COLORS.gold,
+    borderRadius: 24,
+    paddingHorizontal: 28,
+    paddingVertical: 13,
+  },
+  bookNowBtnText: { fontSize: 15, fontWeight: '800', color: '#0A0A0F' },
 });

@@ -107,15 +107,16 @@ export default function BookingConfirmScreen() {
     setLoading(true);
     try {
       if (user) {
+        const scheduledAt = date && time
+          ? new Date(`${date}T${time}`).toISOString()
+          : new Date().toISOString();
         const { error } = await supabase.from('appointments').insert({
           user_id: user.id,
           venue_id: venueId,
-          staff_id: staffId !== 'any' ? staffId : null,
-          date: date,
-          time: time,
-          services: serviceIds,
+          scheduled_at: scheduledAt,
           total_price: totalPrice,
           status: 'upcoming',
+          created_at: new Date().toISOString(),
         });
         if (error) {
           console.log('[Booking/Confirm] Supabase insert error (non-fatal):', error.message);
