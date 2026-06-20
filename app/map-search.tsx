@@ -20,7 +20,6 @@ import { supabase } from '@/utils/supabase';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
-const MAP_HEIGHT = screenHeight * 0.55;
 const SNAP_COLLAPSED = 80;
 const SNAP_HALF = screenHeight * 0.45;
 const SNAP_FULL = screenHeight * 0.82;
@@ -247,11 +246,18 @@ export default function MapSearchScreen() {
         console.log('[MapSearch] Marker pressed for venue:', data.venueId);
         setSelectedVenueId(data.venueId);
         snapToPoint(SNAP_HALF);
+        // scroll venue list to show selected venue
+        const idx = venues.findIndex(v => v.id === data.venueId);
+        if (idx >= 0) {
+          setTimeout(() => {
+            venueListRef.current?.scrollTo({ y: idx * 280, animated: true });
+          }, 350);
+        }
       } else if (data.type === 'mapMove') {
         console.log('[MapSearch] Map moved to:', data.lat, data.lng);
       }
     } catch (e) {}
-  }, [snapToPoint]);
+  }, [snapToPoint, venues]);
 
   const handleVenueCardPress = useCallback((id: string, name: string) => {
     console.log('[MapSearch] Venue card pressed:', id, name);
@@ -287,7 +293,7 @@ export default function MapSearchScreen() {
         key={mapKey}
         ref={webViewRef}
         source={{ html: mapHtml }}
-        style={[styles.map, { height: MAP_HEIGHT }]}
+        style={styles.map}
         originWhitelist={['*']}
         onMessage={handleWebViewMessage}
         scrollEnabled={false}
@@ -343,11 +349,14 @@ export default function MapSearchScreen() {
           contentContainerStyle={styles.venueListContent}
           showsVerticalScrollIndicator={false}
           nestedScrollEnabled
-          scrollEnabled={sheetAtFull}
-          onScrollBeginDrag={() => {
-            console.log('[MapSearch] Venue list scroll started, expanding sheet');
-            if (!sheetAtFull) snapToPoint(SNAP_FULL);
+          scrollEnabled={true}
+          onScroll={(e) => {
+            if (e.nativeEvent.contentOffset.y > 2 && !sheetAtFull) {
+              console.log('[MapSearch] Venue list scroll detected, expanding sheet to full');
+              snapToPoint(SNAP_FULL);
+            }
           }}
+          scrollEventThrottle={16}
         >
           {venues.filter(v =>
             !searchQuery ||
@@ -427,6 +436,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
+    bottom: 0,
   },
   searchBar: {
     position: 'absolute',

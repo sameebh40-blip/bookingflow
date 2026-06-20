@@ -227,7 +227,7 @@ export default function VenueDetailScreen() {
             ? [venue.image_url, ...VENUE_IMAGES_FALLBACK.filter(u => u !== venue.image_url).slice(0, 2)]
             : VENUE_IMAGES_FALLBACK;
           return (
-            <View style={{ height: 300, position: 'relative' }}>
+            <View style={{ height: 320, position: 'relative', overflow: 'visible' }}>
               <FlatList
                 data={venueImages}
                 horizontal
@@ -241,15 +241,15 @@ export default function VenueDetailScreen() {
                 renderItem={({ item }) => (
                   <Image
                     source={resolveImageSource(item)}
-                    style={{ width: screenWidth, height: 300 }}
+                    style={{ width: screenWidth, height: 320 }}
                     resizeMode="cover"
                   />
                 )}
                 keyExtractor={(_, i) => String(i)}
               />
               <LinearGradient
-                colors={['rgba(0,0,0,0.45)', 'transparent']}
-                style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 100 }}
+                colors={['rgba(0,0,0,0.55)', 'transparent']}
+                style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 120 }}
               />
               {/* Back */}
               <AnimatedPressable
@@ -257,12 +257,12 @@ export default function VenueDetailScreen() {
                   console.log('[VenueDetail] Back pressed');
                   router.back();
                 }}
-                style={[styles.carouselBtn, { top: insets.top + 12, left: 16 }]}
+                style={[styles.carouselBtn, { top: insets.top + 8, left: 16 }]}
               >
                 <ArrowLeft size={20} color="#fff" />
               </AnimatedPressable>
               {/* Share + Heart */}
-              <View style={{ position: 'absolute', top: insets.top + 12, right: 16, flexDirection: 'row', gap: 8 }}>
+              <View style={{ position: 'absolute', top: insets.top + 8, right: 16, flexDirection: 'row', gap: 8 }}>
                 <AnimatedPressable
                   onPress={() => console.log('[VenueDetail] Share pressed')}
                   style={styles.carouselBtn}
@@ -311,13 +311,7 @@ export default function VenueDetailScreen() {
           <View style={styles.addressPill}>
             <MapPin size={14} color={MADAR_COLORS.gold} />
             <Text style={styles.addressText} numberOfLines={1}>
-              {distanceFixed}
-            </Text>
-            <Text style={styles.addressText} numberOfLines={1}>
-              km ·
-            </Text>
-            <Text style={styles.addressText} numberOfLines={1}>
-              {venue.address}
+              {distanceFixed} km · {venue.address}
             </Text>
           </View>
         </View>

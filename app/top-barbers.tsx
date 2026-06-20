@@ -34,6 +34,7 @@ const ALL_BARBERS: BarberProfile[] = [
   { id: '3', name: 'majed', specialty: 'Beard Styling', rating: 0.0, bookings: 0, review_count: 0, avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200', rank: 3 },
   { id: '4', name: 'Omar Saleh', specialty: 'Hot Towel Shave', rating: 4.8, bookings: 32, review_count: 54, avatar: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=200', rank: 4 },
   { id: '5', name: 'Faisal Al-Mansoori', specialty: 'Skin Fade', rating: 4.7, bookings: 28, review_count: 41, avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200', rank: 5 },
+  { id: '6', name: 'Hassan Al-Zayed', specialty: 'Color & Highlights', rating: 4.6, bookings: 19, review_count: 28, avatar: 'https://images.unsplash.com/photo-1463453091185-61582044d556?w=200', rank: 6 },
 ];
 
 const RANK_COLORS: Record<number, string> = {
