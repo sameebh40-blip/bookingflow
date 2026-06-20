@@ -21,10 +21,7 @@
         ]
       },
       "entitlements": {
-        "aps-environment": "production",
-        "com.apple.security.application-groups": [
-          "group.com.placeholder.app.onesignal"
-        ]
+        "aps-environment": "production"
       }
     },
     "android": {
@@ -40,12 +37,6 @@
       "bundler": "metro"
     },
     "plugins": [
-      [
-        "onesignal-expo-plugin",
-        {
-          "mode": "production"
-        }
-      ],
       "expo-font",
       "expo-router",
       "expo-web-browser",
@@ -58,7 +49,7 @@
     "extra": {
       "router": {},
       "backendUrl": "https://vhy3fcvv38j7g23yz7m8bxke9chk8cgj.app.specular.dev",
-      "oneSignalAppId": "3e6a213e-27d9-4d48-8f71-61de9d57f251"
+
     }
   }
 }

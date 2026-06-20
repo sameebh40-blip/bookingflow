@@ -1,9 +1,8 @@
 /**
- * NotificationContext — default (web-safe) stub.
+ * NotificationContext — web-safe no-op stub.
  *
- * The real OneSignal implementation lives in NotificationContext.native.tsx,
- * which Metro loads on iOS/Android. This file is the fallback for web where
- * react-native-onesignal would crash at import time.
+ * OneSignal has been removed. This stub preserves the same interface so all
+ * consumers continue to compile and run without changes.
  */
 
 import React, { createContext, useContext, ReactNode } from "react";

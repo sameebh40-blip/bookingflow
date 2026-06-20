@@ -2,7 +2,7 @@
  * Notification Preferences Screen
  *
  * Shows notification permission status and allows users to manage
- * their notification preferences using OneSignal tags.
+ * their notification preferences.
  */
 
 import React, { useState } from "react";
