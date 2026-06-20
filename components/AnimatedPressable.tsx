@@ -34,6 +34,8 @@ export function AnimatedPressable({
     }).start();
   }, [scale]);
 
+  const { __sourceLocation, __componentStack, __debugInfo, __contentSource, __dataContext, ...safeProps } = props as typeof props & { __sourceLocation?: unknown; __componentStack?: unknown; __debugInfo?: unknown; __contentSource?: unknown; __dataContext?: unknown };
+
   return (
     <Animated.View style={[{ transform: [{ scale }] }, disabled && { opacity: 0.5 }]}>
       <Pressable
@@ -42,7 +44,7 @@ export function AnimatedPressable({
         onPress={onPress}
         disabled={disabled}
         style={style}
-        {...props}
+        {...safeProps}
       >
         {children}
       </Pressable>
