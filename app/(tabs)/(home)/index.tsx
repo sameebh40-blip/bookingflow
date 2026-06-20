@@ -28,7 +28,6 @@ import {
   Star,
   RefreshCw,
   Play,
-  SlidersHorizontal,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MADAR_COLORS } from '@/constants/Colors';
@@ -422,24 +421,6 @@ export default function HomeScreen() {
         </ScrollView>
       </View>
 
-      {/* Map search bar */}
-      <AnimatedPressable
-        onPress={() => {
-          console.log('[Home] Search bar pressed');
-          router.push('/map-search');
-        }}
-        style={styles.homeSearchBar}
-      >
-        <Search size={18} color='#888' />
-        <View style={{ flex: 1 }}>
-          <Text style={styles.homeSearchTitle}>All treatments</Text>
-          <Text style={styles.homeSearchSub}>Current location</Text>
-        </View>
-        <View style={styles.homeSearchFilterBtn}>
-          <SlidersHorizontal size={16} color={MADAR_COLORS.text} />
-        </View>
-      </AnimatedPressable>
-
       {/* Nearby Shops — horizontal carousel */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
@@ -762,39 +743,6 @@ const styles = StyleSheet.create({
     height: 14,
     borderRadius: 7,
     backgroundColor: MADAR_COLORS.surfaceSecondary,
-  },
-  homeSearchBar: {
-    marginHorizontal: 0,
-    marginBottom: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: MADAR_COLORS.surface,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: MADAR_COLORS.border,
-  },
-  homeSearchTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: MADAR_COLORS.text,
-  },
-  homeSearchSub: {
-    fontSize: 12,
-    color: MADAR_COLORS.textSecondary,
-    marginTop: 1,
-  },
-  homeSearchFilterBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: MADAR_COLORS.surfaceSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: MADAR_COLORS.border,
   },
   // Barber simple cards (horizontal FlatList)
   barbersListContent: {

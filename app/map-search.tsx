@@ -13,7 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { WebView } from 'react-native-webview';
-import { Search, SlidersHorizontal, Heart, Star, MapPin, Clock } from 'lucide-react-native';
+import { Search, SlidersHorizontal, Heart, Star, MapPin, AlignJustify, ChevronDown, X, Store, Users } from 'lucide-react-native';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { supabase } from '@/utils/supabase';
@@ -50,14 +50,7 @@ const MOCK_VENUES: Venue[] = [
   { id: '5', name: 'Fade Masters', category: 'Barber', rating: 4.7, review_count: 156, distance_km: 0.9, address: 'Gudaibiya, Manama', image_url: 'https://images.unsplash.com/photo-1599351431202-1e0f0137899a?w=800', starting_price: 6, is_open: true, next_slot: '8:00 PM', latitude: 26.2260, longitude: 50.5820, is_top_rated: false, men_only: true },
 ];
 
-const FILTER_CHIPS = [
-  { id: 'venues', label: 'Venues ▾', route: null },
-  { id: 'best', label: 'Best match ▾', route: null },
-  { id: 'price', label: 'Price ▾', route: null },
-  { id: 'amenities', label: 'Amenities ▾', route: '/filter-amenities' },
-  { id: 'options', label: 'Options ▾', route: '/filter-options' },
-  { id: 'service', label: 'Service type ▾', route: '/filter-service-type' },
-];
+
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: '' };
@@ -179,6 +172,12 @@ export default function MapSearchScreen() {
   const [venues, setVenues] = useState<Venue[]>(MOCK_VENUES);
   const [mapKey, setMapKey] = useState(0);
   const [searchQuery, setSearchQuery] = useState(params.query ?? '');
+  const [searchMode, setSearchMode] = useState<'venues' | 'barbers'>('venues');
+  const [sortMode, setSortMode] = useState<'best' | 'nearest' | 'top_rated'>('best');
+  const [maxPrice, setMaxPrice] = useState(284);
+  const [showSearchByModal, setShowSearchByModal] = useState(false);
+  const [showSortModal, setShowSortModal] = useState(false);
+  const [showPriceModal, setShowPriceModal] = useState(false);
 
   useEffect(() => {
     const fetchVenues = async () => {
@@ -218,6 +217,12 @@ export default function MapSearchScreen() {
   }, []);
 
   const mapHtml = generateMapHtml(venues);
+
+  const filteredVenues = venues.filter(v =>
+    !searchQuery ||
+    v.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    v.category.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const snapToPoint = useCallback((target: number) => {
     lastHeight.current = target;
@@ -288,13 +293,6 @@ export default function MapSearchScreen() {
     selectMarkerOnMap(id);
   }, [selectMarkerOnMap]);
 
-  const handleFilterChip = useCallback((chip: typeof FILTER_CHIPS[0]) => {
-    console.log('[MapSearch] Filter chip pressed:', chip.id);
-    if (chip.route) {
-      router.push(chip.route as any);
-    }
-  }, [router]);
-
   const handleSearchPress = useCallback(() => {
     console.log('[MapSearch] Search bar pressed');
     router.push('/search-modal');
@@ -318,47 +316,48 @@ export default function MapSearchScreen() {
         javaScriptEnabled
       />
 
-      {/* Floating search bar */}
-      <AnimatedPressable
-        onPress={handleSearchPress}
-        style={[styles.searchBar, { top: insets.top + 12 }]}
-      >
-        <Search size={16} color='#666' />
-        <Text style={styles.searchText}>All treatments · Map area</Text>
-        <SlidersHorizontal size={16} color='#666' />
-      </AnimatedPressable>
+      {/* Search bar */}
+      <View style={[styles.searchBarContainer, { top: insets.top + 12 }]}>
+        <View style={styles.searchBarPill}>
+          <Search size={18} color="#888" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.searchBarTitle}>All treatments</Text>
+            <Text style={styles.searchBarSub}>Map area</Text>
+          </View>
+          <AnimatedPressable onPress={() => { console.log('[MapSearch] Menu button pressed'); setShowSearchByModal(true); }} style={styles.searchBarMenuBtn}>
+            <AlignJustify size={18} color={MADAR_COLORS.text} />
+          </AnimatedPressable>
+        </View>
+      </View>
 
       {/* Bottom sheet */}
       <Animated.View style={[styles.bottomSheet, { height: sheetHeight }]}>
         {/* Drag handle */}
         <View {...panResponder.panHandlers} style={styles.dragArea}>
           <View style={styles.dragHandle} />
-          <Text style={styles.venueCount}>77 venues in map area</Text>
         </View>
 
-        {/* Filter chips */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterChipsContent}
-          style={styles.filterChipsScroll}
-        >
-          <AnimatedPressable
-            onPress={() => console.log('[MapSearch] Filter icon pressed')}
-            style={styles.filterIconBtn}
-          >
+        {/* Filter bar */}
+        <View style={styles.filterBar}>
+          <AnimatedPressable style={styles.filterIconBtn} onPress={() => { console.log('[MapSearch] Filter icon pressed'); setShowSortModal(true); }}>
             <SlidersHorizontal size={16} color={MADAR_COLORS.text} />
           </AnimatedPressable>
-          {FILTER_CHIPS.map((chip) => (
-            <AnimatedPressable
-              key={chip.id}
-              onPress={() => handleFilterChip(chip)}
-              style={styles.filterChip}
-            >
-              <Text style={styles.filterChipText}>{chip.label}</Text>
-            </AnimatedPressable>
-          ))}
-        </ScrollView>
+          <AnimatedPressable style={styles.filterChipDropdown} onPress={() => { console.log('[MapSearch] Venues/Professionals chip pressed'); setShowSearchByModal(true); }}>
+            <Text style={styles.filterChipDropdownText}>{searchMode === 'barbers' ? 'Professionals' : 'Venues'}</Text>
+            <ChevronDown size={14} color={MADAR_COLORS.text} />
+          </AnimatedPressable>
+          <AnimatedPressable style={styles.filterChipDropdown} onPress={() => { console.log('[MapSearch] Sort chip pressed'); setShowSortModal(true); }}>
+            <Text style={styles.filterChipDropdownText}>{sortMode === 'nearest' ? 'Nearest' : sortMode === 'top_rated' ? 'Top rated' : 'Best match'}</Text>
+            <ChevronDown size={14} color={MADAR_COLORS.text} />
+          </AnimatedPressable>
+          <AnimatedPressable style={styles.filterChipDropdown} onPress={() => { console.log('[MapSearch] Price chip pressed'); setShowPriceModal(true); }}>
+            <Text style={styles.filterChipDropdownText}>Price</Text>
+            <ChevronDown size={14} color={MADAR_COLORS.text} />
+          </AnimatedPressable>
+        </View>
+
+        {/* Venue count */}
+        <Text style={styles.venueCount}>{filteredVenues.length} venues in map area</Text>
 
         {/* Venue list */}
         <ScrollView
@@ -376,11 +375,7 @@ export default function MapSearchScreen() {
           }}
           scrollEventThrottle={16}
         >
-          {venues.filter(v =>
-            !searchQuery ||
-            v.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            v.category.toLowerCase().includes(searchQuery.toLowerCase())
-          ).map((venue) => {
+          {filteredVenues.map((venue) => {
             const isSelected = selectedVenueId === venue.id;
             const ratingStr = Number(venue.rating).toFixed(1);
             const distanceStr = venue.distance_km < 1
@@ -440,6 +435,109 @@ export default function MapSearchScreen() {
           <View style={{ height: 40 }} />
         </ScrollView>
       </Animated.View>
+
+      {/* Search by modal */}
+      {showSearchByModal && (
+        <AnimatedPressable
+          style={styles.modalOverlay}
+          onPress={() => setShowSearchByModal(false)}
+        >
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Search by</Text>
+              <AnimatedPressable onPress={() => setShowSearchByModal(false)}>
+                <X size={20} color={MADAR_COLORS.text} />
+              </AnimatedPressable>
+            </View>
+            <View style={styles.modalOptions}>
+              <AnimatedPressable
+                style={[styles.modalOption, searchMode === 'venues' && styles.modalOptionActive]}
+                onPress={() => { console.log('[MapSearch] Search mode set to venues'); setSearchMode('venues'); setShowSearchByModal(false); }}
+              >
+                <Store size={24} color={searchMode === 'venues' ? MADAR_COLORS.gold : MADAR_COLORS.textSecondary} />
+                <Text style={[styles.modalOptionText, searchMode === 'venues' && styles.modalOptionTextActive]}>Venues</Text>
+              </AnimatedPressable>
+              <AnimatedPressable
+                style={[styles.modalOption, searchMode === 'barbers' && styles.modalOptionActive]}
+                onPress={() => { console.log('[MapSearch] Search mode set to barbers'); setSearchMode('barbers'); setShowSearchByModal(false); }}
+              >
+                <Users size={24} color={searchMode === 'barbers' ? MADAR_COLORS.gold : MADAR_COLORS.textSecondary} />
+                <Text style={[styles.modalOptionText, searchMode === 'barbers' && styles.modalOptionTextActive]}>Professionals</Text>
+              </AnimatedPressable>
+            </View>
+          </View>
+        </AnimatedPressable>
+      )}
+
+      {/* Sort by modal */}
+      {showSortModal && (
+        <AnimatedPressable
+          style={styles.modalOverlay}
+          onPress={() => setShowSortModal(false)}
+        >
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Sort by</Text>
+              <AnimatedPressable onPress={() => setShowSortModal(false)}>
+                <X size={20} color={MADAR_COLORS.text} />
+              </AnimatedPressable>
+            </View>
+            <View style={styles.modalOptions}>
+              {[
+                { id: 'best', label: 'Best match', Icon: Heart },
+                { id: 'nearest', label: 'Nearest', Icon: MapPin },
+                { id: 'top_rated', label: 'Top rated', Icon: Star },
+              ].map(({ id, label, Icon }) => (
+                <AnimatedPressable
+                  key={id}
+                  style={[styles.modalOption, sortMode === id && styles.modalOptionActive]}
+                  onPress={() => { console.log('[MapSearch] Sort mode set to:', id); setSortMode(id as any); setShowSortModal(false); }}
+                >
+                  <Icon size={24} color={sortMode === id ? MADAR_COLORS.gold : MADAR_COLORS.textSecondary} />
+                  <Text style={[styles.modalOptionText, sortMode === id && styles.modalOptionTextActive]}>{label}</Text>
+                </AnimatedPressable>
+              ))}
+            </View>
+          </View>
+        </AnimatedPressable>
+      )}
+
+      {/* Price modal */}
+      {showPriceModal && (
+        <AnimatedPressable
+          style={styles.modalOverlay}
+          onPress={() => setShowPriceModal(false)}
+        >
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Price</Text>
+              <AnimatedPressable onPress={() => setShowPriceModal(false)}>
+                <X size={20} color={MADAR_COLORS.text} />
+              </AnimatedPressable>
+            </View>
+            <View style={{ paddingHorizontal: 20, paddingBottom: 20, gap: 16 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ color: MADAR_COLORS.textSecondary, fontSize: 14 }}>Maximum price</Text>
+                <Text style={{ color: MADAR_COLORS.text, fontWeight: '600', fontSize: 14 }}>BHD {maxPrice}+</Text>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
+                <AnimatedPressable
+                  style={[styles.filterChipDropdown, { flex: 1, justifyContent: 'center' }]}
+                  onPress={() => { console.log('[MapSearch] Price filter cleared'); setShowPriceModal(false); }}
+                >
+                  <Text style={styles.filterChipDropdownText}>Clear</Text>
+                </AnimatedPressable>
+                <AnimatedPressable
+                  style={[styles.filterChipDropdown, { flex: 1, justifyContent: 'center', backgroundColor: MADAR_COLORS.text, borderColor: MADAR_COLORS.text }]}
+                  onPress={() => { console.log('[MapSearch] Price filter applied, max:', maxPrice); setShowPriceModal(false); }}
+                >
+                  <Text style={[styles.filterChipDropdownText, { color: MADAR_COLORS.background }]}>Apply</Text>
+                </AnimatedPressable>
+              </View>
+            </View>
+          </View>
+        </AnimatedPressable>
+      )}
     </View>
   );
 }
@@ -456,28 +554,44 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
-  searchBar: {
+  searchBarContainer: {
     position: 'absolute',
     left: 16,
     right: 16,
+    zIndex: 20,
+  },
+  searchBarPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     backgroundColor: 'rgba(255,255,255,0.97)',
     borderRadius: 28,
-    paddingHorizontal: 16,
-    paddingVertical: 13,
+    paddingLeft: 16,
+    paddingRight: 8,
+    paddingVertical: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 4,
   },
-  searchText: {
-    flex: 1,
+  searchBarTitle: {
     fontSize: 15,
+    fontWeight: '700',
     color: '#1a1a1a',
-    fontWeight: '500',
+  },
+  searchBarSub: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 1,
+  },
+  searchBarMenuBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   bottomSheet: {
     position: 'absolute',
@@ -503,41 +617,102 @@ const styles = StyleSheet.create({
     backgroundColor: '#5C5855',
     marginBottom: 8,
   },
-  venueCount: {
-    fontSize: 13,
-    color: MADAR_COLORS.textSecondary,
-    marginBottom: 12,
-  },
-  filterChipsScroll: {
-    flexGrow: 0,
-    marginBottom: 12,
-  },
-  filterChipsContent: {
-    paddingHorizontal: 16,
+  filterBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   filterIconBtn: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: MADAR_COLORS.surfaceSecondary,
     borderWidth: 1,
     borderColor: MADAR_COLORS.border,
+    backgroundColor: MADAR_COLORS.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  filterChip: {
-    backgroundColor: MADAR_COLORS.surfaceSecondary,
-    borderRadius: 20,
-    paddingHorizontal: 14,
+  filterChipDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
     paddingVertical: 8,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: MADAR_COLORS.border,
+    backgroundColor: MADAR_COLORS.surface,
   },
-  filterChipText: {
+  filterChipDropdownText: {
     fontSize: 13,
+    fontWeight: '600',
     color: MADAR_COLORS.text,
-    fontWeight: '500',
+  },
+  venueCount: {
+    fontSize: 13,
+    color: MADAR_COLORS.textSecondary,
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+    zIndex: 100,
+  },
+  modalSheet: {
+    backgroundColor: MADAR_COLORS.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: 32,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: MADAR_COLORS.border,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: MADAR_COLORS.text,
+  },
+  modalOptions: {
+    flexDirection: 'row',
+    gap: 12,
+    padding: 20,
+  },
+  modalOption: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 20,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: MADAR_COLORS.border,
+    backgroundColor: MADAR_COLORS.surfaceSecondary,
+  },
+  modalOptionActive: {
+    borderColor: MADAR_COLORS.gold,
+    backgroundColor: 'rgba(201,168,76,0.1)',
+  },
+  modalOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: MADAR_COLORS.textSecondary,
+  },
+  modalOptionTextActive: {
+    color: MADAR_COLORS.gold,
   },
   venueList: {
     flex: 1,
