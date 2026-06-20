@@ -16,6 +16,7 @@ import {
 import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { NotificationProvider } from "@/contexts/NotificationContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 const DevErrorBoundary = __DEV__
@@ -70,6 +71,7 @@ export default function RootLayout() {
       <ThemeProvider value={colorScheme === "dark" ? MadarDarkTheme : MadarLightTheme}>
         <SafeAreaProvider>
           <AuthProvider>
+        <NotificationProvider>
             <WidgetProvider>
               <GestureHandlerRootView style={{ flex: 1 }}>
                 <Stack>
@@ -96,7 +98,8 @@ export default function RootLayout() {
                 <SystemBars style="light" />
               </GestureHandlerRootView>
             </WidgetProvider>
-          </AuthProvider>
+          </NotificationProvider>
+        </AuthProvider>
         </SafeAreaProvider>
       </ThemeProvider>
     </DevErrorBoundary>

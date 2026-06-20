@@ -32,6 +32,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { NotificationBell } from "@/components/NotificationBell";
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/utils/supabase';
 
@@ -373,7 +374,9 @@ export default function HomeScreen() {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Book again</Text>
-          <AnimatedPressable onPress={() => console.log('[Home] See all rebook pressed')}>
+                    <NotificationBell />
+          
+<AnimatedPressable onPress={() => console.log('[Home] See all rebook pressed')}>
             <Text style={styles.seeAll}>See all</Text>
           </AnimatedPressable>
         </View>
