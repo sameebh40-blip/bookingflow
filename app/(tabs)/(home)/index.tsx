@@ -60,6 +60,8 @@ interface Barber {
   bookings: number;
   avatar: string;
   rank: number;
+  specialty?: string;
+  review_count?: number;
 }
 
 const MOCK_VENUES: Venue[] = [
@@ -70,9 +72,9 @@ const MOCK_VENUES: Venue[] = [
 ];
 
 const MOCK_BARBERS: Barber[] = [
-  { id: '1', name: 'Majed Al-Rashid', rating: 5.0, bookings: 6, avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200', rank: 1 },
-  { id: '2', name: 'Ali Hassan', rating: 4.9, bookings: 45, avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200', rank: 2 },
-  { id: '3', name: 'Khalid Nasser', rating: 4.8, bookings: 38, avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200', rank: 3 },
+  { id: '1', name: 'Majed Al-Rashid', specialty: 'Fade Specialist', rating: 5.0, bookings: 6, review_count: 2, avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200', rank: 1 },
+  { id: '2', name: 'alili barber', specialty: 'Classic Cuts', rating: 0.0, bookings: 0, review_count: 0, avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200', rank: 2 },
+  { id: '3', name: 'majed', specialty: 'Beard Styling', rating: 0.0, bookings: 0, review_count: 0, avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200', rank: 3 },
 ];
 
 const MOCK_REELS = [
@@ -182,30 +184,37 @@ function CarouselVenueCard({ venue, onPress }: { venue: Venue; onPress: () => vo
   );
 }
 
-function BarberCircleCard({ barber, onPress }: { barber: Barber; onPress: () => void }) {
+function BarberRectCard({ barber, onPress }: { barber: Barber; onPress: () => void }) {
   const rankColor = RANK_COLORS[barber.rank] ?? MADAR_COLORS.textSecondary;
   const borderWidth = barber.rank === 1 ? 3 : 2;
   const ratingStr = Number(barber.rating).toFixed(1);
+  const bookingsText = `${barber.bookings} bookings`;
 
   return (
-    <AnimatedPressable onPress={onPress} style={styles.barberCircleContainer}>
+    <AnimatedPressable onPress={onPress} style={styles.barberRectCard}>
+      {/* Avatar with rank badge */}
       <View style={{ position: 'relative' }}>
         <Image
           source={resolveImageSource(barber.avatar)}
-          style={[styles.barberCircleAvatar, { borderWidth, borderColor: rankColor }]}
+          style={[styles.barberRectAvatar, { borderWidth, borderColor: rankColor }]}
         />
         <View style={[styles.barberRankBadge, { backgroundColor: rankColor }]}>
           <Text style={styles.barberRankBadgeText}>{barber.rank}</Text>
         </View>
       </View>
-      <Text style={styles.barberCircleName} numberOfLines={1}>{barber.name}</Text>
-      <View style={styles.barberCircleRatingRow}>
-        <Star size={10} color={MADAR_COLORS.gold} fill={MADAR_COLORS.gold} />
-        <Text style={styles.barberCircleRating}>{ratingStr}</Text>
+      {/* Star + rating */}
+      <View style={styles.barberRectRatingRow}>
+        <Star size={12} color={MADAR_COLORS.gold} fill={MADAR_COLORS.gold} />
+        <Text style={styles.barberRectRating}>{ratingStr}</Text>
       </View>
+      {/* TOP BARBER pill */}
       <View style={styles.topBarberPill}>
         <Text style={styles.topBarberPillText}>TOP BARBER</Text>
       </View>
+      {/* Name */}
+      <Text style={styles.barberRectName} numberOfLines={1}>{barber.name}</Text>
+      {/* Bookings */}
+      <Text style={styles.barberRectBookings}>{bookingsText}</Text>
     </AnimatedPressable>
   );
 }
@@ -307,7 +316,7 @@ export default function HomeScreen() {
   }, [router]);
 
   const handleBarberPress = useCallback((id: string, name: string) => {
-    console.log('[Home] Barber circle pressed:', id, name);
+    console.log('[Home] Barber card pressed:', id, name);
     router.push(`/barber/${id}`);
   }, [router]);
 
@@ -442,7 +451,7 @@ export default function HomeScreen() {
         )}
       </View>
 
-      {/* Top Barbers — 3 equal circle cards */}
+      {/* Top Barbers — horizontal FlatList of rect cards */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Top Barbers</Text>
@@ -451,15 +460,21 @@ export default function HomeScreen() {
           </AnimatedPressable>
         </View>
 
-        <View style={styles.barbersRow}>
-          {barbers.slice(0, 3).map((barber) => (
-            <BarberCircleCard
-              key={barber.id}
-              barber={barber}
-              onPress={() => handleBarberPress(barber.id, barber.name)}
+        <FlatList
+          data={barbers.slice(0, 5)}
+          keyExtractor={(item) => item.id}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          snapToInterval={152}
+          decelerationRate="fast"
+          contentContainerStyle={styles.barbersListContent}
+          renderItem={({ item }) => (
+            <BarberRectCard
+              barber={item}
+              onPress={() => handleBarberPress(item.id, item.name)}
             />
-          ))}
-        </View>
+          )}
+        />
       </View>
 
       {/* Trending Reels */}
@@ -722,18 +737,22 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     backgroundColor: MADAR_COLORS.surfaceSecondary,
   },
-  // Barber circle cards
-  barbersRow: {
-    flexDirection: 'row',
+  // Barber rect cards (horizontal FlatList)
+  barbersListContent: {
     paddingHorizontal: 16,
     gap: 12,
   },
-  barberCircleContainer: {
-    flex: 1,
+  barberRectCard: {
+    width: 140,
+    backgroundColor: MADAR_COLORS.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: MADAR_COLORS.border,
+    padding: 12,
     alignItems: 'center',
     gap: 8,
   },
-  barberCircleAvatar: {
+  barberRectAvatar: {
     width: 72,
     height: 72,
     borderRadius: 36,
@@ -742,43 +761,49 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -2,
     right: -2,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
   },
   barberRankBadgeText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '800',
     color: '#fff',
   },
-  barberCircleName: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: MADAR_COLORS.text,
-    textAlign: 'center',
-  },
-  barberCircleRatingRow: {
+  barberRectRatingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
   },
-  barberCircleRating: {
-    fontSize: 11,
+  barberRectRating: {
+    fontSize: 14,
+    fontWeight: '700',
     color: MADAR_COLORS.gold,
-    fontWeight: '600',
   },
   topBarberPill: {
     backgroundColor: MADAR_COLORS.goldMuted,
-    borderRadius: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: MADAR_COLORS.goldBorder,
   },
   topBarberPillText: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '700',
     color: MADAR_COLORS.gold,
+  },
+  barberRectName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: MADAR_COLORS.text,
+    textAlign: 'center',
+  },
+  barberRectBookings: {
+    fontSize: 11,
+    color: MADAR_COLORS.textSecondary,
   },
   // Reels
   reelCard: {

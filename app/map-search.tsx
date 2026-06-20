@@ -75,22 +75,38 @@ const MAP_HTML_TEMPLATE = `<!DOCTYPE html>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body, #map { width: 100%; height: 100%; background: #0A0A0F; }
     .rating-marker {
-      background: #1C1C26;
-      border: 2px solid #C9A84C;
+      background: #1a1a2e;
+      border: 2px solid rgba(255,255,255,0.15);
       border-radius: 20px;
-      padding: 4px 10px;
-      color: #C9A84C;
-      font-size: 13px;
+      padding: 5px 12px;
+      color: white;
+      font-size: 14px;
       font-weight: 700;
       font-family: -apple-system, sans-serif;
       white-space: nowrap;
       cursor: pointer;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+      box-shadow: 0 3px 10px rgba(0,0,0,0.5);
+      position: relative;
+    }
+    .rating-marker::after {
+      content: '';
+      position: absolute;
+      bottom: -7px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 7px solid #1a1a2e;
     }
     .rating-marker.selected {
       background: #C9A84C;
-      color: #0A0A0F;
       border-color: #E8C96A;
+      color: #0A0A0F;
+    }
+    .rating-marker.selected::after {
+      border-top-color: #C9A84C;
     }
   </style>
 </head>
@@ -310,6 +326,10 @@ export default function MapSearchScreen() {
             const distanceStr = venue.distance_km < 1
               ? `${Math.round(venue.distance_km * 1000)}m`
               : `${venue.distance_km.toFixed(1)} km`;
+            const distanceAddress = `${distanceStr} · ${venue.address}`;
+            const categoryReviews = `${venue.category} · ${venue.review_count} reviews`;
+            const fromPrice = `From BHD ${venue.starting_price}`;
+            const nextSlot = `Next: ${venue.next_slot}`;
 
             return (
               <AnimatedPressable
@@ -320,6 +340,7 @@ export default function MapSearchScreen() {
                 }}
                 style={[styles.venueCard, isSelected && styles.venueCardSelected]}
               >
+                {/* Cover image */}
                 <View style={styles.venueImageContainer}>
                   <Image
                     source={resolveImageSource(venue.image_url)}
@@ -330,44 +351,27 @@ export default function MapSearchScreen() {
                     onPress={() => handleHeartPress(venue.id, venue.name)}
                     style={styles.heartBtn}
                   >
-                    <Heart size={16} color={MADAR_COLORS.danger} />
+                    <Heart size={16} color="#fff" />
                   </AnimatedPressable>
-                  <View style={styles.badgesRow}>
-                    {venue.is_top_rated && (
-                      <View style={styles.badgeGold}>
-                        <Text style={styles.badgeGoldText}>Top rated</Text>
-                      </View>
-                    )}
-                    {venue.is_open && (
-                      <View style={styles.badgeGreen}>
-                        <Text style={styles.badgeGreenText}>Open now</Text>
-                      </View>
-                    )}
-                    {venue.men_only && (
-                      <View style={styles.badgeBlue}>
-                        <Text style={styles.badgeBlueText}>Men only</Text>
-                      </View>
-                    )}
-                  </View>
                 </View>
+                {/* Info below image */}
                 <View style={styles.venueInfo}>
-                  <Text style={styles.venueName}>{venue.name}</Text>
-                  <Text style={styles.venueCategory}>
-                    {venue.category} · {venue.address}
-                  </Text>
-                  <View style={styles.venueRatingRow}>
-                    <Star size={12} color={MADAR_COLORS.gold} fill={MADAR_COLORS.gold} />
-                    <Text style={styles.venueRating}>{ratingStr}</Text>
-                    <Text style={styles.venueReviews}>({venue.review_count})</Text>
-                    <View style={{ flex: 1 }} />
-                    <MapPin size={11} color={MADAR_COLORS.textTertiary} />
-                    <Text style={styles.venueDistance}>{distanceStr}</Text>
+                  {/* Row 1: Name + Rating */}
+                  <View style={styles.venueRow1}>
+                    <Text style={styles.venueName} numberOfLines={1}>{venue.name}</Text>
+                    <View style={styles.venueRatingBadge}>
+                      <Star size={13} color={MADAR_COLORS.gold} fill={MADAR_COLORS.gold} />
+                      <Text style={styles.venueRating}>{ratingStr}</Text>
+                    </View>
                   </View>
+                  {/* Row 2: distance · address */}
+                  <Text style={styles.venueDistanceAddress} numberOfLines={1}>{distanceAddress}</Text>
+                  {/* Row 3: category · reviews */}
+                  <Text style={styles.venueCategoryReviews}>{categoryReviews}</Text>
+                  {/* Row 4: price + next slot */}
                   <View style={styles.venuePriceRow}>
-                    <Text style={styles.venuePrice}>From BHD {venue.starting_price}</Text>
-                    <View style={{ flex: 1 }} />
-                    <Clock size={11} color={MADAR_COLORS.success} />
-                    <Text style={styles.venueNextSlot}>Next: {venue.next_slot}</Text>
+                    <Text style={styles.venuePrice}>{fromPrice}</Text>
+                    <Text style={styles.venueNextSlot}>{nextSlot}</Text>
                   </View>
                 </View>
               </AnimatedPressable>
@@ -477,26 +481,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   venueListContent: {
-    paddingHorizontal: 16,
     paddingBottom: 120,
   },
   venueCard: {
-    backgroundColor: MADAR_COLORS.surface,
-    borderRadius: 16,
-    overflow: 'hidden',
+    marginHorizontal: 16,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: MADAR_COLORS.border,
   },
   venueCardSelected: {
-    borderColor: MADAR_COLORS.gold,
+    // highlight handled via image border
   },
   venueImageContainer: {
     position: 'relative',
   },
   venueImage: {
     width: '100%',
-    height: 180,
+    height: 200,
     borderRadius: 16,
   },
   heartBtn: {
@@ -506,99 +505,56 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgesRow: {
-    position: 'absolute',
-    bottom: 12,
-    left: 12,
+  venueInfo: {
+    paddingTop: 10,
+    gap: 4,
+  },
+  venueRow1: {
     flexDirection: 'row',
-    gap: 6,
+    alignItems: 'center',
+    gap: 8,
   },
-  badgeGold: {
-    backgroundColor: MADAR_COLORS.goldMuted,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: MADAR_COLORS.goldBorder,
+  venueName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: MADAR_COLORS.text,
+    flex: 1,
   },
-  badgeGoldText: {
-    fontSize: 11,
+  venueRatingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  venueRating: {
+    fontSize: 14,
     color: MADAR_COLORS.gold,
     fontWeight: '700',
   },
-  badgeGreen: {
-    backgroundColor: 'rgba(76,175,125,0.2)',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  badgeGreenText: {
-    fontSize: 11,
-    color: MADAR_COLORS.success,
-    fontWeight: '700',
-  },
-  badgeBlue: {
-    backgroundColor: 'rgba(100,149,237,0.2)',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  badgeBlueText: {
-    fontSize: 11,
-    color: '#6495ED',
-    fontWeight: '700',
-  },
-  venueInfo: {
-    paddingHorizontal: 14,
-    paddingTop: 10,
-    paddingBottom: 14,
-    gap: 4,
-  },
-  venueName: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: MADAR_COLORS.text,
-  },
-  venueCategory: {
+  venueDistanceAddress: {
     fontSize: 13,
     color: MADAR_COLORS.textSecondary,
   },
-  venueRatingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 2,
-  },
-  venueRating: {
+  venueCategoryReviews: {
     fontSize: 13,
-    color: MADAR_COLORS.gold,
-    fontWeight: '700',
-  },
-  venueReviews: {
-    fontSize: 12,
-    color: MADAR_COLORS.textTertiary,
-  },
-  venueDistance: {
-    fontSize: 12,
     color: MADAR_COLORS.textSecondary,
   },
   venuePriceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
+    justifyContent: 'space-between',
+    marginTop: 2,
   },
   venuePrice: {
     fontSize: 13,
-    color: MADAR_COLORS.text,
+    color: MADAR_COLORS.gold,
     fontWeight: '600',
   },
   venueNextSlot: {
-    fontSize: 12,
+    fontSize: 13,
     color: MADAR_COLORS.success,
     fontWeight: '600',
   },

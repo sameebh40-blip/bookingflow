@@ -10,7 +10,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Search, RefreshCw, CreditCard, Award } from 'lucide-react-native';
+import { Search, RefreshCw, CreditCard, Award, Star, Calendar } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { useAuth } from '@/contexts/AuthContext';
@@ -25,12 +26,51 @@ interface Appointment {
   items: number;
   status: 'upcoming' | 'past';
   venue_id: string;
+  services?: { name: string; price: number }[];
 }
 
 const MOCK_APPOINTMENTS: Appointment[] = [
-  { id: '1', venue_name: 'Level Barber Shop', venue_image: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=200', date: 'Fri, Jun 19, 2026 at 7:25 AM', price: 7, items: 2, status: 'upcoming', venue_id: '1' },
-  { id: '2', venue_name: 'Hairpage', venue_image: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=200', date: 'Mon, Jun 15, 2026 at 7:00 AM', price: 14, items: 2, status: 'past', venue_id: '2' },
-  { id: '3', venue_name: 'Elite Athlete Barber', venue_image: 'https://images.unsplash.com/photo-1599351431202-1e0f0137899a?w=200', date: 'Sat, Jun 6, 2026 at 11:15 AM', price: 3, items: 1, status: 'past', venue_id: '3' },
+  {
+    id: '1',
+    venue_name: 'Level Barber Shop',
+    venue_image: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800',
+    date: 'Fri, Jun 19, 2026 at 7:25 AM',
+    price: 7,
+    items: 2,
+    status: 'upcoming',
+    venue_id: '1',
+    services: [
+      { name: 'Haircut & Beard Trim', price: 5 },
+      { name: 'Hot Towel Shave', price: 2 },
+    ],
+  },
+  {
+    id: '2',
+    venue_name: 'Level Barber Shop',
+    venue_image: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800',
+    date: 'Fri, Jun 19, 2026 at 10:25 AM',
+    price: 14,
+    items: 2,
+    status: 'past',
+    venue_id: '2',
+    services: [
+      { name: 'Classic Fade', price: 8 },
+      { name: 'Beard Trim', price: 6 },
+    ],
+  },
+  {
+    id: '3',
+    venue_name: 'Elite Athlete Barber',
+    venue_image: 'https://images.unsplash.com/photo-1599351431202-1e0f0137899a?w=800',
+    date: 'Sat, Jun 6, 2026 at 11:15 AM',
+    price: 3,
+    items: 1,
+    status: 'past',
+    venue_id: '3',
+    services: [
+      { name: 'Skin Fade', price: 3 },
+    ],
+  },
 ];
 
 const MOCK_GIFT_CARDS = [
@@ -57,6 +97,127 @@ function AnimatedListItem({ index, children }: { index: number; children: React.
     ]).start();
   }, []);
   return <Animated.View style={{ opacity, transform: [{ translateY }] }}>{children}</Animated.View>;
+}
+
+function UpcomingCard({ appt, onViewDetails, onRebook }: {
+  appt: Appointment;
+  onViewDetails: () => void;
+  onRebook: () => void;
+}) {
+  const services = appt.services ?? [{ name: 'Service', price: appt.price }];
+  const totalStr = `BHD ${Number(appt.price).toFixed(3)}`;
+
+  return (
+    <View style={styles.upcomingCard}>
+      {/* Top row: thumbnail + venue + date */}
+      <View style={styles.upcomingTopRow}>
+        <Image source={resolveImageSource(appt.venue_image)} style={styles.upcomingThumb} resizeMode="cover" />
+        <View style={styles.upcomingTopInfo}>
+          <Text style={styles.upcomingVenueName} numberOfLines={1}>{appt.venue_name}</Text>
+          <Text style={styles.upcomingDate}>{appt.date}</Text>
+        </View>
+      </View>
+      {/* Divider */}
+      <View style={styles.divider} />
+      {/* Service rows */}
+      {services.map((svc, i) => {
+        const svcPrice = `BHD ${Number(svc.price).toFixed(3)}`;
+        return (
+          <View key={i} style={styles.serviceLineRow}>
+            <Text style={styles.serviceLineName}>{svc.name}</Text>
+            <Text style={styles.serviceLinePrice}>{svcPrice}</Text>
+          </View>
+        );
+      })}
+      {/* Divider */}
+      <View style={styles.divider} />
+      {/* Total row */}
+      <View style={styles.totalRow}>
+        <Text style={styles.totalLabel}>Total</Text>
+        <Text style={styles.totalPrice}>{totalStr}</Text>
+      </View>
+      {/* Paid badge */}
+      <View style={styles.paidBadge}>
+        <Text style={styles.paidBadgeText}>Paid by Card</Text>
+      </View>
+      {/* Divider */}
+      <View style={styles.divider} />
+      {/* Bottom actions */}
+      <View style={styles.upcomingActions}>
+        <AnimatedPressable onPress={onViewDetails}>
+          <Text style={styles.viewDetailsText}>View details</Text>
+        </AnimatedPressable>
+        <AnimatedPressable onPress={onRebook} style={styles.rebookFilledBtn}>
+          <Text style={styles.rebookFilledBtnText}>Rebook</Text>
+        </AnimatedPressable>
+      </View>
+    </View>
+  );
+}
+
+function PastCard({ appt, onRebook, onMessage }: {
+  appt: Appointment;
+  onRebook: () => void;
+  onMessage: () => void;
+}) {
+  const [userRating, setUserRating] = useState(0);
+  const stars = [1, 2, 3, 4, 5];
+  const questionText = `How was your experience at ${appt.venue_name}?`;
+
+  const handleStarPress = useCallback((star: number) => {
+    console.log('[Bookings] Star rating pressed:', star, 'for appointment:', appt.id);
+    setUserRating(star);
+  }, [appt.id]);
+
+  return (
+    <View style={styles.pastCard}>
+      {/* Cover image with gradient */}
+      <View style={styles.pastImageContainer}>
+        <Image source={resolveImageSource(appt.venue_image)} style={styles.pastCoverImage} resizeMode="cover" />
+        <LinearGradient
+          colors={['transparent', 'rgba(10,10,15,0.85)']}
+          style={StyleSheet.absoluteFillObject}
+        />
+        {/* Completed badge */}
+        <View style={styles.completedBadge}>
+          <Text style={styles.completedBadgeText}>Completed</Text>
+        </View>
+        {/* Venue name overlay */}
+        <Text style={styles.pastVenueName}>{appt.venue_name}</Text>
+      </View>
+      {/* Info section */}
+      <View style={styles.pastInfo}>
+        {/* Date row */}
+        <View style={styles.pastDateRow}>
+          <Calendar size={14} color={MADAR_COLORS.gold} />
+          <Text style={styles.pastDateText}>{appt.date}</Text>
+        </View>
+        {/* Rating question */}
+        <Text style={styles.ratingQuestion}>{questionText}</Text>
+        {/* Stars */}
+        <View style={styles.starsRow}>
+          {stars.map((s) => (
+            <AnimatedPressable key={s} onPress={() => handleStarPress(s)}>
+              <Star
+                size={22}
+                color={s <= userRating ? MADAR_COLORS.gold : MADAR_COLORS.textTertiary}
+                fill={s <= userRating ? MADAR_COLORS.gold : 'transparent'}
+              />
+            </AnimatedPressable>
+          ))}
+        </View>
+        {/* Action buttons */}
+        <View style={styles.pastActions}>
+          <AnimatedPressable onPress={onRebook} style={styles.bookAgainBtn}>
+            <Text style={styles.bookAgainBtnText}>Book again</Text>
+          </AnimatedPressable>
+          <AnimatedPressable onPress={onMessage} style={styles.sendMessageBtn}>
+            <Text style={styles.sendMessageBtnText}>Send message</Text>
+          </AnimatedPressable>
+        </View>
+      </View>
+    </View>
+  );
 }
 
 export default function BookingsScreen() {
@@ -104,6 +265,14 @@ export default function BookingsScreen() {
     console.log('[Bookings] Rebook pressed:', venueId, venueName);
     router.push(`/venue/${venueId}`);
   }, [router]);
+
+  const handleMessage = useCallback((venueId: string, venueName: string) => {
+    console.log('[Bookings] Send message pressed for venue:', venueId, venueName);
+  }, []);
+
+  const handleViewDetails = useCallback((apptId: string) => {
+    console.log('[Bookings] View details pressed for appointment:', apptId);
+  }, []);
 
   const handleTabChange = useCallback((tab: 'appointments' | 'giftcards' | 'memberships') => {
     console.log('[Bookings] Tab changed to:', tab);
@@ -165,7 +334,11 @@ export default function BookingsScreen() {
                 <Text style={styles.sectionTitle}>Upcoming</Text>
                 {upcoming.map((appt, index) => (
                   <AnimatedListItem key={appt.id} index={index}>
-                    <AppointmentRow appt={appt} onRebook={handleRebook} />
+                    <UpcomingCard
+                      appt={appt}
+                      onViewDetails={() => handleViewDetails(appt.id)}
+                      onRebook={() => handleRebook(appt.venue_id, appt.venue_name)}
+                    />
                   </AnimatedListItem>
                 ))}
               </View>
@@ -176,7 +349,11 @@ export default function BookingsScreen() {
                 <Text style={styles.sectionTitle}>Past</Text>
                 {past.map((appt, index) => (
                   <AnimatedListItem key={appt.id} index={index}>
-                    <AppointmentRow appt={appt} onRebook={handleRebook} />
+                    <PastCard
+                      appt={appt}
+                      onRebook={() => handleRebook(appt.venue_id, appt.venue_name)}
+                      onMessage={() => handleMessage(appt.venue_id, appt.venue_name)}
+                    />
                   </AnimatedListItem>
                 ))}
               </View>
@@ -248,25 +425,6 @@ export default function BookingsScreen() {
   );
 }
 
-function AppointmentRow({ appt, onRebook }: { appt: Appointment; onRebook: (id: string, name: string) => void }) {
-  return (
-    <View style={styles.appointmentRow}>
-      <Image source={{ uri: appt.venue_image }} style={styles.appointmentImage} resizeMode="cover" />
-      <View style={styles.appointmentInfo}>
-        <Text style={styles.appointmentVenue} numberOfLines={1}>{appt.venue_name}</Text>
-        <Text style={styles.appointmentDate} numberOfLines={1}>{appt.date}</Text>
-        <Text style={styles.appointmentMeta}>BHD {appt.price} · {appt.items} {appt.items === 1 ? 'item' : 'items'}</Text>
-      </View>
-      <AnimatedPressable
-        onPress={() => onRebook(appt.venue_id, appt.venue_name)}
-        style={styles.rebookBtn}
-      >
-        <Text style={styles.rebookBtnText}>Rebook</Text>
-      </AnimatedPressable>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: MADAR_COLORS.background },
   header: {
@@ -322,27 +480,202 @@ const styles = StyleSheet.create({
   scrollContent: { paddingHorizontal: 20 },
   section: { marginBottom: 24 },
   sectionTitle: { fontSize: 20, fontWeight: '700', color: MADAR_COLORS.text, marginBottom: 16, letterSpacing: -0.3 },
-  appointmentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: MADAR_COLORS.divider,
+
+  // Upcoming card (receipt style)
+  upcomingCard: {
+    backgroundColor: MADAR_COLORS.surface,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: MADAR_COLORS.border,
+    marginBottom: 12,
     gap: 12,
   },
-  appointmentImage: { width: 56, height: 56, borderRadius: 8 },
-  appointmentInfo: { flex: 1, gap: 3 },
-  appointmentVenue: { fontSize: 15, fontWeight: '700', color: MADAR_COLORS.text },
-  appointmentDate: { fontSize: 12, color: MADAR_COLORS.textSecondary },
-  appointmentMeta: { fontSize: 12, color: MADAR_COLORS.textSecondary },
-  rebookBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: MADAR_COLORS.goldBorder,
+  upcomingTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
-  rebookBtnText: { fontSize: 13, color: MADAR_COLORS.gold, fontWeight: '600' },
+  upcomingThumb: {
+    width: 56,
+    height: 56,
+    borderRadius: 10,
+  },
+  upcomingTopInfo: {
+    flex: 1,
+    gap: 4,
+  },
+  upcomingVenueName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: MADAR_COLORS.text,
+  },
+  upcomingDate: {
+    fontSize: 13,
+    color: MADAR_COLORS.textSecondary,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: MADAR_COLORS.border,
+  },
+  serviceLineRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  serviceLineName: {
+    fontSize: 14,
+    color: MADAR_COLORS.text,
+    flex: 1,
+  },
+  serviceLinePrice: {
+    fontSize: 14,
+    color: MADAR_COLORS.gold,
+    fontWeight: '600',
+  },
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  totalLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: MADAR_COLORS.text,
+  },
+  totalPrice: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: MADAR_COLORS.gold,
+  },
+  paidBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(76,175,125,0.15)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  paidBadgeText: {
+    fontSize: 12,
+    color: MADAR_COLORS.success,
+    fontWeight: '600',
+  },
+  upcomingActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  viewDetailsText: {
+    fontSize: 14,
+    color: MADAR_COLORS.gold,
+    fontWeight: '600',
+  },
+  rebookFilledBtn: {
+    backgroundColor: MADAR_COLORS.gold,
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  rebookFilledBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0A0A0F',
+  },
+
+  // Past card (image-first)
+  pastCard: {
+    backgroundColor: MADAR_COLORS.surface,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  pastImageContainer: {
+    position: 'relative',
+    height: 160,
+  },
+  pastCoverImage: {
+    width: '100%',
+    height: 160,
+    resizeMode: 'cover',
+  },
+  completedBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    backgroundColor: MADAR_COLORS.success,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  completedBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  pastVenueName: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  pastInfo: {
+    padding: 14,
+    gap: 0,
+  },
+  pastDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  pastDateText: {
+    fontSize: 13,
+    color: MADAR_COLORS.textSecondary,
+  },
+  ratingQuestion: {
+    fontSize: 13,
+    color: MADAR_COLORS.text,
+    marginTop: 8,
+  },
+  starsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 8,
+  },
+  pastActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  bookAgainBtn: {
+    flex: 1,
+    backgroundColor: MADAR_COLORS.gold,
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  bookAgainBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0A0A0F',
+  },
+  sendMessageBtn: {
+    flex: 1,
+    backgroundColor: MADAR_COLORS.surface,
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: MADAR_COLORS.border,
+  },
+  sendMessageBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: MADAR_COLORS.text,
+  },
+
+  // Empty state
   emptyState: { alignItems: 'center', paddingVertical: 60, gap: 12 },
   emptyIcon: {
     width: 72,
@@ -363,6 +696,8 @@ const styles = StyleSheet.create({
     backgroundColor: MADAR_COLORS.gold,
   },
   emptyBtnText: { fontSize: 14, color: MADAR_COLORS.background, fontWeight: '700' },
+
+  // Gift cards
   giftCard: {
     backgroundColor: MADAR_COLORS.surface,
     borderRadius: 16,
@@ -376,6 +711,8 @@ const styles = StyleSheet.create({
   giftCardCode: { fontSize: 13, color: MADAR_COLORS.textSecondary, fontFamily: 'SpaceMono' },
   giftCardBalance: { fontSize: 28, fontWeight: '800', color: MADAR_COLORS.gold, letterSpacing: -0.5 },
   giftCardExpiry: { fontSize: 12, color: MADAR_COLORS.textTertiary },
+
+  // Memberships
   membershipCard: {
     backgroundColor: MADAR_COLORS.surface,
     borderRadius: 16,
