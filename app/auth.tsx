@@ -79,6 +79,30 @@ export default function AuthScreen() {
     }).start();
   }, [subTabAnim]);
 
+  const handleDemoLogin = useCallback(async (type: 'client' | 'partner') => {
+    console.log('[Auth] Demo login pressed, type:', type);
+    setLoading(true);
+    setError('');
+    try {
+      const demoEmail = type === 'client' ? 'demo.client@booklyflow.com' : 'demo.partner@booklyflow.com';
+      const demoPassword = 'Demo1234!';
+      const { error: signInError } = await signIn(demoEmail, demoPassword);
+      if (signInError) {
+        setError('Demo login failed. Please try again.');
+        return;
+      }
+      if (type === 'partner') {
+        router.replace('/(partner)');
+      } else {
+        router.replace('/(tabs)/(home)');
+      }
+    } catch {
+      setError('Demo login failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [signIn, router]);
+
   const handleSubmit = useCallback(async () => {
     if (!email.trim() || !password.trim()) {
       setError('Please fill in all fields');
@@ -114,20 +138,11 @@ export default function AuthScreen() {
             .single();
           const role = profileData?.role ?? 'customer';
           console.log('[Auth] Sign in success, role:', role);
-          if (userType === 'partner') {
-            if (role === 'shop_owner' || role === 'barber') {
-              router.replace('/(partner)');
-            } else {
-              setError('This account is not a partner account');
-              await supabase.auth.signOut();
-              return;
-            }
+          // Route based on actual role, not selected tab
+          if (role === 'shop_owner' || role === 'barber') {
+            router.replace('/(partner)');
           } else {
-            if (role === 'shop_owner' || role === 'barber') {
-              router.replace('/(partner)');
-            } else {
-              router.replace('/(tabs)/(home)');
-            }
+            router.replace('/(tabs)/(home)');
           }
         }
       } else {
@@ -371,9 +386,41 @@ export default function AuthScreen() {
           </AnimatedPressable>
 
           {!isPartner && (
+            <>
+            {/* Demo login buttons */}
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+              <AnimatedPressable
+                onPress={() => handleDemoLogin('client')}
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  borderWidth: 1.5,
+                  borderColor: '#C9A84C',
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ color: '#C9A84C', fontWeight: '600', fontSize: 13 }}>👤 Demo Client</Text>
+              </AnimatedPressable>
+              <AnimatedPressable
+                onPress={() => handleDemoLogin('partner')}
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  borderWidth: 1.5,
+                  borderColor: '#7C3AED',
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ color: '#7C3AED', fontWeight: '600', fontSize: 13 }}>🏪 Demo Partner</Text>
+              </AnimatedPressable>
+            </View>
+
             <AnimatedPressable onPress={handleSkip} style={styles.skipBtn}>
               <Text style={styles.skipText}>Continue as guest</Text>
             </AnimatedPressable>
+            </>
           )}
         </View>
       </ScrollView>
