@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -42,22 +42,6 @@ function ProgressDots({ step }: { step: number }) {
   );
 }
 
-const MOCK_SERVICES: Record<string, { name: string; price: number }> = {
-  '1': { name: 'Classic Haircut', price: 5 },
-  '2': { name: 'Fade + Beard Trim', price: 8 },
-  '3': { name: 'Hot Towel Shave', price: 7 },
-  '4': { name: 'Hair + Beard Combo', price: 12 },
-  '5': { name: 'kids', price: 0 },
-  '6': { name: 'Beard Styling', price: 5 },
-};
-
-const MOCK_STAFF: Record<string, { name: string; avatar: string }> = {
-  'any': { name: 'Any available', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200' },
-  '1': { name: 'majed barber', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200' },
-  '2': { name: 'Khalid Hassan', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200' },
-  '3': { name: 'Omar Saleh', avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200' },
-};
-
 const STAR_PARTICLES = [
   { top: '8%', left: '10%', size: 6, opacity: 0.6, char: '✦' },
   { top: '12%', left: '80%', size: 8, opacity: 0.4, char: '✦' },
@@ -73,6 +57,24 @@ const STAR_PARTICLES = [
   { top: '60%', left: '85%', size: 6, opacity: 0.3, char: '✦' },
 ];
 
+interface ServiceItem {
+  id: string;
+  name: string;
+  price: number;
+}
+
+interface ShopInfo {
+  name: string;
+  cover_url: string;
+  address: string;
+}
+
+interface BarberInfo {
+  display_name: string;
+  avatar_url: string;
+  specialty: string;
+}
+
 export default function BookingConfirmScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -87,15 +89,84 @@ export default function BookingConfirmScreen() {
 
   const [loading, setLoading] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const [shopInfo, setShopInfo] = useState<ShopInfo | null>(null);
+  const [barberInfo, setBarberInfo] = useState<BarberInfo | null>(null);
+  const [serviceItems, setServiceItems] = useState<ServiceItem[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
 
   const serviceIds = (services ?? '').split(',').filter(Boolean);
-  const selectedServices = serviceIds.map(id => MOCK_SERVICES[id]).filter(Boolean);
-  const totalPrice = selectedServices.reduce((sum, s) => sum + s.price, 0);
-  const staffInfo = MOCK_STAFF[staffId ?? 'any'] ?? MOCK_STAFF['any'];
-  const staffName = staffInfo.name;
-  const staffAvatar = staffInfo.avatar;
 
-  const serviceNameDisplay = selectedServices.length > 0 ? selectedServices[0].name : 'kids';
+  useEffect(() => {
+    fetchBookingData();
+  }, [venueId, staffId, services]);
+
+  const fetchBookingData = async () => {
+    console.log('[Booking/Confirm] Fetching real booking data — venueId:', venueId, 'staffId:', staffId, 'serviceIds:', serviceIds);
+    setDataLoading(true);
+    try {
+      const promises: Promise<any>[] = [
+        supabase.from('barbershops').select('name, cover_url, address').eq('id', venueId).single(),
+      ];
+
+      if (staffId && staffId !== 'any') {
+        promises.push(
+          supabase.from('barbers').select('display_name, avatar_url, specialty').eq('id', staffId).single()
+        );
+      } else {
+        promises.push(Promise.resolve({ data: null, error: null }));
+      }
+
+      if (serviceIds.length > 0) {
+        promises.push(
+          supabase.from('services').select('id, name, price_bhd, duration_minutes').in('id', serviceIds)
+        );
+      } else {
+        promises.push(Promise.resolve({ data: [], error: null }));
+      }
+
+      const [shopRes, barberRes, svcsRes] = await Promise.all(promises);
+
+      console.log('[Booking/Confirm] Shop fetch:', shopRes.error?.message ?? 'ok');
+      if (shopRes.data) {
+        setShopInfo({
+          name: shopRes.data.name ?? 'Barbershop',
+          cover_url: shopRes.data.cover_url ?? 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=400',
+          address: shopRes.data.address ?? '',
+        });
+      }
+
+      console.log('[Booking/Confirm] Barber fetch:', barberRes.error?.message ?? 'ok');
+      if (barberRes.data) {
+        setBarberInfo({
+          display_name: barberRes.data.display_name ?? 'Any available',
+          avatar_url: barberRes.data.avatar_url ?? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
+          specialty: barberRes.data.specialty ?? 'Barber',
+        });
+      }
+
+      console.log('[Booking/Confirm] Services fetch:', svcsRes.error?.message ?? 'ok', 'count:', svcsRes.data?.length ?? 0);
+      if (svcsRes.data && svcsRes.data.length > 0) {
+        setServiceItems(svcsRes.data.map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          price: Number(s.price_bhd) || 0,
+        })));
+      }
+    } catch (err) {
+      console.log('[Booking/Confirm] Exception fetching booking data:', err);
+    } finally {
+      setDataLoading(false);
+    }
+  };
+
+  const totalPrice = serviceItems.reduce((sum, s) => sum + s.price, 0);
+  const staffName = barberInfo?.display_name ?? (staffId === 'any' ? 'Any available' : 'Barber');
+  const staffAvatar = barberInfo?.avatar_url ?? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200';
+  const staffSpecialty = barberInfo?.specialty ?? 'Barber';
+  const shopName = shopInfo?.name ?? 'Barbershop';
+  const shopAddress = shopInfo?.address ?? '';
+  const shopCover = shopInfo?.cover_url ?? 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=400';
+  const serviceNameDisplay = serviceItems.length > 0 ? serviceItems[0].name : 'Service';
 
   const dateObj = date ? new Date(date) : new Date();
   const dateDisplay = dateObj.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
@@ -116,6 +187,7 @@ export default function BookingConfirmScreen() {
           customer_profile_id: user.id,
           shop_id: venueId,
           barber_id: staffId && staffId !== 'any' ? staffId : null,
+          service_id: serviceIds[0] ?? null,
           start_at: scheduledAt,
           end_at: endAt,
           status: 'pending',
@@ -208,7 +280,7 @@ export default function BookingConfirmScreen() {
             <Image source={resolveImageSource(staffAvatar)} style={styles.barberAvatar} />
             <View style={styles.barberInfo}>
               <Text style={styles.barberName}>{staffName}</Text>
-              <Text style={styles.barberSpecialty}>Fade Specialist</Text>
+              <Text style={styles.barberSpecialty}>{staffSpecialty}</Text>
             </View>
           </View>
 
@@ -294,13 +366,13 @@ export default function BookingConfirmScreen() {
         {/* Venue card */}
         <View style={styles.summaryCard}>
           <Image
-            source={resolveImageSource('https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=400')}
+            source={resolveImageSource(shopCover)}
             style={styles.venueImage}
             resizeMode="cover"
           />
           <View style={styles.venueInfo}>
-            <Text style={styles.venueName}>Level Barber Shop</Text>
-            <Text style={styles.venueAddress}>Avenue 11, Tubli, Bahrain</Text>
+            <Text style={styles.venueName}>{shopName}</Text>
+            <Text style={styles.venueAddress}>{shopAddress}</Text>
           </View>
         </View>
 
@@ -328,12 +400,22 @@ export default function BookingConfirmScreen() {
         {/* Services */}
         <View style={styles.servicesCard}>
           <Text style={styles.servicesTitle}>Services</Text>
-          {selectedServices.map((s, i) => (
-            <View key={i} style={styles.serviceRow}>
-              <Text style={styles.serviceName}>{s.name}</Text>
-              <Text style={styles.servicePrice}>BHD {s.price}</Text>
+          {serviceItems.length > 0 ? (
+            serviceItems.map((s) => {
+              const priceStr = Number(s.price).toFixed(3);
+              return (
+                <View key={s.id} style={styles.serviceRow}>
+                  <Text style={styles.serviceName}>{s.name}</Text>
+                  <Text style={styles.servicePrice}>BHD {priceStr}</Text>
+                </View>
+              );
+            })
+          ) : (
+            <View style={styles.serviceRow}>
+              <Text style={styles.serviceName}>Service</Text>
+              <Text style={styles.servicePrice}>BHD 0.000</Text>
             </View>
-          ))}
+          )}
           <View style={styles.totalDivider} />
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>Total</Text>
@@ -347,7 +429,7 @@ export default function BookingConfirmScreen() {
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
         <AnimatedPressable
           onPress={handleConfirm}
-          disabled={loading}
+          disabled={loading || dataLoading}
           style={styles.confirmBtn}
         >
           <LinearGradient

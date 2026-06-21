@@ -67,32 +67,60 @@ export default function MessagesScreen() {
     try {
       const { data: msgs, error } = await supabase
         .from('messages')
-        .select('*, barbershops!venue_id(id, name, cover_url)')
-        .order('created_at', { ascending: false });
+        .select('id, venue_id, text, created_at')
+        .order('created_at', { ascending: false })
+        .limit(100);
 
-      if (!error && msgs && msgs.length > 0) {
-        console.log('[Messages] Loaded', msgs.length, 'messages, grouping by venue');
-        const seen = new Set<string>();
-        const convs: Conversation[] = [];
-        for (const msg of msgs) {
-          const shop = (msg as any).barbershops;
-          if (!seen.has(msg.venue_id) && shop) {
-            seen.add(msg.venue_id);
-            convs.push({
-              id: msg.venue_id,
-              venue_name: shop.name ?? 'Venue',
-              avatar: shop.cover_url ?? '',
-              last_message: msg.text ?? '',
-              timestamp: new Date(msg.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-              unread: 0,
-            });
-          }
-        }
-        setConversations(convs.length > 0 ? convs : MOCK_CONVERSATIONS);
-      } else {
-        console.log('[Messages] Using mock conversations:', error?.message);
+      if (error) {
+        console.log('[Messages] Messages fetch error:', error.message, '— using mock');
         setConversations(MOCK_CONVERSATIONS);
+        return;
       }
+
+      if (!msgs || msgs.length === 0) {
+        console.log('[Messages] No messages found, using mock');
+        setConversations(MOCK_CONVERSATIONS);
+        return;
+      }
+
+      console.log('[Messages] Loaded', msgs.length, 'messages, fetching shop details');
+      const venueIds = [...new Set(msgs.map((m: any) => m.venue_id).filter(Boolean))] as string[];
+
+      const { data: shops, error: shopsError } = await supabase
+        .from('barbershops')
+        .select('id, name, cover_url')
+        .in('id', venueIds);
+
+      if (shopsError) {
+        console.log('[Messages] Shops fetch error:', shopsError.message);
+      }
+
+      const shopMap: Record<string, { name: string; cover_url: string }> = {};
+      if (shops) {
+        for (const shop of shops) {
+          shopMap[shop.id] = { name: shop.name, cover_url: shop.cover_url ?? '' };
+        }
+      }
+
+      const seen = new Set<string>();
+      const convs: Conversation[] = [];
+      for (const msg of msgs) {
+        const venueId: string = msg.venue_id;
+        if (!venueId || seen.has(venueId)) continue;
+        seen.add(venueId);
+        const shop = shopMap[venueId];
+        convs.push({
+          id: venueId,
+          venue_name: shop?.name ?? 'Venue',
+          avatar: shop?.cover_url ?? '',
+          last_message: msg.text ?? '',
+          timestamp: new Date(msg.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+          unread: 0,
+        });
+      }
+
+      console.log('[Messages] Built', convs.length, 'conversations');
+      setConversations(convs.length > 0 ? convs : MOCK_CONVERSATIONS);
     } catch (err) {
       console.log('[Messages] Exception, using mock:', err);
       setConversations(MOCK_CONVERSATIONS);

@@ -63,6 +63,21 @@ interface Barber {
   review_count?: number;
 }
 
+interface ReelItem {
+  id: string;
+  business: string;
+  duration: string;
+  image_url: string;
+}
+
+interface RebookItem {
+  id: string;
+  name: string;
+  price: number;
+  items: number;
+  image_url: string;
+}
+
 const MOCK_VENUES: Venue[] = [
   { id: '1', name: 'Level Barber Shop', category: 'Barber', rating: 5.0, review_count: 1336, distance_km: 0.75, address: 'Bu Ashira', image_url: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800', starting_price: 5, is_open: true },
   { id: '2', name: 'The Groom Room', category: 'Barber', rating: 4.7, review_count: 210, distance_km: 1.2, address: 'Seef District', image_url: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800', starting_price: 8, is_open: true },
@@ -76,14 +91,14 @@ const MOCK_BARBERS: Barber[] = [
   { id: '3', name: 'majed', specialty: 'Beard Styling', rating: 0.0, bookings: 0, review_count: 0, avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200', rank: 3 },
 ];
 
-const MOCK_REELS = [
+const MOCK_REELS: ReelItem[] = [
   { id: '1', business: 'Level Barber', duration: '02:04', image_url: 'https://images.unsplash.com/photo-1599351431202-1e0f0137899a?w=400&h=600&fit=crop' },
   { id: '2', business: 'Luxe Spa', duration: '01:30', image_url: 'https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=400&h=600&fit=crop' },
   { id: '3', business: 'Nail Studio', duration: '00:45', image_url: 'https://images.unsplash.com/photo-1604654894610-df63bc536371?w=400&h=600&fit=crop' },
   { id: '4', business: 'Groom Room', duration: '03:12', image_url: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=400&h=600&fit=crop' },
 ];
 
-const MOCK_REBOOK = [
+const MOCK_REBOOK: RebookItem[] = [
   { id: '1', name: 'Level Barber Shop', price: 7, items: 2, image_url: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=400' },
   { id: '2', name: 'The Groom Room', price: 14, items: 2, image_url: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=400' },
 ];
@@ -99,7 +114,6 @@ const CATEGORIES = [
   { id: 'fitness', label: 'Fitness', Icon: Dumbbell },
   { id: 'home', label: 'Home service', Icon: HomeIcon },
 ];
-
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: '' };
@@ -202,6 +216,8 @@ export default function HomeScreen() {
   const [activeCategory, setActiveCategory] = useState('all');
   const [venues, setVenues] = useState<Venue[]>([]);
   const [barbers, setBarbers] = useState<Barber[]>(MOCK_BARBERS);
+  const [reels, setReels] = useState<ReelItem[]>(MOCK_REELS);
+  const [rebook, setRebook] = useState<RebookItem[]>(MOCK_REBOOK);
   const [loading, setLoading] = useState(true);
 
   const greeting = React.useMemo(() => {
@@ -212,17 +228,17 @@ export default function HomeScreen() {
   }, []);
 
   const userName = user?.user_metadata?.full_name?.split(' ')[0] ?? null;
-  const greetingText = userName ? `${greeting}, ${userName}` : 'Discover Madar';
+  const greetingText = userName ? `${greeting}, ${userName}` : 'Discover Hallaq';
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [user]);
 
   const fetchData = async () => {
-    console.log('[Home] Fetching barbershops and barbers from Supabase (hallaq)');
+    console.log('[Home] Fetching barbershops, barbers, posts, and bookings from Supabase (hallaq)');
     setLoading(true);
     try {
-      const [venuesRes, barbersRes] = await Promise.all([
+      const promises: Promise<any>[] = [
         supabase
           .from('barbershops')
           .select('id, name, category, rating_avg, address, cover_url, logo_url, lat, lng, is_active, status')
@@ -235,7 +251,30 @@ export default function HomeScreen() {
           .eq('status', 'approved')
           .order('rating_avg', { ascending: false })
           .limit(10),
-      ]);
+        supabase
+          .from('posts')
+          .select('id, media_url, thumbnail_url, caption, shop_id, barber_id, likes_count, views_count')
+          .eq('is_active', true)
+          .eq('status', 'approved')
+          .order('views_count', { ascending: false })
+          .limit(8),
+      ];
+
+      if (user) {
+        promises.push(
+          supabase
+            .from('bookings')
+            .select('id, shop_id, price_bhd, barbershops!shop_id(name, cover_url)')
+            .eq('customer_profile_id', user.id)
+            .eq('status', 'completed')
+            .order('created_at', { ascending: false })
+            .limit(3)
+        );
+      } else {
+        promises.push(Promise.resolve({ data: null, error: null }));
+      }
+
+      const [venuesRes, barbersRes, postsRes, rebookRes] = await Promise.all(promises);
 
       if (venuesRes.error || !venuesRes.data || venuesRes.data.length === 0) {
         console.log('[Home] Using mock venues:', venuesRes.error?.message);
@@ -273,10 +312,48 @@ export default function HomeScreen() {
           rank: i + 1,
         })));
       }
+
+      console.log('[Home] Posts fetch result:', postsRes.error?.message ?? 'ok', 'count:', postsRes.data?.length ?? 0);
+      if (!postsRes.error && postsRes.data && postsRes.data.length > 0) {
+        const mappedReels: ReelItem[] = postsRes.data.map((p: any) => {
+          const imageUrl: string = p.thumbnail_url ?? p.media_url ?? 'https://images.unsplash.com/photo-1599351431202-1e0f0137899a?w=400&h=600&fit=crop';
+          const business: string = p.caption ? String(p.caption).slice(0, 20) : 'Trending';
+          return {
+            id: String(p.id),
+            business,
+            duration: '',
+            image_url: imageUrl,
+          };
+        });
+        setReels(mappedReels);
+      } else {
+        console.log('[Home] Using mock reels');
+        setReels(MOCK_REELS);
+      }
+
+      console.log('[Home] Rebook fetch result:', rebookRes.error?.message ?? 'ok', 'count:', rebookRes.data?.length ?? 0);
+      if (!rebookRes.error && rebookRes.data && rebookRes.data.length > 0) {
+        const mappedRebook: RebookItem[] = rebookRes.data.map((b: any) => {
+          const shop = b.barbershops ?? {};
+          return {
+            id: b.shop_id ?? b.id,
+            name: shop.name ?? 'Barbershop',
+            price: Number(b.price_bhd) || 0,
+            items: 1,
+            image_url: shop.cover_url ?? 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=400',
+          };
+        });
+        setRebook(mappedRebook);
+      } else {
+        console.log('[Home] Using mock rebook');
+        setRebook(MOCK_REBOOK);
+      }
     } catch (err) {
       console.log('[Home] Exception, using mock data:', err);
       setVenues(MOCK_VENUES);
       setBarbers(MOCK_BARBERS);
+      setReels(MOCK_REELS);
+      setRebook(MOCK_REBOOK);
     } finally {
       setLoading(false);
     }
@@ -391,7 +468,7 @@ export default function HomeScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.rebookScroll}
         >
-          {MOCK_REBOOK.map((item, index) => (
+          {rebook.map((item, index) => (
             <AnimatedListItem key={item.id} index={index}>
               <AnimatedPressable
                 onPress={() => handleRebook(item.id, item.name)}
@@ -405,7 +482,7 @@ export default function HomeScreen() {
                 <View style={styles.rebookInfo}>
                   <Text style={styles.rebookName} numberOfLines={1}>{item.name}</Text>
                   <Text style={styles.rebookMeta}>
-                    BHD {item.price} · {item.items} items
+                    BHD {Number(item.price).toFixed(3)}
                   </Text>
                   <AnimatedPressable
                     onPress={() => handleRebook(item.id, item.name)}
@@ -497,7 +574,7 @@ export default function HomeScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ gap: 10 }}
         >
-          {MOCK_REELS.map((reel) => (
+          {reels.map((reel) => (
             <AnimatedPressable
               key={reel.id}
               onPress={() => handleReelPress(reel.id)}
@@ -514,7 +591,9 @@ export default function HomeScreen() {
               <View style={styles.reelPlayBtn}>
                 <Play size={14} color="#fff" fill="#fff" />
               </View>
-              <Text style={styles.reelDuration}>{reel.duration}</Text>
+              {reel.duration ? (
+                <Text style={styles.reelDuration}>{reel.duration}</Text>
+              ) : null}
             </AnimatedPressable>
           ))}
         </ScrollView>

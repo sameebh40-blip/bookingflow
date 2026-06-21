@@ -87,11 +87,6 @@ export default function AuthScreen() {
     router.replace('/(tabs)/(home)');
   }, [router]);
 
-  const indicatorTranslate = tabAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 1],
-  });
-
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -110,10 +105,10 @@ export default function AuthScreen() {
             end={{ x: 1, y: 0 }}
             style={styles.logoGradient}
           >
-            <Text style={styles.logoText}>M</Text>
+            <Text style={styles.logoText}>H</Text>
           </LinearGradient>
-          <Text style={styles.appName}>Madar</Text>
-          <Text style={styles.appSubtitle}>Your premium booking experience</Text>
+          <Text style={styles.appName}>Hallaq</Text>
+          <Text style={styles.appSubtitle}>Your premium grooming experience</Text>
         </View>
 
         {/* Tab switcher */}

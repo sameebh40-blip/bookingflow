@@ -43,15 +43,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
+  const upsertProfile = async (user: User) => {
+    console.log('[Auth] Upserting profile for user:', user.id);
+    try {
+      const { error } = await supabase.from('profiles').upsert({
+        id: user.id,
+        email: user.email,
+        full_name: user.user_metadata?.full_name ?? null,
+        role: 'customer',
+        status: 'active',
+      }, { onConflict: 'id', ignoreDuplicates: true });
+      if (error) console.log('[Auth] Profile upsert error (non-fatal):', error.message);
+      else console.log('[Auth] Profile upserted successfully');
+    } catch (err) {
+      console.log('[Auth] Profile upsert exception (non-fatal):', err);
+    }
+  };
+
+  const upsertCustomer = async (user: User) => {
+    console.log('[Auth] Upserting customer for user:', user.id);
+    try {
+      const { error } = await supabase.from('customers').upsert({
+        id: user.id,
+        email: user.email,
+        full_name: user.user_metadata?.full_name ?? null,
+        language: 'en',
+        loyalty_points: 0,
+      }, { onConflict: 'id', ignoreDuplicates: true });
+      if (error) console.log('[Auth] Customer upsert error (non-fatal):', error.message);
+      else console.log('[Auth] Customer upserted successfully');
+    } catch (err) {
+      console.log('[Auth] Customer upsert exception (non-fatal):', err);
+    }
+  };
+
   const signIn = async (email: string, password: string) => {
     console.log('[Auth] signIn attempt:', email);
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         console.log('[Auth] signIn error:', error.message);
         return { error };
       }
       console.log('[Auth] signIn success');
+      if (data.user) {
+        await upsertProfile(data.user);
+      }
       return { error: null };
     } catch (err) {
       console.log('[Auth] signIn exception:', err);
@@ -62,7 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUp = async (email: string, password: string, fullName: string) => {
     console.log('[Auth] signUp attempt:', email, fullName);
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: { data: { full_name: fullName } },
@@ -72,6 +109,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { error };
       }
       console.log('[Auth] signUp success');
+      if (data.user) {
+        await upsertProfile(data.user);
+        await upsertCustomer(data.user);
+      }
       return { error: null };
     } catch (err) {
       console.log('[Auth] signUp exception:', err);
@@ -90,7 +131,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { error } = await supabase.rpc('delete_user');
       if (error) {
         console.log('[Auth] deleteAccount rpc error:', error.message);
-        // Fallback: sign out even if deletion fails
         await supabase.auth.signOut();
         return { error };
       }

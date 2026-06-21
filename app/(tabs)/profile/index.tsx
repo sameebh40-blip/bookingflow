@@ -1,10 +1,11 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
-  TouchableOpacity,
+  Image,
+  ImageSourcePropType,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -17,12 +18,18 @@ import {
   HelpCircle,
   ChevronRight,
   LogOut,
-  Wallet,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/utils/supabase';
+
+interface ProfileData {
+  full_name?: string;
+  avatar_url?: string;
+  membership_tier?: string;
+}
 
 interface MenuItem {
   icon: React.ReactNode;
@@ -31,13 +38,42 @@ interface MenuItem {
   external?: boolean;
 }
 
+function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
+  if (!source) return { uri: '' };
+  if (typeof source === 'string') return { uri: source };
+  return source as ImageSourcePropType;
+}
+
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, signOut } = useAuth();
+  const [profile, setProfile] = useState<ProfileData | null>(null);
 
-  const userName = user?.user_metadata?.full_name ?? user?.email?.split('@')[0] ?? 'Guest';
-  const initials = userName
+  useEffect(() => {
+    if (user) {
+      console.log('[Profile] Fetching profile from Supabase for user:', user.id);
+      supabase
+        .from('profiles')
+        .select('full_name, avatar_url, membership_tier')
+        .eq('id', user.id)
+        .single()
+        .then(({ data, error }) => {
+          if (error) {
+            console.log('[Profile] Profile fetch error (non-fatal):', error.message);
+          } else if (data) {
+            console.log('[Profile] Profile loaded:', data.full_name);
+            setProfile(data);
+          }
+        });
+    }
+  }, [user]);
+
+  const displayName = profile?.full_name ?? user?.user_metadata?.full_name ?? user?.email?.split('@')[0] ?? 'Guest';
+  const membershipTier = profile?.membership_tier ?? 'Silver';
+  const avatarUrl = profile?.avatar_url ?? null;
+
+  const initials = displayName
     .split(' ')
     .map((n: string) => n[0])
     .join('')
@@ -82,12 +118,22 @@ export default function ProfileScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Text style={styles.userName}>{userName}</Text>
-          <Text style={styles.userSubtitle}>Personal profile</Text>
+          <Text style={styles.userName}>{displayName}</Text>
+          <View style={styles.tierBadge}>
+            <Text style={styles.tierText}>{membershipTier}</Text>
+          </View>
         </View>
-        <View style={styles.avatarCircle}>
-          <Text style={styles.avatarInitials}>{initials}</Text>
-        </View>
+        {avatarUrl ? (
+          <Image
+            source={resolveImageSource(avatarUrl)}
+            style={styles.avatarImage}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={styles.avatarCircle}>
+            <Text style={styles.avatarInitials}>{initials}</Text>
+          </View>
+        )}
       </View>
 
       {/* Wallet card */}
@@ -168,9 +214,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 24,
   },
-  headerLeft: { gap: 4 },
+  headerLeft: { gap: 6 },
   userName: { fontSize: 26, fontWeight: '800', color: MADAR_COLORS.text, letterSpacing: -0.5 },
-  userSubtitle: { fontSize: 14, color: MADAR_COLORS.textSecondary },
+  tierBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: MADAR_COLORS.goldMuted,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: MADAR_COLORS.goldBorder,
+  },
+  tierText: { fontSize: 11, fontWeight: '700', color: MADAR_COLORS.gold },
   avatarCircle: {
     width: 56,
     height: 56,
@@ -180,6 +235,13 @@ const styles = StyleSheet.create({
     borderColor: MADAR_COLORS.purple,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  avatarImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 2,
+    borderColor: MADAR_COLORS.border,
   },
   avatarInitials: { fontSize: 18, fontWeight: '800', color: MADAR_COLORS.purple },
   walletCardWrapper: { marginBottom: 24 },

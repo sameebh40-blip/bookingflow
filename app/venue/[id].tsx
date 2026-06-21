@@ -34,6 +34,7 @@ interface Venue {
   description?: string;
   is_open?: boolean;
   open_until?: string;
+  opening_hours?: Record<string, { open: string; close: string; enabled: boolean }>;
 }
 
 interface Service {
@@ -50,6 +51,7 @@ interface Staff {
   specialty: string;
   rating: number;
   avatar: string;
+  avatar_url?: string;
 }
 
 interface Review {
@@ -59,12 +61,13 @@ interface Review {
   rating: number;
   comment: string;
   date: string;
+  avatar_url?: string;
 }
 
 const MOCK_VENUES: Record<string, Venue> = {
-  '1': { id: '1', name: 'Level Barber Shop', category: 'Barber', rating: 5.0, review_count: 1336, distance_km: 0.75, address: 'Avenue 11, Tubli, Bahrain', image_url: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800', starting_price: 5, description: 'Level Barber Shop is a premium barbershop offering the finest cuts and grooming services in Bahrain. Our skilled barbers are dedicated to providing an exceptional experience with every visit. We specialize in modern fades, classic cuts, and beard grooming.', is_open: true, open_until: '9:00 PM' },
-  '2': { id: '2', name: 'The Groom Room', category: 'Barber', rating: 5.0, review_count: 513, distance_km: 14.6, address: 'Mall of Dilmunia, Shop 26', image_url: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800', starting_price: 8, description: "The Groom Room is an upscale gentleman's barber shop offering today's progressive gentlemen a haven where he can sit back, relax and experience the finest grooming.", is_open: true, open_until: '8:00 PM' },
-  '3': { id: '3', name: 'Luxe Spa & Wellness', category: 'Spa', rating: 4.8, review_count: 287, distance_km: 2.1, address: 'Seef District, Manama', image_url: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=800', starting_price: 25, description: 'A sanctuary of relaxation and rejuvenation in the heart of Manama.', is_open: false, open_until: '10:00 PM' },
+  '1': { id: '1', name: 'Level Barber Shop', category: 'Barber', rating: 5.0, review_count: 1336, distance_km: 0.75, address: 'Avenue 11, Tubli, Bahrain', image_url: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800', starting_price: 5, description: 'Level Barber Shop is a premium barbershop offering the finest cuts and grooming services in Bahrain.', is_open: true, open_until: '9:00 PM' },
+  '2': { id: '2', name: 'The Groom Room', category: 'Barber', rating: 5.0, review_count: 513, distance_km: 14.6, address: 'Mall of Dilmunia, Shop 26', image_url: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800', starting_price: 8, description: "The Groom Room is an upscale gentleman's barber shop.", is_open: true, open_until: '8:00 PM' },
+  '3': { id: '3', name: 'Luxe Spa & Wellness', category: 'Spa', rating: 4.8, review_count: 287, distance_km: 2.1, address: 'Seef District, Manama', image_url: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=800', starting_price: 25, description: 'A sanctuary of relaxation and rejuvenation.', is_open: false, open_until: '10:00 PM' },
 };
 
 const MOCK_SERVICES: Service[] = [
@@ -96,7 +99,20 @@ const VENUE_IMAGES_FALLBACK = [
 
 const TABS = ['Photos', 'About', 'Services', 'Team', 'Reviews', 'Other'];
 
-const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+// DAYS array: index 0=Sunday, 1=Monday, ..., 6=Saturday
+// opening_hours keys: "0"=Sun, "1"=Mon, ..., "6"=Sat
+// Display order: Mon-Sun
+const DAYS_DISPLAY = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+// Map display index to opening_hours key (Mon=1, Tue=2, ..., Sun=0)
+const DAY_KEY_MAP: Record<string, string> = {
+  'Monday': '1',
+  'Tuesday': '2',
+  'Wednesday': '3',
+  'Thursday': '4',
+  'Friday': '5',
+  'Saturday': '6',
+  'Sunday': '0',
+};
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: '' };
@@ -112,6 +128,7 @@ export default function VenueDetailScreen() {
   const [services, setServices] = useState<Service[]>([]);
   const [reviews, setReviews] = useState<Review[]>(MOCK_REVIEWS);
   const [staff, setStaff] = useState<Staff[]>(MOCK_STAFF);
+  const [carouselImages, setCarouselImages] = useState<string[]>([]);
   const [isFavourite, setIsFavourite] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
   const [currentImage, setCurrentImage] = useState(0);
@@ -132,7 +149,7 @@ export default function VenueDetailScreen() {
   const fetchVenueData = async () => {
     console.log('[VenueDetail] Fetching venue data for id:', id, '(hallaq barbershops)');
     try {
-      const [venueRes, servicesRes, reviewsRes, staffRes] = await Promise.all([
+      const [venueRes, servicesRes, reviewsRes, staffRes, postsRes] = await Promise.all([
         supabase
           .from('barbershops')
           .select('id, name, category, rating_avg, address, cover_url, logo_url, lat, lng, description, opening_hours, is_active, status, phone, instagram')
@@ -146,7 +163,7 @@ export default function VenueDetailScreen() {
           .limit(20),
         supabase
           .from('reviews')
-          .select('id, rating, text, created_at, customer_profile_id')
+          .select('id, rating, text, created_at, customer_profile_id, profiles!customer_profile_id(full_name, avatar_url)')
           .eq('shop_id', id)
           .eq('target_type', 'shop')
           .order('created_at', { ascending: false })
@@ -157,13 +174,21 @@ export default function VenueDetailScreen() {
           .eq('shop_id', id)
           .eq('status', 'approved')
           .limit(10),
+        supabase
+          .from('posts')
+          .select('id, media_url, thumbnail_url, image_url')
+          .eq('shop_id', id)
+          .eq('is_active', true)
+          .limit(6),
       ]);
 
       console.log('[VenueDetail] Barbershop fetch result:', venueRes.error?.message ?? 'ok');
+      let coverUrl = 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800';
       if (venueRes.error || !venueRes.data) {
         setVenue(MOCK_VENUES[id ?? '1'] ?? MOCK_VENUES['1']);
       } else {
         const data = venueRes.data;
+        coverUrl = data.cover_url ?? coverUrl;
         setVenue({
           id: data.id,
           name: data.name,
@@ -172,12 +197,24 @@ export default function VenueDetailScreen() {
           review_count: 0,
           distance_km: 0.5,
           address: data.address ?? '',
-          image_url: data.cover_url ?? 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800',
+          image_url: coverUrl,
           description: data.description ?? '',
           is_open: data.is_active,
           open_until: '21:00',
           starting_price: 5,
+          opening_hours: data.opening_hours ?? undefined,
         });
+      }
+
+      // Build carousel images from posts, fallback to cover + stock
+      console.log('[VenueDetail] Posts fetch result:', postsRes.error?.message ?? 'ok', 'count:', postsRes.data?.length ?? 0);
+      if (postsRes.data && postsRes.data.length > 0) {
+        const postImages = postsRes.data
+          .map((p: any) => p.thumbnail_url ?? p.media_url ?? p.image_url)
+          .filter(Boolean) as string[];
+        setCarouselImages(postImages.length > 0 ? postImages : [coverUrl, ...VENUE_IMAGES_FALLBACK.filter(u => u !== coverUrl).slice(0, 2)]);
+      } else {
+        setCarouselImages([coverUrl, ...VENUE_IMAGES_FALLBACK.filter(u => u !== coverUrl).slice(0, 2)]);
       }
 
       console.log('[VenueDetail] Services fetch result:', servicesRes.error?.message ?? 'ok', 'count:', servicesRes.data?.length ?? 0);
@@ -195,14 +232,28 @@ export default function VenueDetailScreen() {
 
       console.log('[VenueDetail] Reviews fetch result:', reviewsRes.error?.message ?? 'ok', 'count:', reviewsRes.data?.length ?? 0);
       if (reviewsRes.data && reviewsRes.data.length > 0) {
-        setReviews(reviewsRes.data.map((r: any) => ({
-          id: r.id,
-          name: 'Customer',
-          initials: 'C',
-          rating: r.rating,
-          comment: r.text ?? '',
-          date: r.created_at,
-        })));
+        const mappedReviews = reviewsRes.data.map((r: any) => {
+          const profile = r.profiles;
+          const fullName: string = profile?.full_name ?? 'Customer';
+          const initials = fullName.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2).toUpperCase() || 'C';
+          const dateStr = r.created_at
+            ? new Date(r.created_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+            : '';
+          return {
+            id: r.id,
+            name: fullName,
+            initials,
+            rating: r.rating,
+            comment: r.text ?? '',
+            date: dateStr,
+            avatar_url: profile?.avatar_url ?? undefined,
+          };
+        });
+        // Also update review_count on venue
+        setVenue(prev => prev ? { ...prev, review_count: reviewsRes.data?.length ?? 0 } : prev);
+        setReviews(mappedReviews);
+      } else {
+        setReviews(MOCK_REVIEWS);
       }
 
       console.log('[VenueDetail] Barbers fetch result:', staffRes.error?.message ?? 'ok', 'count:', staffRes.data?.length ?? 0);
@@ -274,6 +325,8 @@ export default function VenueDetailScreen() {
   const servicesCountText = `${services.length} services available`;
   const starsFilled = Math.round(venue.rating);
 
+  const venueImages = carouselImages.length > 0 ? carouselImages : [venue.image_url, ...VENUE_IMAGES_FALLBACK.filter(u => u !== venue.image_url).slice(0, 2)];
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -284,79 +337,75 @@ export default function VenueDetailScreen() {
         contentContainerStyle={{ paddingBottom: 120 }}
       >
         {/* ── PHOTO CAROUSEL ── */}
-        {(() => {
-          const venueImages = venue.image_url
-            ? [venue.image_url, ...VENUE_IMAGES_FALLBACK.filter(u => u !== venue.image_url).slice(0, 2)]
-            : VENUE_IMAGES_FALLBACK;
-          return (
-            <View style={{ height: 320, position: 'relative', overflow: 'visible' }}>
-              <FlatList
-                data={venueImages}
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                onMomentumScrollEnd={(e) => {
-                  const index = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
-                  console.log('[VenueDetail] Photo swiped to index:', index);
-                  setCurrentImage(index);
-                }}
-                renderItem={({ item }) => (
-                  <Image
-                    source={resolveImageSource(item)}
-                    style={{ width: screenWidth, height: 320 }}
-                    resizeMode="cover"
-                  />
-                )}
-                keyExtractor={(_, i) => String(i)}
+        <View style={{ height: 320, position: 'relative' }}>
+          {/* FlatList for photos only — overflow hidden */}
+          <View style={{ height: 320, overflow: 'hidden' }}>
+            <FlatList
+              data={venueImages}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={(e) => {
+                const index = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
+                console.log('[VenueDetail] Photo swiped to index:', index);
+                setCurrentImage(index);
+              }}
+              renderItem={({ item }) => (
+                <Image
+                  source={resolveImageSource(item)}
+                  style={{ width: screenWidth, height: 320 }}
+                  resizeMode="cover"
+                />
+              )}
+              keyExtractor={(_, i) => String(i)}
+            />
+          </View>
+          <LinearGradient
+            colors={['rgba(0,0,0,0.55)', 'transparent']}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 120 }}
+          />
+          {/* Back button — outside FlatList, no clipping */}
+          <AnimatedPressable
+            onPress={() => {
+              console.log('[VenueDetail] Back pressed');
+              router.back();
+            }}
+            style={[styles.carouselBtn, { position: 'absolute', top: insets.top + 8, left: 16 }]}
+          >
+            <ArrowLeft size={20} color="#fff" />
+          </AnimatedPressable>
+          {/* Share + Heart — outside FlatList */}
+          <View style={{ position: 'absolute', top: insets.top + 8, right: 16, flexDirection: 'row', gap: 8 }}>
+            <AnimatedPressable
+              onPress={() => console.log('[VenueDetail] Share pressed')}
+              style={styles.carouselBtn}
+            >
+              <Share2 size={18} color="#fff" />
+            </AnimatedPressable>
+            <AnimatedPressable
+              onPress={() => {
+                console.log('[VenueDetail] Favourite toggled:', !isFavourite);
+                setIsFavourite(f => !f);
+              }}
+              style={styles.carouselBtn}
+            >
+              <Heart
+                size={18}
+                color={isFavourite ? MADAR_COLORS.danger : '#fff'}
+                fill={isFavourite ? MADAR_COLORS.danger : 'transparent'}
               />
-              <LinearGradient
-                colors={['rgba(0,0,0,0.55)', 'transparent']}
-                style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 120 }}
+            </AnimatedPressable>
+          </View>
+          {/* Dot indicators */}
+          <View style={styles.dotRow}>
+            {venueImages.map((_, i) => (
+              <View
+                key={i}
+                style={[styles.dot, i === currentImage && styles.dotActive]}
               />
-              {/* Back */}
-              <AnimatedPressable
-                onPress={() => {
-                  console.log('[VenueDetail] Back pressed');
-                  router.back();
-                }}
-                style={[styles.carouselBtn, { top: insets.top + 8, left: 16 }]}
-              >
-                <ArrowLeft size={20} color="#fff" />
-              </AnimatedPressable>
-              {/* Share + Heart */}
-              <View style={{ position: 'absolute', top: insets.top + 8, right: 16, flexDirection: 'row', gap: 8 }}>
-                <AnimatedPressable
-                  onPress={() => console.log('[VenueDetail] Share pressed')}
-                  style={styles.carouselBtn}
-                >
-                  <Share2 size={18} color="#fff" />
-                </AnimatedPressable>
-                <AnimatedPressable
-                  onPress={() => {
-                    console.log('[VenueDetail] Favourite toggled:', !isFavourite);
-                    setIsFavourite(f => !f);
-                  }}
-                  style={styles.carouselBtn}
-                >
-                  <Heart
-                    size={18}
-                    color={isFavourite ? MADAR_COLORS.danger : '#fff'}
-                    fill={isFavourite ? MADAR_COLORS.danger : 'transparent'}
-                  />
-                </AnimatedPressable>
-              </View>
-              {/* Dot indicators */}
-              <View style={styles.dotRow}>
-                {venueImages.map((_, i) => (
-                  <View
-                    key={i}
-                    style={[styles.dot, i === currentImage && styles.dotActive]}
-                  />
-                ))}
-              </View>
-            </View>
-          );
-        })()}
+            ))}
+          </View>
+        </View>
 
         {/* ── VENUE INFO CARD ── */}
         <View style={styles.infoCard}>
@@ -433,7 +482,7 @@ export default function VenueDetailScreen() {
             <View key={cat} style={{ marginBottom: 12 }}>
               <Text style={styles.categoryHeader}>{cat}</Text>
               {svcs.map((svc) => {
-                const priceFixed = svc.price.toFixed(2);
+                const priceFixed = Number(svc.price).toFixed(2);
                 return (
                   <View key={svc.id} style={styles.serviceRow}>
                     <View style={{ flex: 1 }}>
@@ -532,16 +581,24 @@ export default function VenueDetailScreen() {
           {/* Review cards */}
           {reviews.map((review) => {
             const reviewStarsFilled = Number(review.rating);
-            const reviewName = review.name ?? review.reviewer_name ?? 'Anonymous';
+            const reviewName = review.name ?? 'Anonymous';
             const reviewInitials = review.initials ?? reviewName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
-            const reviewDate = review.date ?? (review.created_at ? new Date(review.created_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '');
-            const reviewComment = review.comment ?? review.text ?? '';
+            const reviewDate = review.date ?? '';
+            const reviewComment = review.comment ?? '';
             return (
               <View key={review.id} style={styles.reviewCard}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: MADAR_COLORS.surfaceSecondary, alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: MADAR_COLORS.textSecondary }}>{reviewInitials}</Text>
-                  </View>
+                  {review.avatar_url ? (
+                    <Image
+                      source={resolveImageSource(review.avatar_url)}
+                      style={{ width: 40, height: 40, borderRadius: 20 }}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: MADAR_COLORS.surfaceSecondary, alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: MADAR_COLORS.textSecondary }}>{reviewInitials}</Text>
+                    </View>
+                  )}
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 13, fontWeight: '700', color: MADAR_COLORS.text }}>{reviewName}</Text>
                     <Text style={{ fontSize: 11, color: MADAR_COLORS.textTertiary }}>{reviewDate}</Text>
@@ -575,16 +632,25 @@ export default function VenueDetailScreen() {
           onLayout={(e) => { otherY.current = e.nativeEvent.layout.y; }}
         >
           <Text style={styles.sectionTitle}>Opening times</Text>
-          {DAYS.map((day) => (
-            <View
-              key={day}
-              style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: MADAR_COLORS.border }}
-            >
-              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: MADAR_COLORS.success, marginRight: 12 }} />
-              <Text style={{ flex: 1, fontSize: 14, color: MADAR_COLORS.text }}>{day}</Text>
-              <Text style={{ fontSize: 14, color: MADAR_COLORS.textSecondary }}>10:00 AM – 8:00 PM</Text>
-            </View>
-          ))}
+          {DAYS_DISPLAY.map((day) => {
+            const key = DAY_KEY_MAP[day];
+            const hours = venue.opening_hours?.[key];
+            const isEnabled = hours?.enabled ?? true;
+            const timeText = isEnabled && hours
+              ? `${hours.open} – ${hours.close}`
+              : 'Closed';
+            const dotColor = isEnabled ? MADAR_COLORS.success : MADAR_COLORS.danger;
+            return (
+              <View
+                key={day}
+                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: MADAR_COLORS.border }}
+              >
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: dotColor, marginRight: 12 }} />
+                <Text style={{ flex: 1, fontSize: 14, color: MADAR_COLORS.text }}>{day}</Text>
+                <Text style={{ fontSize: 14, color: MADAR_COLORS.textSecondary }}>{timeText}</Text>
+              </View>
+            );
+          })}
           <View style={{ marginTop: 20 }}>
             <Text style={styles.sectionTitle}>Additional information</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
@@ -617,7 +683,6 @@ export default function VenueDetailScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: MADAR_COLORS.background },
   carouselBtn: {
-    position: 'absolute',
     width: 40,
     height: 40,
     borderRadius: 20,
