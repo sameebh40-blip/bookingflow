@@ -519,7 +519,7 @@ function PartnerCalendarInner({ router: expoRouter }: { router: ReturnType<typeo
           Complete your shop onboarding to access the calendar.
         </Text>
         <TouchableOpacity
-          onPress={() => expoRouter.push('/(partner)/ob-essentials' as never)}
+          onPress={() => expoRouter.push('/(partner)/setup' as never)}
           style={{ backgroundColor: '#C9A84C', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 24 }}
         >
           <Text style={{ color: '#000', fontWeight: '700', fontSize: 15 }}>Complete Setup →</Text>
@@ -883,7 +883,7 @@ function PartnerCalendarInner({ router: expoRouter }: { router: ReturnType<typeo
           Complete your shop onboarding to access the calendar.
         </Text>
         <TouchableOpacity
-          onPress={() => { console.log('[Calendar] Complete Setup pressed'); expoRouter.push('/(partner)/ob-essentials' as never); }}
+          onPress={() => { console.log('[Calendar] Complete Setup pressed'); expoRouter.push('/(partner)/setup' as never); }}
           style={{ backgroundColor: '#C9A84C', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 24 }}
         >
           <Text style={{ color: '#000', fontWeight: '700', fontSize: 15 }}>Complete Setup →</Text>
@@ -1069,7 +1069,7 @@ function PartnerCalendarInner({ router: expoRouter }: { router: ReturnType<typeo
           <TouchableOpacity
             onPress={() => {
               console.log('[Calendar] Complete Setup button pressed');
-              expoRouter.push('/(partner)/ob-essentials' as never);
+              expoRouter.push('/(partner)/setup' as never);
             }}
             style={{ backgroundColor: P.gold, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 24, alignItems: 'center' }}
           >

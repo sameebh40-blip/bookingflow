@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -46,7 +47,7 @@ const SAMPLE_ENHANCED =
 export default function ObEssentials() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { profile, user } = useAuth();
+  const { profile, user, refreshProfile } = useAuth();
 
   const [displayName, setDisplayName] = useState('');
   const [phone, setPhone] = useState('');
@@ -123,28 +124,58 @@ export default function ObEssentials() {
   };
 
   const saveEssentials = async () => {
-    if (!profile?.shop_id) return;
-    console.log('[ObEssentials] Save essentials pressed — name:', editName, 'phone:', editCountryCode + editPhone);
+    if (!editName.trim()) {
+      Alert.alert('Required', 'Please enter a display name for your venue.');
+      return;
+    }
+    if (!user) return;
+    console.log('[ObEssentials] Save essentials pressed — name:', editName);
     setSaving(true);
-    const fullPhone = editCountryCode + ' ' + editPhone;
-    const { error } = await supabase
-      .from('barbershops')
-      .update({ name: editName, phone: fullPhone })
-      .eq('id', profile.shop_id);
-    setSaving(false);
-    if (error) {
-      console.log('[ObEssentials] Error saving essentials:', error.message);
-    } else {
-      console.log('[ObEssentials] Essentials saved successfully');
-      setDisplayName(editName);
-      setPhone(editPhone);
+    const fullPhone = editCountryCode + ' ' + editPhone.trim();
+    try {
+      if (profile?.shop_id) {
+        // Shop exists — just update
+        const { error } = await supabase
+          .from('barbershops')
+          .update({ name: editName.trim(), phone: fullPhone })
+          .eq('id', profile.shop_id);
+        if (error) throw new Error(error.message);
+      } else {
+        // No shop yet — CREATE one
+        console.log('[ObEssentials] No shop_id found, creating new barbershop...');
+        const { error } = await supabase.from('barbershops').insert({
+          name: editName.trim(),
+          phone: fullPhone,
+          owner_profile_id: user.id,
+          is_active: true,
+          status: 'active',
+          category: 'barbershop',
+        });
+        if (error) throw new Error(error.message);
+        // Update profile role to shop_owner
+        await supabase.from('profiles').update({ role: 'shop_owner' }).eq('id', user.id);
+        // Refresh profile so shop_id is set in memory
+        await refreshProfile();
+        console.log('[ObEssentials] Shop created and profile refreshed');
+      }
+      setDisplayName(editName.trim());
+      setPhone(editPhone.trim());
       setCountryCode(editCountryCode);
       setEssentialsModalVisible(false);
+    } catch (err: any) {
+      console.log('[ObEssentials] Error saving essentials:', err.message);
+      Alert.alert('Save failed', err.message ?? 'Please try again.');
+    } finally {
+      setSaving(false);
     }
   };
 
   const saveAbout = async () => {
-    if (!profile?.shop_id) return;
+    if (!profile?.shop_id) {
+      Alert.alert('Setup required', 'Please fill in your venue name and phone first, then save essentials.');
+      setAboutModalVisible(false);
+      return;
+    }
     console.log('[ObEssentials] Save about pressed — description length:', editDescription.length);
     setSaving(true);
     const { error } = await supabase
@@ -154,6 +185,7 @@ export default function ObEssentials() {
     setSaving(false);
     if (error) {
       console.log('[ObEssentials] Error saving description:', error.message);
+      Alert.alert('Save failed', error.message);
     } else {
       console.log('[ObEssentials] Description saved successfully');
       setDescription(editDescription);

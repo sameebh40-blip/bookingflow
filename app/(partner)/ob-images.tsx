@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Image,
   ImageSourcePropType,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -121,7 +122,7 @@ export default function ObImages() {
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    if (!profile?.shop_id) return;
+    if (!profile?.shop_id) { Alert.alert('Setup required', 'Please complete Venue Essentials first.'); return; }
     console.log('[ObImages] Fetching venue images for shop_id:', profile.shop_id);
     supabase
       .from('barbershops')
@@ -229,7 +230,7 @@ export default function ObImages() {
   };
 
   const saveImages = async () => {
-    if (!profile?.shop_id) return;
+    if (!profile?.shop_id) { Alert.alert('Setup required', 'Please complete Venue Essentials first.'); return; }
     console.log('[ObImages] Save images pressed, count:', editImages.length);
     setSaving(true);
     const updatePayload: Record<string, unknown> = { venue_images: editImages };

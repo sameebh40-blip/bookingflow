@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -106,7 +107,10 @@ export default function ObHours() {
   };
 
   const saveHours = async () => {
-    if (!profile?.shop_id) return;
+    if (!profile?.shop_id) {
+      Alert.alert('Setup required', 'Please complete Venue Essentials first to create your shop.');
+      return;
+    }
     console.log('[ObHours] Save hours pressed');
     setSaving(true);
     const { error } = await supabase

@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -74,7 +75,7 @@ export default function ObLocation() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!profile?.shop_id) return;
+    if (!profile?.shop_id) { Alert.alert('Setup required', 'Please complete Venue Essentials first.'); return; }
     console.log('[ObLocation] Fetching location for shop_id:', profile.shop_id);
     supabase
       .from('barbershops')
@@ -100,7 +101,7 @@ export default function ObLocation() {
   };
 
   const saveLocation = async () => {
-    if (!profile?.shop_id) return;
+    if (!profile?.shop_id) { Alert.alert('Setup required', 'Please complete Venue Essentials first.'); return; }
     console.log('[ObLocation] Save location pressed — address:', editAddress);
     setSaving(true);
     const { error } = await supabase
