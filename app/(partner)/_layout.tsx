@@ -21,6 +21,9 @@ import {
   Settings,
   LogOut,
   Grid3x3,
+  Bell,
+  Tag,
+  Plus,
 } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -51,14 +54,16 @@ const SIDEBAR_ITEMS = [
   { route: '/(partner)/catalog', label: 'Catalog', icon: BookOpen },
   { route: '/(partner)/team', label: 'Team', icon: UserCheck },
   { route: '/(partner)/settings', label: 'Settings', icon: Settings },
+  { route: '/(partner)/notifications', label: 'Notifications', icon: Bell },
+  { route: '/(partner)/more', label: 'More', icon: Grid3x3 },
 ];
 
 const MOBILE_TABS = [
-  { route: '/(partner)', label: 'Home', icon: Home },
-  { route: '/(partner)/calendar', label: 'Calendar', icon: CalendarDays },
-  { route: '/(partner)/clients', label: 'Clients', icon: Users },
-  { route: '/(partner)/chat', label: 'Chat', icon: MessageCircle },
-  { route: '/(partner)/sales', label: 'More', icon: Grid3x3 },
+  { route: '/(partner)/calendar', icon: CalendarDays, isCenter: false },
+  { route: '/(partner)/catalog', icon: Tag, isCenter: false },
+  { route: '/(partner)/new-booking', icon: Plus, isCenter: true },
+  { route: '/(partner)/notifications', icon: Bell, isCenter: false },
+  { route: '/(partner)/more', icon: Grid3x3, isCenter: false },
 ];
 
 export default function PartnerLayout() {
@@ -173,10 +178,23 @@ export default function PartnerLayout() {
         <Slot />
       </View>
       {/* Bottom tab bar */}
-      <View style={[styles.tabBar, { paddingBottom: insets.bottom + 4 }]}>
+      <View style={[styles.tabBar, { height: 56 + insets.bottom, paddingBottom: insets.bottom }]}>
         {MOBILE_TABS.map((tab) => {
           const active = isActive(tab.route);
           const Icon = tab.icon;
+          if (tab.isCenter) {
+            return (
+              <TouchableOpacity
+                key={tab.route}
+                style={styles.tabItem}
+                onPress={() => navigateTo(tab.route)}
+              >
+                <View style={styles.centerTabBtn}>
+                  <Icon size={22} color="#fff" strokeWidth={2.5} />
+                </View>
+              </TouchableOpacity>
+            );
+          }
           return (
             <TouchableOpacity
               key={tab.route}
@@ -190,9 +208,6 @@ export default function PartnerLayout() {
                   strokeWidth={active ? 2.5 : 2}
                 />
               </View>
-              <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
-                {tab.label}
-              </Text>
             </TouchableOpacity>
           );
         })}
@@ -306,7 +321,22 @@ const styles = StyleSheet.create({
     backgroundColor: P.surface,
     borderTopWidth: 1,
     borderTopColor: P.border,
-    paddingTop: 8,
+    paddingTop: 4,
+    alignItems: 'center',
+  },
+  centerTabBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: P.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+    elevation: 4,
+    shadowColor: P.accent,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
   },
   tabItem: {
     flex: 1,
