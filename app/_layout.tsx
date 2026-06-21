@@ -1,7 +1,7 @@
 import "react-native-reanimated";
 import React, { useEffect } from "react";
 import { useFonts } from "expo-font";
-import { Stack } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -15,7 +15,7 @@ import {
 } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
@@ -28,6 +28,31 @@ SplashScreen.preventAutoHideAsync();
 export const unstable_settings = {
   initialRouteName: "(tabs)",
 };
+
+function RoleRouter() {
+  const { profile, loading } = useAuth();
+  const router = useRouter();
+  const segments = useSegments();
+
+  useEffect(() => {
+    if (loading) return;
+    const isPartner = profile?.role === 'shop_owner' || profile?.role === 'barber';
+    const inPartner = segments[0] === '(partner)';
+    const inAuth = segments[0] === 'auth';
+
+    console.log('[RoleRouter] profile role:', profile?.role, 'segments:', segments[0], 'isPartner:', isPartner);
+
+    if (isPartner && !inPartner && !inAuth) {
+      console.log('[RoleRouter] Redirecting to partner dashboard');
+      router.replace('/(partner)');
+    } else if (!isPartner && inPartner) {
+      console.log('[RoleRouter] Redirecting to customer tabs');
+      router.replace('/(tabs)');
+    }
+  }, [profile, loading]);
+
+  return null;
+}
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -71,37 +96,39 @@ export default function RootLayout() {
       <ThemeProvider value={colorScheme === "dark" ? MadarDarkTheme : MadarLightTheme}>
         <SafeAreaProvider>
           <AuthProvider>
-        <NotificationProvider>
-            <WidgetProvider>
-              <GestureHandlerRootView style={{ flex: 1 }}>
-                <Stack>
-                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                  <Stack.Screen name="auth" options={{ headerShown: false }} />
-                  <Stack.Screen name="venue/[id]" options={{ headerShown: false }} />
-                  <Stack.Screen name="booking/services" options={{ headerShown: false }} />
-                  <Stack.Screen name="booking/staff" options={{ headerShown: false }} />
-                  <Stack.Screen name="booking/datetime" options={{ headerShown: false }} />
-                  <Stack.Screen name="booking/confirm" options={{ headerShown: false }} />
-                  <Stack.Screen name="chat/[venueId]" options={{ headerShown: false }} />
-                  <Stack.Screen name="favourites" options={{ headerShown: false }} />
-                  <Stack.Screen name="wallet" options={{ headerShown: false }} />
-                  <Stack.Screen name="settings" options={{ headerShown: false }} />
-                  <Stack.Screen name="edit-profile" options={{ headerShown: false }} />
-                  <Stack.Screen name="reels" options={{ headerShown: false }} />
-                  <Stack.Screen name="search-modal" options={{ headerShown: false, presentation: 'modal' }} />
-                  <Stack.Screen name="filter-amenities" options={{ headerShown: false, presentation: 'formSheet' }} />
-                  <Stack.Screen name="filter-options" options={{ headerShown: false, presentation: 'formSheet' }} />
-                  <Stack.Screen name="filter-service-type" options={{ headerShown: false, presentation: 'formSheet' }} />
-                  <Stack.Screen name="map-search" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
-                  <Stack.Screen name="top-barbers" options={{ headerShown: false }} />
-                  <Stack.Screen name="barber/[id]" options={{ headerShown: false }} />
-                  <Stack.Screen name="appointment/[id]" options={{ headerShown: false }} />
-                </Stack>
-                <SystemBars style="light" />
-              </GestureHandlerRootView>
-            </WidgetProvider>
-          </NotificationProvider>
-        </AuthProvider>
+            <NotificationProvider>
+              <WidgetProvider>
+                <GestureHandlerRootView style={{ flex: 1 }}>
+                  <RoleRouter />
+                  <Stack>
+                    <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                    <Stack.Screen name="(partner)" options={{ headerShown: false }} />
+                    <Stack.Screen name="auth" options={{ headerShown: false }} />
+                    <Stack.Screen name="venue/[id]" options={{ headerShown: false }} />
+                    <Stack.Screen name="booking/services" options={{ headerShown: false }} />
+                    <Stack.Screen name="booking/staff" options={{ headerShown: false }} />
+                    <Stack.Screen name="booking/datetime" options={{ headerShown: false }} />
+                    <Stack.Screen name="booking/confirm" options={{ headerShown: false }} />
+                    <Stack.Screen name="chat/[venueId]" options={{ headerShown: false }} />
+                    <Stack.Screen name="favourites" options={{ headerShown: false }} />
+                    <Stack.Screen name="wallet" options={{ headerShown: false }} />
+                    <Stack.Screen name="settings" options={{ headerShown: false }} />
+                    <Stack.Screen name="edit-profile" options={{ headerShown: false }} />
+                    <Stack.Screen name="reels" options={{ headerShown: false }} />
+                    <Stack.Screen name="search-modal" options={{ headerShown: false, presentation: 'modal' }} />
+                    <Stack.Screen name="filter-amenities" options={{ headerShown: false, presentation: 'formSheet' }} />
+                    <Stack.Screen name="filter-options" options={{ headerShown: false, presentation: 'formSheet' }} />
+                    <Stack.Screen name="filter-service-type" options={{ headerShown: false, presentation: 'formSheet' }} />
+                    <Stack.Screen name="map-search" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
+                    <Stack.Screen name="top-barbers" options={{ headerShown: false }} />
+                    <Stack.Screen name="barber/[id]" options={{ headerShown: false }} />
+                    <Stack.Screen name="appointment/[id]" options={{ headerShown: false }} />
+                  </Stack>
+                  <SystemBars style="light" />
+                </GestureHandlerRootView>
+              </WidgetProvider>
+            </NotificationProvider>
+          </AuthProvider>
         </SafeAreaProvider>
       </ThemeProvider>
     </DevErrorBoundary>

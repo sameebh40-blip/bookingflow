@@ -1,0 +1,217 @@
+import React, { useEffect, useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+  Image,
+  Modal,
+  ImageSourcePropType,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import { Plus, Star, ChevronRight, X } from 'lucide-react-native';
+import { supabase } from '@/utils/supabase';
+import { useAuth } from '@/contexts/AuthContext';
+import { AnimatedPressable } from '@/components/AnimatedPressable';
+
+const P = {
+  bg: '#0F0F1A',
+  surface: '#1A1A2E',
+  surfaceElevated: '#242438',
+  border: '#2A2A45',
+  accent: '#7C3AED',
+  accentLight: 'rgba(124,58,237,0.15)',
+  gold: '#C9A84C',
+  text: '#F0F0FF',
+  textSecondary: '#9090B0',
+  textTertiary: '#5A5A7A',
+  success: '#4CAF7D',
+  danger: '#E85454',
+  warning: '#F59E0B',
+  divider: '#1E1E35',
+};
+
+function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
+  if (!source) return { uri: '' };
+  if (typeof source === 'string') return { uri: source };
+  return source as ImageSourcePropType;
+}
+
+interface Barber {
+  id: string;
+  display_name: string;
+  specialty?: string;
+  avatar_url?: string;
+  rating_avg?: number;
+  reviews_count?: number;
+  status?: string;
+}
+
+function StarRating({ rating }: { rating: number }) {
+  const stars = Array.from({ length: 5 }, (_, i) => i < Math.round(rating));
+  return (
+    <View style={{ flexDirection: 'row', gap: 2 }}>
+      {stars.map((filled, i) => (
+        <Star key={i} size={12} color={filled ? P.gold : P.textTertiary} fill={filled ? P.gold : 'transparent'} />
+      ))}
+    </View>
+  );
+}
+
+export default function PartnerTeam() {
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const { profile } = useAuth();
+  const shopId = profile?.shop_id;
+
+  const [barbers, setBarbers] = useState<Barber[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showInvite, setShowInvite] = useState(false);
+
+  const fetchBarbers = useCallback(async () => {
+    if (!shopId) return;
+    console.log('[Team] Fetching barbers for shop:', shopId);
+    try {
+      const { data } = await supabase
+        .from('barbers')
+        .select('id, display_name, specialty, avatar_url, rating_avg, reviews_count, status')
+        .eq('shop_id', shopId);
+      setBarbers((data as Barber[]) ?? []);
+      console.log('[Team] Loaded', data?.length ?? 0, 'barbers');
+    } catch (err) {
+      console.log('[Team] fetchBarbers error:', err);
+      setBarbers([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [shopId]);
+
+  useEffect(() => {
+    fetchBarbers();
+  }, [fetchBarbers]);
+
+  return (
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Team</Text>
+        <TouchableOpacity style={styles.addBtn} onPress={() => { console.log('[Team] Invite barber pressed'); setShowInvite(true); }}>
+          <Plus size={18} color="#fff" />
+        </TouchableOpacity>
+      </View>
+
+      {loading ? (
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator color={P.accent} />
+        </View>
+      ) : (
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
+          {barbers.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>No team members yet</Text>
+              <Text style={styles.emptySub}>Invite barbers to join your shop</Text>
+            </View>
+          ) : (
+            barbers.map(barber => {
+              const initials = barber.display_name.charAt(0).toUpperCase();
+              const rating = Number(barber.rating_avg) || 0;
+              const reviews = barber.reviews_count ?? 0;
+              const statusColor = barber.status === 'approved' ? P.success : P.warning;
+              const statusLabel = barber.status ?? 'pending';
+              return (
+                <AnimatedPressable
+                  key={barber.id}
+                  onPress={() => {
+                    console.log('[Team] Barber tapped:', barber.id);
+                    router.push(`/(partner)/team/${barber.id}` as never);
+                  }}
+                >
+                  <View style={styles.barberCard}>
+                    {barber.avatar_url ? (
+                      <Image source={resolveImageSource(barber.avatar_url)} style={styles.avatar} />
+                    ) : (
+                      <View style={styles.avatarPlaceholder}>
+                        <Text style={styles.avatarInitial}>{initials}</Text>
+                      </View>
+                    )}
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.barberName}>{barber.display_name}</Text>
+                      {barber.specialty && <Text style={styles.barberSpecialty}>{barber.specialty}</Text>}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                        <StarRating rating={rating} />
+                        <Text style={styles.reviewCount}>({reviews})</Text>
+                      </View>
+                    </View>
+                    <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                      <View style={[styles.statusBadge, { backgroundColor: statusColor + '22' }]}>
+                        <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
+                      </View>
+                      <ChevronRight size={14} color={P.textTertiary} />
+                    </View>
+                  </View>
+                </AnimatedPressable>
+              );
+            })
+          )}
+        </ScrollView>
+      )}
+
+      {/* FAB */}
+      <TouchableOpacity style={[styles.fab, { bottom: insets.bottom + 80 }]} onPress={() => { console.log('[Team] FAB pressed'); setShowInvite(true); }}>
+        <Plus size={24} color="#fff" />
+      </TouchableOpacity>
+
+      {/* Invite modal */}
+      <Modal visible={showInvite} transparent animationType="slide" onRequestClose={() => setShowInvite(false)}>
+        <View style={styles.sheetOverlay}>
+          <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Invite Barber</Text>
+              <TouchableOpacity onPress={() => setShowInvite(false)}>
+                <X size={20} color={P.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.comingSoon}>
+              <Text style={styles.comingSoonIcon}>🚀</Text>
+              <Text style={styles.comingSoonTitle}>Coming Soon</Text>
+              <Text style={styles.comingSoonSub}>Barber invitations will be available in the next update.</Text>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: P.bg },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16 },
+  headerTitle: { color: P.text, fontSize: 20, fontWeight: '700' },
+  addBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center' },
+  loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  emptyState: { alignItems: 'center', paddingVertical: 60, gap: 8 },
+  emptyTitle: { color: P.textSecondary, fontSize: 16, fontWeight: '600' },
+  emptySub: { color: P.textTertiary, fontSize: 13 },
+  barberCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: P.surface, borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: P.border },
+  avatar: { width: 52, height: 52, borderRadius: 26 },
+  avatarPlaceholder: { width: 52, height: 52, borderRadius: 26, backgroundColor: P.accentLight, alignItems: 'center', justifyContent: 'center' },
+  avatarInitial: { color: P.accent, fontSize: 22, fontWeight: '700' },
+  barberName: { color: P.text, fontSize: 15, fontWeight: '700' },
+  barberSpecialty: { color: P.textSecondary, fontSize: 12, marginTop: 2 },
+  reviewCount: { color: P.textTertiary, fontSize: 11 },
+  statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  statusText: { fontSize: 11, fontWeight: '600' },
+  fab: { position: 'absolute', right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center', elevation: 8 },
+  sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  sheet: { backgroundColor: P.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 },
+  sheetHandle: { width: 40, height: 4, backgroundColor: P.border, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
+  sheetTitle: { color: P.text, fontSize: 18, fontWeight: '700' },
+  comingSoon: { alignItems: 'center', paddingVertical: 32, gap: 10 },
+  comingSoonIcon: { fontSize: 40 },
+  comingSoonTitle: { color: P.text, fontSize: 18, fontWeight: '700' },
+  comingSoonSub: { color: P.textSecondary, fontSize: 14, textAlign: 'center' },
+});
