@@ -206,28 +206,32 @@ const BookingBlock = React.memo(({
   const dragY = useRef(new Animated.Value(0)).current;
   const isDragging = useRef(false);
 
-  const panResponder = useRef(PanResponder.create({
-    onStartShouldSetPanResponder: () => false,
-    onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dy) > 10 && Math.abs(gs.dy) > Math.abs(gs.dx) * 2,
-    onPanResponderGrant: () => {
-      isDragging.current = true;
-      console.log('[Calendar] Drag started for booking:', booking.id);
-    },
-    onPanResponderMove: Animated.event([null, { dy: dragY }], { useNativeDriver: false }),
-    onPanResponderRelease: (_, gs) => {
-      isDragging.current = false;
-      const deltaMin = Math.round((gs.dy / HOUR_HEIGHT) * 60 / 15) * 15;
-      dragY.setValue(0);
-      if (Math.abs(deltaMin) >= 15) {
-        console.log('[Calendar] Drag released, delta minutes:', deltaMin, 'booking:', booking.id);
-        onDragEnd(booking, deltaMin);
-      }
-    },
-    onPanResponderTerminate: () => {
-      isDragging.current = false;
-      dragY.setValue(0);
-    },
-  })).current;
+  const panResponder = useRef(
+    Platform.OS !== 'web'
+      ? PanResponder.create({
+          onStartShouldSetPanResponder: () => false,
+          onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dy) > 10 && Math.abs(gs.dy) > Math.abs(gs.dx) * 2,
+          onPanResponderGrant: () => {
+            isDragging.current = true;
+            console.log('[Calendar] Drag started for booking:', booking.id);
+          },
+          onPanResponderMove: Animated.event([null, { dy: dragY }], { useNativeDriver: false }),
+          onPanResponderRelease: (_, gs) => {
+            isDragging.current = false;
+            const deltaMin = Math.round((gs.dy / HOUR_HEIGHT) * 60 / 15) * 15;
+            dragY.setValue(0);
+            if (Math.abs(deltaMin) >= 15) {
+              console.log('[Calendar] Drag released, delta minutes:', deltaMin, 'booking:', booking.id);
+              onDragEnd(booking, deltaMin);
+            }
+          },
+          onPanResponderTerminate: () => {
+            isDragging.current = false;
+            dragY.setValue(0);
+          },
+        })
+      : { panHandlers: {} }
+  ).current;
 
   const start = new Date(booking.start_at);
   const end = booking.end_at ? new Date(booking.end_at) : new Date(start.getTime() + 30 * 60000);
