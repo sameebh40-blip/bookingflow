@@ -76,6 +76,9 @@ function AnimatedPressable({
   scaleValue?: number;
   [key: string]: any;
 }) {
+  const safeProps = Object.fromEntries(
+    Object.entries(props as Record<string, unknown>).filter(([k]) => !k.startsWith('__'))
+  ) as typeof props;
   const scale = useRef(new Animated.Value(1)).current;
   const animateIn = useCallback(() => {
     Animated.spring(scale, { toValue: scaleValue, useNativeDriver: true, speed: 50, bounciness: 4 }).start();
@@ -91,7 +94,7 @@ function AnimatedPressable({
         onPress={onPress}
         disabled={disabled}
         style={style}
-        {...props}
+        {...safeProps}
       >
         {children}
       </Pressable>
