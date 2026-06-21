@@ -112,12 +112,12 @@ export default function BookingConfirmScreen() {
     setDataLoading(true);
     try {
       const promises: Promise<any>[] = [
-        supabase.from('barbershops').select('name, cover_url, address').eq('id', venueId).single(),
+        supabase.from('barbershops').select('name, cover_url, address').eq('id', venueId).single() as unknown as Promise<any>,
       ];
 
       if (staffId && staffId !== 'any') {
         promises.push(
-          supabase.from('barbers').select('display_name, avatar_url, specialty').eq('id', staffId).single()
+          supabase.from('barbers').select('display_name, avatar_url, specialty').eq('id', staffId).single() as unknown as Promise<any>
         );
       } else {
         promises.push(Promise.resolve({ data: null, error: null }));
@@ -125,7 +125,7 @@ export default function BookingConfirmScreen() {
 
       if (serviceIds.length > 0) {
         promises.push(
-          supabase.from('services').select('id, name, price_bhd, duration_minutes').in('id', serviceIds)
+          supabase.from('services').select('id, name, price_bhd, duration_minutes').in('id', serviceIds) as unknown as Promise<any>
         );
       } else {
         promises.push(Promise.resolve({ data: [], error: null }));

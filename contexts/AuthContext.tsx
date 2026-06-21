@@ -3,6 +3,7 @@ import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/utils/supabase';
 
 interface ProfileData {
+  id?: string;
   role: string;
   full_name?: string;
   avatar_url?: string;

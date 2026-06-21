@@ -37,7 +37,7 @@ function RoleRouter() {
 
   useEffect(() => {
     if (loading) return;
-    if (!segments || segments.length === 0) return; // guard null/empty
+    if (!segments || (segments as string[]).length === 0) return; // guard null/empty
     const isPartner = profile?.role === 'shop_owner' || profile?.role === 'barber';
     const inPartner = segments[0] === '(partner)';
     const inAuth = segments[0] === 'auth';
@@ -55,7 +55,7 @@ function RoleRouter() {
       }
     } else if (!isPartner && inPartner) {
       console.log('[RoleRouter] Redirecting to customer tabs');
-      router.replace('/(tabs)');
+      router.replace('/(tabs)' as never);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile, loading, segments]);

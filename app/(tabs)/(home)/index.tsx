@@ -306,20 +306,20 @@ export default function HomeScreen() {
           .select('id, name, category, rating_avg, address, cover_url, logo_url, lat, lng, is_active, status, opening_hours')
           .eq('status', 'approved')
           .eq('is_active', true)
-          .limit(10),
+          .limit(10) as unknown as Promise<any>,
         supabase
           .from('barbers')
           .select('id, display_name, specialty, rating_avg, avatar_url, reviews_count, status')
           .eq('status', 'approved')
           .order('rating_avg', { ascending: false })
-          .limit(10),
+          .limit(10) as unknown as Promise<any>,
         supabase
           .from('posts')
           .select('id, media_url, thumbnail_url, caption, shop_id, barber_id, likes_count, views_count')
           .eq('is_active', true)
           .eq('status', 'approved')
           .order('views_count', { ascending: false })
-          .limit(8),
+          .limit(8) as unknown as Promise<any>,
       ];
 
       if (user) {
@@ -330,7 +330,7 @@ export default function HomeScreen() {
             .eq('customer_profile_id', user.id)
             .eq('status', 'completed')
             .order('created_at', { ascending: false })
-            .limit(3)
+            .limit(3) as unknown as Promise<any>
         );
       } else {
         promises.push(Promise.resolve({ data: null, error: null }));

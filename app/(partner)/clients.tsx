@@ -71,7 +71,7 @@ export default function PartnerClients() {
         .order('created_at', { ascending: false });
 
       const seen = new Map<string, ClientEntry>();
-      for (const b of (data ?? []) as { customer_profile_id: string; profiles: { id: string; full_name: string; avatar_url?: string; email?: string; phone?: string } | null }[]) {
+      for (const b of (data ?? []) as unknown as { customer_profile_id: string; profiles: { id: string; full_name: string; avatar_url?: string; email?: string; phone?: string } | null }[]) {
         if (!b.profiles) continue;
         const id = b.profiles.id;
         if (seen.has(id)) {

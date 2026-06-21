@@ -185,7 +185,7 @@ export default function NewBooking() {
         .limit(30);
       const seen = new Set<string>();
       const unique: Client[] = [];
-      for (const b of (data ?? []) as { profiles: Client | null }[]) {
+      for (const b of (data ?? []) as unknown as { profiles: Client | null }[]) {
         if (b.profiles && !seen.has(b.profiles.id)) {
           seen.add(b.profiles.id);
           if (b.profiles.full_name?.toLowerCase().includes(search.toLowerCase())) {
