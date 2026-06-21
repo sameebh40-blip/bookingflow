@@ -731,7 +731,7 @@ function PartnerCalendarInner() {
                           const dateStr = col.date.toISOString().split('T')[0];
                           const timeStr = `${String(h).padStart(2, '0')}:00`;
                           console.log('[Calendar] Empty slot tapped, date:', dateStr, 'time:', timeStr, 'barber:', col.barberId ?? 'any');
-                          expoRouter.push(`/(partner)/new-booking?date=${dateStr}&time=${timeStr}${col.barberId ? `&barberId=${col.barberId}` : ''}` as never);
+                          if (clientReady) expoRouter.push(`/(partner)/new-booking?date=${dateStr}&time=${timeStr}${col.barberId ? `&barberId=${col.barberId}` : ''}` as never);
                         }}
                       />
                     ))}
@@ -878,13 +878,13 @@ function PartnerCalendarInner() {
           <ChevronDown size={14} color={P.textSecondary} />
         </TouchableOpacity>
         <View style={styles.topBarRight}>
-          <TouchableOpacity style={styles.topBarBtn} onPress={() => { console.log('[Calendar] Chat button pressed'); expoRouter.push('/(partner)/chat' as never); }}>
+          <TouchableOpacity style={styles.topBarBtn} onPress={() => { console.log('[Calendar] Chat button pressed'); if (clientReady) expoRouter.push('/(partner)/chat' as never); }}>
             <MessageCircle size={20} color={P.text} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.topBarBtn} onPress={() => { console.log('[Calendar] Notifications button pressed'); expoRouter.push('/(partner)/notifications' as never); }}>
+          <TouchableOpacity style={styles.topBarBtn} onPress={() => { console.log('[Calendar] Notifications button pressed'); if (clientReady) expoRouter.push('/(partner)/notifications' as never); }}>
             <Bell size={20} color={P.text} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.avatarBtn} onPress={() => { console.log('[Calendar] Profile avatar pressed'); expoRouter.push('/(partner)/profile' as never); }}>
+          <TouchableOpacity style={styles.avatarBtn} onPress={() => { console.log('[Calendar] Profile avatar pressed'); if (clientReady) expoRouter.push('/(partner)/profile' as never); }}>
             <View style={styles.avatarCircle}>
               <Text style={styles.avatarInitials}>{(profile?.full_name ?? 'U').split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)}</Text>
             </View>
@@ -1018,7 +1018,7 @@ function PartnerCalendarInner() {
 
       {/* Bottom action bar */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 8 }]}>
-        <TouchableOpacity style={styles.bbBtn} onPress={() => { console.log('[Calendar] Bottom bar: Calendar pressed'); expoRouter.push('/(partner)/calendar' as never); }}>
+        <TouchableOpacity style={styles.bbBtn} onPress={() => { console.log('[Calendar] Bottom bar: Calendar pressed'); if (clientReady) expoRouter.push('/(partner)/calendar' as never); }}>
           <CalendarDays size={22} color={P.accent} />
         </TouchableOpacity>
         <TouchableOpacity style={styles.bbBtn} onPress={() => console.log('[Calendar] Bottom bar: Tag pressed')}>
@@ -1030,7 +1030,7 @@ function PartnerCalendarInner() {
         <TouchableOpacity style={styles.bbBtn} onPress={() => console.log('[Calendar] Bottom bar: Smile pressed')}>
           <Smile size={22} color={P.textSecondary} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.bbBtn} onPress={() => { console.log('[Calendar] Bottom bar: More pressed'); expoRouter.push('/(partner)/more' as never); }}>
+        <TouchableOpacity style={styles.bbBtn} onPress={() => { console.log('[Calendar] Bottom bar: More pressed'); if (clientReady) expoRouter.push('/(partner)/more' as never); }}>
           <Grid3x3 size={22} color={P.textSecondary} />
         </TouchableOpacity>
       </View>
@@ -1067,7 +1067,7 @@ function PartnerCalendarInner() {
                 onPress={() => {
                   console.log('[Calendar] Rebook pressed for booking:', selectedBooking?.id);
                   setSelectedBooking(null);
-                  expoRouter.push('/(partner)/new-booking' as never);
+                  if (clientReady) expoRouter.push('/(partner)/new-booking' as never);
                 }}
               >
                 <Text style={styles.rebookBtnText}>Rebook</Text>
@@ -1204,7 +1204,7 @@ function PartnerCalendarInner() {
                   setSelectedBooking(null);
                   const clientName = encodeURIComponent(selectedBooking.customer_name ?? 'Walk-In');
                   const serviceId = selectedBooking.booking_services?.[0]?.service_name_en ? encodeURIComponent(selectedBooking.booking_services[0].service_name_en) : '';
-                  expoRouter.push(`/(partner)/pos/new?clientName=${clientName}&serviceName=${serviceId}&bookingId=${selectedBooking.id}` as never);
+                  if (clientReady) expoRouter.push(`/(partner)/pos/new?clientName=${clientName}&serviceName=${serviceId}&bookingId=${selectedBooking.id}` as never);
                 }}
               >
                 <Text style={styles.checkoutBtnText}>Checkout</Text>
@@ -1545,7 +1545,7 @@ function PartnerCalendarInner() {
               <TouchableOpacity key={i} style={styles.addSheetRow} onPress={() => {
                 console.log('[Calendar] Add sheet item pressed:', item.label);
                 setShowAddSheet(false);
-                if (item.route) expoRouter.push(item.route as never);
+                if (item.route && clientReady) expoRouter.push(item.route as never);
               }}>
                 <View style={styles.addSheetIcon}><Text style={{ fontSize: 22 }}>{item.icon}</Text></View>
                 <Text style={styles.addSheetLabel}>{item.label}</Text>
