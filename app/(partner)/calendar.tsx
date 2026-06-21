@@ -1021,6 +1021,22 @@ function PartnerCalendarInner() {
         <View style={styles.loadingWrap}>
           <ActivityIndicator color={P.accent} size="large" />
         </View>
+      ) : !shopId ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 16 }}>
+          <Text style={{ color: P.gold, fontSize: 18, fontWeight: '700', textAlign: 'center' }}>Setup Required</Text>
+          <Text style={{ color: P.textSecondary, fontSize: 14, textAlign: 'center', lineHeight: 22 }}>
+            Complete your shop onboarding to view and manage your calendar.
+          </Text>
+          <TouchableOpacity
+            onPress={() => {
+              console.log('[Calendar] Complete Setup button pressed');
+              expoRouter.push('/(partner)/ob-welcome' as never);
+            }}
+            style={{ backgroundColor: P.gold, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 24, alignItems: 'center' }}
+          >
+            <Text style={{ color: '#000', fontWeight: '700', fontSize: 15 }}>Complete Setup →</Text>
+          </TouchableOpacity>
+        </View>
       ) : (
         <View style={{ flex: 1 }}>
           {calView === 'day' && renderTimeGrid(dayColumns, COL_WIDTH, true)}

@@ -77,7 +77,11 @@ export default function BookingDatetimeScreen() {
   const staffName = staffId && staffId !== 'any' ? 'Barber selected' : 'Any barber';
 
   const fetchAvailability = useCallback(async () => {
-    if (!venueId) return;
+    if (!venueId) {
+      setTimeSlots(generateSlots('09:00', '18:00', []));
+      setLoadingSlots(false);
+      return;
+    }
     const dateObj = new Date(dates[selectedDate].full);
     const dayIndex = dateObj.getDay();
     console.log('[Booking/DateTime] Fetching availability for venueId:', venueId, 'date:', dates[selectedDate].full, 'dayIndex:', dayIndex);

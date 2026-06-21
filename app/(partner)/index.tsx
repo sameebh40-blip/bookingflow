@@ -315,18 +315,23 @@ export default function PartnerHome() {
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
-        {/* Setup banner when no shop_id */}
-        {!shopId && (
-          <AnimatedPressable
-            onPress={() => {
-              console.log('[PartnerHome] Complete setup banner pressed');
-              router.push('/(partner)/setup');
-            }}
-            style={styles.setupBanner}
-          >
-            <Text style={styles.setupBannerText}>⚡ Complete your shop setup to go live</Text>
-            <ChevronRight size={16} color={P.accent} />
-          </AnimatedPressable>
+        {/* Setup required card when no shop_id */}
+        {isDemo && !shopId && (
+          <View style={{ margin: 20, padding: 20, backgroundColor: P.surface, borderRadius: 16, borderWidth: 1, borderColor: P.gold, gap: 12 }}>
+            <Text style={{ color: P.gold, fontSize: 16, fontWeight: '700' }}>⚠️ Setup Required</Text>
+            <Text style={{ color: P.textSecondary, fontSize: 14, lineHeight: 20 }}>
+              Your shop profile is not linked to your account. Please complete the onboarding setup to activate your dashboard.
+            </Text>
+            <AnimatedPressable
+              onPress={() => {
+                console.log('[PartnerHome] Complete Setup button pressed');
+                router.push('/(partner)/ob-welcome' as never);
+              }}
+              style={{ backgroundColor: P.gold, borderRadius: 12, paddingVertical: 12, alignItems: 'center' }}
+            >
+              <Text style={{ color: '#000', fontWeight: '700', fontSize: 15 }}>Complete Setup →</Text>
+            </AnimatedPressable>
+          </View>
         )}
 
         {/* Stat cards */}
