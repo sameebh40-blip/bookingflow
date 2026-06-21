@@ -4,7 +4,7 @@ import {
   ActivityIndicator, Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useRootNavigationState } from 'expo-router';
 import Svg, { Path, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { ArrowLeft, TrendingUp, Users, Briefcase, Zap, AlertCircle } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
@@ -89,7 +89,7 @@ function AreaChart({ data }: { data: Snapshot[] }) {
   );
 }
 
-export default function PartnerAnalytics() {
+function PartnerAnalyticsInner() {
   const insets = useSafeAreaInsets();
   const { profile } = useAuth();
   const shopId = (profile as any)?.shop_id;
@@ -332,3 +332,15 @@ const styles = StyleSheet.create({
   breakdownBarFill: { height: 6, borderRadius: 3, backgroundColor: P.accent },
   breakdownAmount: { color: P.text, fontSize: 13, fontWeight: '700', width: 70, textAlign: 'right' },
 });
+
+export default function PartnerAnalytics() {
+  const navState = useRootNavigationState();
+  if (!navState?.key) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#0B0C10', alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color="#7C3AED" size="large" />
+      </View>
+    );
+  }
+  return <PartnerAnalyticsInner />;
+}

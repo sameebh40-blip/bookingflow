@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useRootNavigationState } from 'expo-router';
 import {
   User, Building2, Scissors, ImageIcon, Star, Settings,
   CreditCard, Calendar, Users, AlertTriangle, ChevronRight,
@@ -29,7 +29,7 @@ const GRID_ITEMS = [
   { icon: Users,      label: 'Team',              route: '/(partner)/team' },
 ];
 
-export default function PartnerPortal() {
+function PartnerPortalInner() {
   const insets = useSafeAreaInsets();
   const { profile } = useAuth();
 
@@ -199,3 +199,15 @@ const styles = StyleSheet.create({
   analyticsCardTitle: { color: P.text, fontSize: 15, fontWeight: '700' },
   analyticsCardSub: { color: P.textSec, fontSize: 12, marginTop: 2 },
 });
+
+export default function PartnerPortal() {
+  const navState = useRootNavigationState();
+  if (!navState?.key) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#0B0C10', alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color="#7C3AED" size="large" />
+      </View>
+    );
+  }
+  return <PartnerPortalInner />;
+}
