@@ -658,8 +658,8 @@ function PartnerCalendarInner() {
               <View style={{ width: TIME_COL_WIDTH, height: totalGridHeight }}>
                 {nowTop >= 0 && nowTop <= totalGridHeight && (
                   <View
-                    pointerEvents="none"
-                    style={{ position: 'absolute', top: nowTop - 10, left: 0, right: 0, zIndex: 21 }}
+                    style={{ position: 'absolute', top: nowTop - 10, left: 0, right: 0, zIndex: 21, ...(Platform.OS === 'web' ? { pointerEvents: 'none' } : {}) }}
+                    {...(Platform.OS !== 'web' ? { pointerEvents: 'none' } : {})}
                   >
                     <View style={{ backgroundColor: '#E85454', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4, alignSelf: 'flex-start', marginLeft: 2 }}>
                       <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>{nowLabel}</Text>
@@ -703,8 +703,8 @@ function PartnerCalendarInner() {
                     ))}
                     {isColToday && nowTop >= 0 && nowTop <= totalGridHeight && (
                       <View
-                        pointerEvents="none"
-                        style={{ position: 'absolute', top: nowTop, left: 0, right: 0, zIndex: 20, flexDirection: 'row', alignItems: 'center' }}
+                        style={{ position: 'absolute', top: nowTop, left: 0, right: 0, zIndex: 20, flexDirection: 'row', alignItems: 'center', ...(Platform.OS === 'web' ? { pointerEvents: 'none' } : {}) }}
+                        {...(Platform.OS !== 'web' ? { pointerEvents: 'none' } : {})}
                       >
                         <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#E85454', marginLeft: -5 }} />
                         <View style={{ flex: 1, height: 2, backgroundColor: '#E85454' }} />
