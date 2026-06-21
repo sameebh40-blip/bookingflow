@@ -50,14 +50,12 @@ interface Booking {
   customer_name: string;
   customer_profile_id: string | null;
   barber_id: string | null;
-  profiles?: { full_name: string; avatar_url: string } | null;
-  barbers?: { display_name: string } | null;
 }
 
 const DEMO_BOOKINGS: Booking[] = [
-  { id: 'd1', start_at: new Date(Date.now() - 2 * 3600000).toISOString(), status: 'confirmed', price_bhd: 5, customer_name: 'Ahmed Al-Mansoori', barber_id: null, customer_profile_id: null, profiles: null, barbers: { display_name: 'Majed' } },
-  { id: 'd2', start_at: new Date(Date.now() + 1 * 3600000).toISOString(), status: 'pending', price_bhd: 8, customer_name: 'Khalid Hassan', barber_id: null, customer_profile_id: null, profiles: null, barbers: { display_name: 'Omar' } },
-  { id: 'd3', start_at: new Date(Date.now() + 3 * 3600000).toISOString(), status: 'confirmed', price_bhd: 12, customer_name: 'Sara Al-Zahra', barber_id: null, customer_profile_id: null, profiles: null, barbers: { display_name: 'Majed' } },
+  { id: 'd1', start_at: new Date(Date.now() - 2 * 3600000).toISOString(), status: 'confirmed', price_bhd: 5, customer_name: 'Ahmed Al-Mansoori', barber_id: null, customer_profile_id: null },
+  { id: 'd2', start_at: new Date(Date.now() + 1 * 3600000).toISOString(), status: 'pending', price_bhd: 8, customer_name: 'Khalid Hassan', barber_id: null, customer_profile_id: null },
+  { id: 'd3', start_at: new Date(Date.now() + 3 * 3600000).toISOString(), status: 'confirmed', price_bhd: 12, customer_name: 'Sara Al-Zahra', barber_id: null, customer_profile_id: null },
 ];
 const DEMO_REVENUE = 25;
 const DEMO_WEEK_COUNT = 14;
@@ -163,7 +161,7 @@ export default function PartnerHome() {
       const [bookingsRes, revenueRes, weekRes] = await Promise.all([
         supabase
           .from('bookings')
-          .select('id, status, start_at, total_price, price_bhd, customer_name, customer_profile_id, barber_id, profiles!customer_profile_id(full_name, avatar_url), barbers!barber_id(display_name)')
+          .select('id, status, start_at, total_price, price_bhd, customer_name, customer_profile_id, barber_id')
           .eq('shop_id', shopId)
           .gte('start_at', todayStart.toISOString())
           .lte('start_at', todayEnd.toISOString())
@@ -367,9 +365,9 @@ export default function PartnerHome() {
               ) : (
                 displayBookings.map((booking) => {
                   const timeText = formatTime(booking.start_at);
-                  const clientName = booking.profiles?.full_name ?? booking.customer_name ?? 'Walk-in';
-                  const barberName = booking.barbers?.display_name ?? 'Any';
-                  const avatarUrl = booking.profiles?.avatar_url;
+                  const clientName = booking.customer_name ?? 'Client';
+                  const barberName = 'Staff';
+                  const avatarUrl = undefined;
                   const initials = clientName.charAt(0).toUpperCase();
                   const priceText = `BHD ${Number(booking.total_price ?? booking.price_bhd ?? 0).toFixed(3)}`;
 

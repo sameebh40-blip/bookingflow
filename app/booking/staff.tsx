@@ -80,7 +80,7 @@ export default function BookingStaffScreen() {
         .from('barbers')
         .select('id, display_name, specialty, avatar_url, rating_avg, reviews_count')
         .eq('shop_id', venueId)
-        .eq('status', 'approved')
+        .or('status.eq.approved,is_active.eq.true')
         .limit(10);
 
       if (!error && data && data.length > 0) {
