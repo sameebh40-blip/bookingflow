@@ -468,7 +468,7 @@ function PartnerCalendarInner() {
   useEffect(() => {
     if (!shopId) return;
     const channel = supabase
-      .channel(`calendar-${shopId}`)
+      .channel(`calendar-${shopId}-${Date.now()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings', filter: `shop_id=eq.${shopId}` }, () => {
         console.log('[Calendar] Real-time update received');
         fetchBookings();

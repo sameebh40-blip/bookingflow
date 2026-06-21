@@ -89,18 +89,38 @@ export default function BookingDatetimeScreen() {
         .eq('id', venueId)
         .single();
 
-      const openingHours = shopData?.opening_hours as Record<string, { open: string; close: string; enabled: boolean }> | null;
-      const dayHours = openingHours?.[String(dayIndex)];
+      const openingHours = shopData?.opening_hours as Record<string, unknown> | null;
+      const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+      const dayKey = DAY_KEYS[dayIndex];
+      const rawDay = openingHours?.[dayKey] ?? openingHours?.[String(dayIndex)];
 
-      if (dayHours && !dayHours.enabled) {
+      // Parse value — could be "10:00-22:00" string OR { open, close, enabled } object
+      let openTime = '09:00';
+      let closeTime = '18:00';
+      let dayEnabled = true;
+
+      if (rawDay === null || rawDay === undefined) {
+        // no entry for this day — use fallback
+      } else if (typeof rawDay === 'string') {
+        // format: "10:00-22:00"
+        const parts = (rawDay as string).split('-');
+        if (parts.length === 2) {
+          openTime = parts[0].trim();
+          closeTime = parts[1].trim();
+        }
+      } else if (typeof rawDay === 'object') {
+        const obj = rawDay as { open?: string; close?: string; enabled?: boolean };
+        if (obj.enabled === false) { dayEnabled = false; }
+        if (obj.open) openTime = obj.open;
+        if (obj.close) closeTime = obj.close;
+      }
+
+      if (!dayEnabled) {
         console.log('[Booking/DateTime] Venue closed on this day');
         setTimeSlots([]);
         setLoadingSlots(false);
         return;
       }
-
-      const openTime = dayHours?.open ?? '09:00';
-      const closeTime = dayHours?.close ?? '18:00';
 
       const startOfDay = new Date(dateObj);
       startOfDay.setHours(0, 0, 0, 0);
