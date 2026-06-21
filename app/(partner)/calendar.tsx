@@ -326,6 +326,7 @@ function PartnerCalendarInner() {
   const { profile } = useAuth();
   const shopId = profile?.shop_id;
 
+  const [clientReady, setClientReady] = React.useState(false);
   const [calView, setCalView] = useState<'day' | '3day' | 'week' | 'month'>('day');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -370,6 +371,8 @@ function PartnerCalendarInner() {
     }, 60000);
     return () => clearInterval(t);
   }, []);
+
+  useEffect(() => { setClientReady(true); }, []);
 
   const nowTop = ((nowMinutes - START_HOUR * 60) / 60) * HOUR_HEIGHT;
   const nowHour = Math.floor(nowMinutes / 60);
@@ -480,6 +483,14 @@ function PartnerCalendarInner() {
     setSelectedBooking(b);
     setDetailTab('details');
   }, []);
+
+  if (!clientReady) {
+    return (
+      <View style={{ flex: 1, backgroundColor: P.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={P.accent} size="large" />
+      </View>
+    );
+  }
 
   // ── Payment ──
   const handlePayCash = async () => {
