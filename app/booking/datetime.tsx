@@ -1,9 +1,10 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -11,6 +12,7 @@ import { ArrowLeft, User, ChevronDown, Plus, Check } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { supabase } from '@/utils/supabase';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -38,28 +40,19 @@ function generateDates(count: number): DateItem[] {
   return dates;
 }
 
-const TIME_SLOTS = [
-  { time: '09:00', available: true, booked: false },
-  { time: '09:30', available: true, booked: false },
-  { time: '10:00', available: true, booked: true },
-  { time: '10:30', available: true, booked: false },
-  { time: '11:00', available: true, booked: false },
-  { time: '11:30', available: true, booked: true },
-  { time: '12:00', available: true, booked: false },
-  { time: '12:30', available: true, booked: false },
-  { time: '13:00', available: true, booked: true },
-  { time: '13:30', available: true, booked: false },
-  { time: '14:00', available: true, booked: false },
-  { time: '14:30', available: true, booked: false },
-  { time: '15:00', available: true, booked: false },
-  { time: '15:30', available: true, booked: false },
-  { time: '16:00', available: true, booked: false },
-  { time: '16:30', available: true, booked: false },
-  { time: '17:00', available: true, booked: false },
-  { time: '17:30', available: true, booked: false },
-  { time: '18:00', available: true, booked: false },
-  { time: '18:30', available: true, booked: false },
-];
+function generateSlots(open: string, close: string, bookedTimes: string[]): { time: string; available: boolean }[] {
+  const slots: { time: string; available: boolean }[] = [];
+  const [openH, openM] = open.split(':').map(Number);
+  const [closeH, closeM] = close.split(':').map(Number);
+  let h = openH, m = openM;
+  while (h * 60 + m < closeH * 60 + closeM) {
+    const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    slots.push({ time, available: !bookedTimes.includes(time) });
+    m += 30;
+    if (m >= 60) { h++; m -= 60; }
+  }
+  return slots;
+}
 
 function ProgressDots({ step }: { step: number }) {
   return (
@@ -78,8 +71,68 @@ export default function BookingDatetimeScreen() {
   const dates = generateDates(14);
   const [selectedDate, setSelectedDate] = useState(0);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [timeSlots, setTimeSlots] = useState<{ time: string; available: boolean }[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
 
   const staffName = staffId && staffId !== 'any' ? 'Barber selected' : 'Any barber';
+
+  const fetchAvailability = useCallback(async () => {
+    if (!venueId) return;
+    const dateObj = new Date(dates[selectedDate].full);
+    const dayIndex = dateObj.getDay();
+    console.log('[Booking/DateTime] Fetching availability for venueId:', venueId, 'date:', dates[selectedDate].full, 'dayIndex:', dayIndex);
+    setLoadingSlots(true);
+    try {
+      const { data: shopData } = await supabase
+        .from('barbershops')
+        .select('opening_hours')
+        .eq('id', venueId)
+        .single();
+
+      const openingHours = shopData?.opening_hours as Record<string, { open: string; close: string; enabled: boolean }> | null;
+      const dayHours = openingHours?.[String(dayIndex)];
+
+      if (dayHours && !dayHours.enabled) {
+        console.log('[Booking/DateTime] Venue closed on this day');
+        setTimeSlots([]);
+        setLoadingSlots(false);
+        return;
+      }
+
+      const openTime = dayHours?.open ?? '09:00';
+      const closeTime = dayHours?.close ?? '18:00';
+
+      const startOfDay = new Date(dateObj);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(dateObj);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      const { data: bookingsData } = await supabase
+        .from('bookings')
+        .select('start_at, duration_minutes')
+        .eq('shop_id', venueId)
+        .eq('status', 'confirmed')
+        .gte('start_at', startOfDay.toISOString())
+        .lte('start_at', endOfDay.toISOString());
+
+      const bookedTimes = (bookingsData ?? []).map((b: any) =>
+        new Date(b.start_at).toTimeString().slice(0, 5)
+      );
+
+      console.log('[Booking/DateTime] Booked times:', bookedTimes);
+      const slots = generateSlots(openTime, closeTime, bookedTimes);
+      setTimeSlots(slots);
+    } catch (err) {
+      console.log('[Booking/DateTime] fetchAvailability error:', err);
+      setTimeSlots(generateSlots('09:00', '18:00', []));
+    } finally {
+      setLoadingSlots(false);
+    }
+  }, [venueId, selectedDate, dates]);
+
+  useEffect(() => {
+    fetchAvailability();
+  }, [fetchAvailability]);
 
   const handleDateSelect = useCallback((index: number, day: string) => {
     console.log('[Booking/DateTime] Date selected:', index, day);
@@ -150,42 +203,52 @@ export default function BookingDatetimeScreen() {
 
         {/* Time slots */}
         <Text style={[styles.sectionLabel, { marginTop: 24 }]}>Pick a time</Text>
-        <View style={styles.timeList}>
-          {TIME_SLOTS.map((slot) => {
-            const isSelected = selectedTime === slot.time;
-            const isBooked = slot.booked;
+        {loadingSlots ? (
+          <View style={{ paddingVertical: 32, alignItems: 'center' }}>
+            <ActivityIndicator color={MADAR_COLORS.gold} />
+          </View>
+        ) : timeSlots.length === 0 ? (
+          <View style={{ paddingVertical: 32, alignItems: 'center' }}>
+            <Text style={{ color: MADAR_COLORS.textSecondary, fontSize: 14 }}>No available slots for this day</Text>
+          </View>
+        ) : (
+          <View style={styles.timeList}>
+            {timeSlots.map((slot) => {
+              const isSelected = selectedTime === slot.time;
+              const isBooked = !slot.available;
 
-            if (isBooked) {
+              if (isBooked) {
+                return (
+                  <View key={slot.time} style={styles.timeRowBooked}>
+                    <Text style={styles.timeTextBooked}>{slot.time}</Text>
+                    <Text style={styles.bookedLabel}>Booked</Text>
+                  </View>
+                );
+              }
+
               return (
-                <View key={slot.time} style={styles.timeRowBooked}>
-                  <Text style={styles.timeTextBooked}>{slot.time}</Text>
-                  <Text style={styles.bookedLabel}>Booked</Text>
-                </View>
+                <AnimatedPressable
+                  key={slot.time}
+                  onPress={() => handleTimeSelect(slot.time)}
+                  style={[styles.timeRow, isSelected && styles.timeRowSelected]}
+                >
+                  <Text style={[styles.timeText, isSelected && styles.timeTextSelected]}>
+                    {slot.time}
+                  </Text>
+                  {isSelected ? (
+                    <View style={styles.checkCircle}>
+                      <Check size={14} color="#000" strokeWidth={3} />
+                    </View>
+                  ) : (
+                    <View style={styles.plusCircle}>
+                      <Plus size={14} color={MADAR_COLORS.textSecondary} strokeWidth={2} />
+                    </View>
+                  )}
+                </AnimatedPressable>
               );
-            }
-
-            return (
-              <AnimatedPressable
-                key={slot.time}
-                onPress={() => handleTimeSelect(slot.time)}
-                style={[styles.timeRow, isSelected && styles.timeRowSelected]}
-              >
-                <Text style={[styles.timeText, isSelected && styles.timeTextSelected]}>
-                  {slot.time}
-                </Text>
-                {isSelected ? (
-                  <View style={styles.checkCircle}>
-                    <Check size={14} color="#000" strokeWidth={3} />
-                  </View>
-                ) : (
-                  <View style={styles.plusCircle}>
-                    <Plus size={14} color={MADAR_COLORS.textSecondary} strokeWidth={2} />
-                  </View>
-                )}
-              </AnimatedPressable>
-            );
-          })}
-        </View>
+            })}
+          </View>
+        )}
 
         <View style={{ height: 120 }} />
       </ScrollView>

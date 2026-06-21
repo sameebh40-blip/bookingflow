@@ -59,18 +59,33 @@ export default function MessagesScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
 
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
   useEffect(() => {
     fetchConversations();
     if (!user) return;
-    const channel = supabase
+
+    // Remove any existing channel first
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+
+    channelRef.current = supabase
       .channel(`messages-list-${user.id}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => {
         console.log('[Messages] Realtime INSERT received, refreshing conversations');
         fetchConversations();
       })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [user]);
+
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
+  }, [user?.id]);
 
   const fetchConversations = async () => {
     console.log('[Messages] Fetching conversations from Supabase, user:', user?.id);

@@ -107,6 +107,7 @@ export default function PartnerChatThread() {
       const { error } = await supabase.from('messages').insert({
         venue_id: shopId,
         sender_id: user.id,
+        client_id: clientId,
         text,
         is_from_venue: true,
         created_at: new Date().toISOString(),

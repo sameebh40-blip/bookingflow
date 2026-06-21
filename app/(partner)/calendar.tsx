@@ -326,7 +326,8 @@ const DateColHeader = React.memo(({ col, colWidth, isToday, isSelected, onPress 
   </TouchableOpacity>
 ));
 
-function PartnerCalendarInner({ router: expoRouter }: { router: ReturnType<typeof useRouter> }) {
+function PartnerCalendarInner() {
+  const expoRouter = useRouter();
   const insets = useSafeInsets();
   const { profile } = useAuth();
   const shopId = profile?.shop_id;
@@ -386,8 +387,6 @@ function PartnerCalendarInner({ router: expoRouter }: { router: ReturnType<typeo
   }, []);
 
   useEffect(() => { setClientReady(true); }, []);
-
-  const navState = useRootNavigationState();
 
   const nowTop = ((nowMinutes - START_HOUR * 60) / 60) * HOUR_HEIGHT;
   const nowHour = Math.floor(nowMinutes / 60);
@@ -512,22 +511,6 @@ function PartnerCalendarInner({ router: expoRouter }: { router: ReturnType<typeo
     setSelectedBooking(null);
     console.log('[Calendar] Booking status updated successfully');
   }, []);
-
-  if (!expoRouter) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#0F0F1A', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color="#7C3AED" size="large" />
-      </View>
-    );
-  }
-
-  if (!navState?.key) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#0F0F1A', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color="#7C3AED" size="large" />
-      </View>
-    );
-  }
 
   if (!clientReady) {
     return (
@@ -1919,6 +1902,5 @@ export default function PartnerCalendar() {
 }
 
 function PartnerCalendarReady() {
-  const router = useRouter();
-  return <PartnerCalendarInner router={router} />;
+  return <PartnerCalendarInner />;
 }

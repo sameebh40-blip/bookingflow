@@ -10,14 +10,21 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
   ImageSourcePropType,
+  Modal,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, Share2, Heart, Star, MapPin, Clock } from 'lucide-react-native';
+import { ArrowLeft, Share2, Heart, Star, MapPin, Clock, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { supabase } from '@/utils/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -134,10 +141,17 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
   return source as ImageSourcePropType;
 }
 
+function getPublicUrl(path: string | null | undefined, bucket = 'shop-covers'): string {
+  if (!path) return '';
+  if (path.startsWith('http')) return path;
+  return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+}
+
 export default function VenueDetailScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { user } = useAuth();
   const [venue, setVenue] = useState<Venue | null>(null);
   const [services, setServices] = useState<Service[]>([]);
   const [reviews, setReviews] = useState<Review[]>(MOCK_REVIEWS);
@@ -150,11 +164,20 @@ export default function VenueDetailScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
   const tabScrollRef = useRef<ScrollView>(null);
 
+  // Review state
+  const [showReviewSheet, setShowReviewSheet] = useState(false);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [hasCompletedBooking, setHasCompletedBooking] = useState(false);
+
   const aboutY = useRef(0);
   const servicesY = useRef(0);
   const teamY = useRef(0);
   const reviewsY = useRef(0);
   const otherY = useRef(0);
+
+  const isMockVenue = id === '1' || id === '2' || id === '3';
 
   useEffect(() => {
     fetchVenueData();
@@ -202,7 +225,7 @@ export default function VenueDetailScreen() {
         setVenue(MOCK_VENUES[id ?? '1'] ?? MOCK_VENUES['1']);
       } else {
         const data = venueRes.data;
-        coverUrl = data.cover_url ?? coverUrl;
+        coverUrl = getPublicUrl(data.cover_url) || coverUrl;
         const openNow = isVenueOpenNow(data.opening_hours ?? undefined);
         setVenue({
           id: data.id,
@@ -259,7 +282,7 @@ export default function VenueDetailScreen() {
             name: fullName,
             initials,
             rating: r.rating,
-            comment: r.text ?? '',
+            comment: r.comment ?? r.text ?? '',
             date: dateStr,
             avatar_url: profile?.avatar_url ?? undefined,
           };
@@ -267,8 +290,22 @@ export default function VenueDetailScreen() {
         // Also update review_count on venue
         setVenue(prev => prev ? { ...prev, review_count: reviewsRes.data?.length ?? 0 } : prev);
         setReviews(mappedReviews);
+      } else if (!isMockVenue) {
+        setReviews([]);
       } else {
         setReviews(MOCK_REVIEWS);
+      }
+
+      // Check if current user has a completed booking at this venue
+      if (user) {
+        const { data: bk } = await supabase
+          .from('bookings')
+          .select('id')
+          .eq('shop_id', id)
+          .eq('customer_profile_id', user.id)
+          .eq('status', 'completed')
+          .limit(1);
+        setHasCompletedBooking((bk?.length ?? 0) > 0);
       }
 
       console.log('[VenueDetail] Barbers fetch result:', staffRes.error?.message ?? 'ok', 'count:', staffRes.data?.length ?? 0);
@@ -286,6 +323,47 @@ export default function VenueDetailScreen() {
       console.log('[VenueDetail] Exception fetching venue data:', err);
       setVenue(MOCK_VENUES[id ?? '1'] ?? MOCK_VENUES['1']);
       setServices(MOCK_SERVICES);
+    }
+  };
+
+  const submitReview = async () => {
+    if (!user || !reviewComment.trim()) return;
+    console.log('[VenueDetail] Submitting review, rating:', reviewRating, 'comment:', reviewComment.trim());
+    setSubmittingReview(true);
+    const { error } = await supabase.from('reviews').insert({
+      shop_id: id,
+      customer_profile_id: user.id,
+      rating: reviewRating,
+      comment: reviewComment.trim(),
+    });
+    if (error) {
+      console.log('[VenueDetail] Review submit error:', error.message);
+    } else {
+      console.log('[VenueDetail] Review submitted successfully');
+    }
+    setSubmittingReview(false);
+    setShowReviewSheet(false);
+    setReviewComment('');
+    setReviewRating(5);
+    // Re-fetch reviews
+    const { data: reviewData } = await supabase
+      .from('reviews')
+      .select('id, rating, comment, created_at, customer_profile_id, profiles!customer_profile_id(full_name, avatar_url)')
+      .eq('shop_id', id)
+      .order('created_at', { ascending: false })
+      .limit(20);
+    if (reviewData && reviewData.length > 0) {
+      const mapped = reviewData.map((r: any) => {
+        const profile = r.profiles;
+        const fullName: string = profile?.full_name ?? 'Customer';
+        const initials = fullName.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2).toUpperCase() || 'C';
+        const dateStr = r.created_at
+          ? new Date(r.created_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+          : '';
+        return { id: r.id, name: fullName, initials, rating: r.rating, comment: r.comment ?? '', date: dateStr, avatar_url: profile?.avatar_url ?? undefined };
+      });
+      setReviews(mapped);
+      setVenue(prev => prev ? { ...prev, review_count: mapped.length } : prev);
     }
   };
 
@@ -577,7 +655,20 @@ export default function VenueDetailScreen() {
           style={styles.section}
           onLayout={(e) => { reviewsY.current = e.nativeEvent.layout.y; }}
         >
-          <Text style={styles.sectionTitle}>Reviews</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Reviews</Text>
+            {hasCompletedBooking && !isMockVenue && (
+              <AnimatedPressable
+                onPress={() => {
+                  console.log('[VenueDetail] Leave a review pressed');
+                  setShowReviewSheet(true);
+                }}
+                style={{ backgroundColor: MADAR_COLORS.gold, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7 }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#0A0A0F' }}>Leave a Review</Text>
+              </AnimatedPressable>
+            )}
+          </View>
           {/* Summary */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
             <View style={{ flexDirection: 'row', gap: 2 }}>
@@ -677,6 +768,76 @@ export default function VenueDetailScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* ── REVIEW MODAL ── */}
+      <Modal
+        visible={showReviewSheet}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowReviewSheet(false)}
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <TouchableOpacity
+            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }}
+            activeOpacity={1}
+            onPress={() => setShowReviewSheet(false)}
+          />
+          <View style={styles.reviewSheet}>
+            <View style={styles.reviewSheetHandle} />
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <Text style={styles.reviewSheetTitle}>Leave a Review</Text>
+              <TouchableOpacity onPress={() => setShowReviewSheet(false)}>
+                <X size={20} color={MADAR_COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            {/* Star rating */}
+            <Text style={{ fontSize: 14, color: MADAR_COLORS.textSecondary, marginBottom: 10 }}>Your rating</Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
+              {[1, 2, 3, 4, 5].map(i => (
+                <TouchableOpacity
+                  key={i}
+                  onPress={() => {
+                    console.log('[VenueDetail] Review star tapped:', i);
+                    setReviewRating(i);
+                  }}
+                >
+                  <Star
+                    size={32}
+                    color={MADAR_COLORS.gold}
+                    fill={i <= reviewRating ? MADAR_COLORS.gold : 'transparent'}
+                  />
+                </TouchableOpacity>
+              ))}
+            </View>
+            {/* Comment input */}
+            <Text style={{ fontSize: 14, color: MADAR_COLORS.textSecondary, marginBottom: 8 }}>Your comment</Text>
+            <TextInput
+              style={styles.reviewInput}
+              placeholder="Share your experience..."
+              placeholderTextColor={MADAR_COLORS.textTertiary}
+              value={reviewComment}
+              onChangeText={setReviewComment}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+            />
+            <TouchableOpacity
+              style={[styles.reviewSubmitBtn, (!reviewComment.trim() || submittingReview) && { opacity: 0.5 }]}
+              onPress={submitReview}
+              disabled={!reviewComment.trim() || submittingReview}
+            >
+              {submittingReview ? (
+                <ActivityIndicator color="#0A0A0F" />
+              ) : (
+                <Text style={styles.reviewSubmitBtnText}>Submit Review</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {/* ── STICKY BOTTOM BAR ── */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
@@ -848,4 +1009,46 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
   },
   bookNowBtnText: { fontSize: 15, fontWeight: '800', color: '#0A0A0F' },
+  reviewSheet: {
+    backgroundColor: MADAR_COLORS.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
+  },
+  reviewSheetHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: MADAR_COLORS.border,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  reviewSheetTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: MADAR_COLORS.text,
+  },
+  reviewInput: {
+    backgroundColor: MADAR_COLORS.surfaceSecondary,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: MADAR_COLORS.border,
+    padding: 14,
+    color: MADAR_COLORS.text,
+    fontSize: 14,
+    minHeight: 100,
+    marginBottom: 20,
+  },
+  reviewSubmitBtn: {
+    backgroundColor: MADAR_COLORS.gold,
+    borderRadius: 24,
+    paddingVertical: 15,
+    alignItems: 'center',
+  },
+  reviewSubmitBtnText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0A0A0F',
+  },
 });
