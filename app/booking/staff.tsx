@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import { ArrowLeft, Check, Star, Shuffle } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { supabase } from '@/utils/supabase';
 
 interface Staff {
   id: string;
@@ -44,11 +45,63 @@ function ProgressDots({ step }: { step: number }) {
   );
 }
 
+function InitialsCircle({ name }: { name: string }) {
+  const initials = name
+    .split(' ')
+    .map(w => w[0] ?? '')
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+  return (
+    <View style={styles.initialsCircle}>
+      <Text style={styles.initialsText}>{initials}</Text>
+    </View>
+  );
+}
+
 export default function BookingStaffScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { venueId, services } = useLocalSearchParams<{ venueId: string; services: string }>();
   const [selectedStaff, setSelectedStaff] = useState<string>('any');
+  const [staffList, setStaffList] = useState<Staff[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchStaff();
+  }, [venueId]);
+
+  const fetchStaff = async () => {
+    console.log('[Booking/Staff] Fetching barbers for venueId:', venueId);
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('barbers')
+        .select('id, display_name, specialty, avatar_url, rating_avg, reviews_count')
+        .eq('shop_id', venueId)
+        .eq('status', 'approved')
+        .limit(10);
+
+      if (!error && data && data.length > 0) {
+        console.log('[Booking/Staff] Loaded', data.length, 'barbers');
+        setStaffList(data.map((b: any) => ({
+          id: String(b.id),
+          name: b.display_name ?? 'Barber',
+          specialty: b.specialty ?? 'Barber',
+          rating: Number(b.rating_avg) || 0,
+          avatar: b.avatar_url ?? '',
+        })));
+      } else {
+        console.log('[Booking/Staff] Using mock staff:', error?.message);
+        setStaffList(MOCK_STAFF);
+      }
+    } catch (err) {
+      console.log('[Booking/Staff] Exception, using mock:', err);
+      setStaffList(MOCK_STAFF);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSelectStaff = useCallback((id: string, name: string) => {
     console.log('[Booking/Staff] Staff selected:', id, name);
@@ -105,31 +158,50 @@ export default function BookingStaffScreen() {
 
         <Text style={styles.orDivider}>or choose a specific specialist</Text>
 
-        {MOCK_STAFF.map((staff) => {
-          const isSelected = selectedStaff === staff.id;
-          return (
-            <AnimatedPressable
-              key={staff.id}
-              onPress={() => handleSelectStaff(staff.id, staff.name)}
-              style={[styles.staffCard, isSelected && styles.staffCardSelected]}
-            >
-              <Image source={resolveImageSource(staff.avatar)} style={styles.staffAvatar} />
-              <View style={styles.staffInfo}>
-                <Text style={styles.staffName}>{staff.name}</Text>
-                <Text style={styles.staffSpecialty}>{staff.specialty}</Text>
-                <View style={styles.ratingRow}>
-                  <Star size={11} color={MADAR_COLORS.gold} fill={MADAR_COLORS.gold} />
-                  <Text style={styles.ratingText}>{staff.rating}</Text>
+        {loading ? (
+          <>
+            {[1, 2, 3].map(i => (
+              <View key={i} style={[styles.staffCard, { opacity: 0.4 }]}>
+                <View style={[styles.staffAvatar, { backgroundColor: MADAR_COLORS.surfaceSecondary }]} />
+                <View style={styles.staffInfo}>
+                  <View style={{ height: 14, width: '60%', backgroundColor: MADAR_COLORS.surfaceSecondary, borderRadius: 7 }} />
+                  <View style={{ height: 10, width: '40%', backgroundColor: MADAR_COLORS.surfaceSecondary, borderRadius: 5, marginTop: 4 }} />
                 </View>
               </View>
-              {isSelected && (
-                <View style={styles.checkCircle}>
-                  <Check size={14} color={MADAR_COLORS.background} strokeWidth={3} />
+            ))}
+          </>
+        ) : (
+          staffList.map((staff) => {
+            const isSelected = selectedStaff === staff.id;
+            const ratingStr = Number(staff.rating).toFixed(1);
+            return (
+              <AnimatedPressable
+                key={staff.id}
+                onPress={() => handleSelectStaff(staff.id, staff.name)}
+                style={[styles.staffCard, isSelected && styles.staffCardSelected]}
+              >
+                {staff.avatar ? (
+                  <Image source={resolveImageSource(staff.avatar)} style={styles.staffAvatar} />
+                ) : (
+                  <InitialsCircle name={staff.name} />
+                )}
+                <View style={styles.staffInfo}>
+                  <Text style={styles.staffName}>{staff.name}</Text>
+                  <Text style={styles.staffSpecialty}>{staff.specialty}</Text>
+                  <View style={styles.ratingRow}>
+                    <Star size={11} color={MADAR_COLORS.gold} fill={MADAR_COLORS.gold} />
+                    <Text style={styles.ratingText}>{ratingStr}</Text>
+                  </View>
                 </View>
-              )}
-            </AnimatedPressable>
-          );
-        })}
+                {isSelected && (
+                  <View style={styles.checkCircle}>
+                    <Check size={14} color={MADAR_COLORS.background} strokeWidth={3} />
+                  </View>
+                )}
+              </AnimatedPressable>
+            );
+          })
+        )}
 
         <View style={{ height: 120 }} />
       </ScrollView>
@@ -185,6 +257,13 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: MADAR_COLORS.goldBorder,
   },
   staffAvatar: { width: 56, height: 56, borderRadius: 28 },
+  initialsCircle: {
+    width: 56, height: 56, borderRadius: 28,
+    backgroundColor: MADAR_COLORS.goldMuted,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: MADAR_COLORS.goldBorder,
+  },
+  initialsText: { fontSize: 18, fontWeight: '700', color: MADAR_COLORS.gold },
   staffInfo: { flex: 1, gap: 3 },
   staffName: { fontSize: 15, fontWeight: '700', color: MADAR_COLORS.text },
   staffSpecialty: { fontSize: 12, color: MADAR_COLORS.textSecondary },

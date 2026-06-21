@@ -1,5 +1,5 @@
-import React, { useCallback } from 'react';
-import { View, Text, ScrollView, Image, StyleSheet, Dimensions, Alert, Linking, Platform } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, Text, ScrollView, Image, StyleSheet, Dimensions, Alert, Linking, Platform, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import {
@@ -17,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { WebView } from 'react-native-webview';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { supabase } from '@/utils/supabase';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -29,6 +30,7 @@ interface Service {
 
 interface AppointmentDetail {
   id: string;
+  shop_id: string;
   venue_name: string;
   venue_image: string;
   venue_address: string;
@@ -39,11 +41,13 @@ interface AppointmentDetail {
   latitude: number;
   longitude: number;
   services: Service[];
+  cancel_reason?: string;
 }
 
 const MOCK_APPT_DETAIL: Record<string, AppointmentDetail> = {
   '1': {
     id: '1',
+    shop_id: '1',
     venue_name: 'Level Barber Shop',
     venue_image: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800',
     venue_address: 'Avenue 11, Tubli, Bahrain',
@@ -57,6 +61,7 @@ const MOCK_APPT_DETAIL: Record<string, AppointmentDetail> = {
   },
   '2': {
     id: '2',
+    shop_id: '2',
     venue_name: 'The Groom Room',
     venue_image: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800',
     venue_address: 'Mall of Dilmunia, Shop 26, Bahrain',
@@ -72,6 +77,17 @@ const MOCK_APPT_DETAIL: Record<string, AppointmentDetail> = {
     ],
   },
 };
+
+function formatDate(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) +
+      ' at ' +
+      d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return iso;
+  }
+}
 
 const MAP_HTML = (lat: number, lng: number) => `<!DOCTYPE html>
 <html><head>
@@ -92,9 +108,80 @@ export default function AppointmentDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const apptId = id ?? '1';
-  const appt = MOCK_APPT_DETAIL[apptId] ?? MOCK_APPT_DETAIL['1'];
-  const totalPrice = appt.services.reduce((s: number, sv: Service) => s + sv.price, 0);
-  const totalPriceStr = totalPrice.toFixed(3);
+
+  const [appt, setAppt] = useState<AppointmentDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchAppointment();
+  }, [apptId]);
+
+  const fetchAppointment = async () => {
+    console.log('[AppointmentDetail] Fetching booking:', apptId);
+    setLoading(true);
+    try {
+      const [bookingRes, servicesRes] = await Promise.all([
+        supabase
+          .from('bookings')
+          .select('id, start_at, end_at, status, price_bhd, total_price, cancel_reason, cancelled_reason, shop_id, barber_id, service_id, barbershops!shop_id(name, cover_url, address, lat, lng)')
+          .eq('id', apptId)
+          .single(),
+        supabase
+          .from('booking_services')
+          .select('id, service_name_en, price_bhd, duration_minutes')
+          .eq('booking_id', apptId),
+      ]);
+
+      if (bookingRes.error || !bookingRes.data) {
+        console.log('[AppointmentDetail] Booking not found, using mock:', bookingRes.error?.message);
+        setAppt(MOCK_APPT_DETAIL[apptId] ?? MOCK_APPT_DETAIL['1']);
+        return;
+      }
+
+      const booking = bookingRes.data as any;
+      const shop = booking.barbershops ?? {};
+      const bookingServices = servicesRes.data ?? [];
+
+      const totalDuration = bookingServices.length > 0
+        ? bookingServices.reduce((sum: number, s: any) => sum + (s.duration_minutes ?? 30), 0)
+        : 30;
+
+      const mappedServices: Service[] = bookingServices.length > 0
+        ? bookingServices.map((s: any) => ({
+            name: s.service_name_en ?? 'Service',
+            price: Number(s.price_bhd) || 0,
+            staff: 'Specialist',
+            duration: s.duration_minutes ?? 30,
+          }))
+        : [{ name: 'Service', price: Number(booking.price_bhd ?? booking.total_price ?? 0), staff: 'Specialist', duration: 30 }];
+
+      const cancelReason = booking.cancel_reason ?? booking.cancelled_reason ?? undefined;
+
+      const detail: AppointmentDetail = {
+        id: booking.id,
+        shop_id: booking.shop_id ?? '',
+        venue_name: shop.name ?? 'Unknown',
+        venue_image: shop.cover_url ?? '',
+        venue_address: shop.address ?? '',
+        date: booking.start_at ? formatDate(booking.start_at) : '',
+        duration: totalDuration,
+        status: booking.status ?? 'pending',
+        booking_ref: String(booking.id).slice(-8).toUpperCase(),
+        latitude: Number(shop.lat) || 26.2235,
+        longitude: Number(shop.lng) || 50.5876,
+        services: mappedServices,
+        cancel_reason: cancelReason,
+      };
+
+      console.log('[AppointmentDetail] Loaded booking:', detail.id, 'status:', detail.status);
+      setAppt(detail);
+    } catch (err) {
+      console.log('[AppointmentDetail] Exception, using mock:', err);
+      setAppt(MOCK_APPT_DETAIL[apptId] ?? MOCK_APPT_DETAIL['1']);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleBack = useCallback(() => {
     console.log('[AppointmentDetail] Back pressed');
@@ -102,51 +189,107 @@ export default function AppointmentDetailScreen() {
   }, [router]);
 
   const handleAddToCalendar = useCallback(() => {
-    console.log('[AppointmentDetail] Add to calendar pressed for:', appt.id);
-  }, [appt.id]);
+    console.log('[AppointmentDetail] Add to calendar pressed for:', apptId);
+  }, [apptId]);
 
   const handleSendMessage = useCallback(() => {
-    console.log('[AppointmentDetail] Send message pressed for venue:', appt.venue_name);
-    router.push(`/chat/${appt.id}`);
-  }, [appt.id, router]);
+    if (!appt) return;
+    console.log('[AppointmentDetail] Send message pressed, navigating to chat for shop:', appt.shop_id);
+    router.push(`/chat/${appt.shop_id}`);
+  }, [appt, router]);
 
   const handleVenueDetails = useCallback(() => {
-    console.log('[AppointmentDetail] Venue details pressed, navigating to venue:', appt.id);
-    router.push(`/venue/${appt.id}`);
-  }, [appt.id, router]);
+    if (!appt) return;
+    console.log('[AppointmentDetail] Venue details pressed, navigating to venue:', appt.shop_id);
+    router.push(`/venue/${appt.shop_id}`);
+  }, [appt, router]);
 
   const handleReschedule = useCallback(() => {
-    console.log('[AppointmentDetail] Reschedule pressed for appointment:', appt.id);
-    router.push(`/booking/datetime?venueId=${appt.id}`);
-  }, [appt.id, router]);
+    if (!appt) return;
+    console.log('[AppointmentDetail] Reschedule pressed for shop:', appt.shop_id);
+    router.push(`/booking/datetime?venueId=${appt.shop_id}`);
+  }, [appt, router]);
+
+  const handleBookAgain = useCallback(() => {
+    if (!appt) return;
+    console.log('[AppointmentDetail] Book again pressed for shop:', appt.shop_id);
+    router.push(`/venue/${appt.shop_id}`);
+  }, [appt, router]);
 
   const handleCancelPress = useCallback(() => {
+    if (!appt) return;
     console.log('[AppointmentDetail] Cancel appointment pressed for:', appt.id);
     Alert.alert(
       'Cancel Appointment',
       'Are you sure you want to cancel this appointment?',
       [
         { text: 'Keep it', style: 'cancel' },
-        { text: 'Cancel', style: 'destructive', onPress: () => {
-          console.log('[AppointmentDetail] Cancelled:', appt.id);
+        { text: 'Cancel', style: 'destructive', onPress: async () => {
+          console.log('[AppointmentDetail] Confirmed cancel for:', appt.id);
+          await supabase.from('bookings').update({ status: 'cancelled', cancel_reason: 'Customer cancelled via app' }).eq('id', appt.id);
           router.back();
         }},
       ]
     );
-  }, [appt.id, router]);
+  }, [appt, router]);
 
   const handleGetDirections = useCallback(() => {
+    if (!appt) return;
     console.log('[AppointmentDetail] Get directions pressed for:', appt.venue_address);
     const url = Platform.OS === 'ios'
       ? `maps://app?daddr=${encodeURIComponent(appt.venue_address)}`
       : `geo:0,0?q=${encodeURIComponent(appt.venue_address)}`;
     Linking.openURL(url).catch(() => {
-      Linking.openURL(`https://maps.google.com/?q=${encodeURIComponent(appt.venue_address)}`);
+      Linking.openURL(`https://maps.google.com/?q=${encodeURIComponent(appt.venue_address ?? '')}`);
     });
-  }, [appt.venue_address]);
+  }, [appt]);
 
+  if (loading) {
+    return (
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color={MADAR_COLORS.gold} />
+      </View>
+    );
+  }
+
+  if (!appt) return null;
+
+  const totalPrice = appt.services.reduce((s: number, sv: Service) => s + sv.price, 0);
+  const totalPriceStr = totalPrice.toFixed(3);
   const mapHtml = MAP_HTML(appt.latitude, appt.longitude);
   const backBtnTop = insets.top + 12;
+
+  const isPast = appt.status === 'completed' || appt.status === 'cancelled' || appt.status === 'no_show';
+
+  // Status badge config
+  let badgeBg = 'rgba(76,175,125,0.15)';
+  let badgeColor = MADAR_COLORS.success;
+  let badgeLabel = 'Confirmed';
+  let BadgeIcon = Check;
+
+  if (appt.status === 'completed') {
+    badgeBg = 'rgba(76,175,125,0.15)';
+    badgeColor = MADAR_COLORS.success;
+    badgeLabel = 'Completed';
+    BadgeIcon = Check;
+  } else if (appt.status === 'cancelled') {
+    badgeBg = 'rgba(232,84,84,0.15)';
+    badgeColor = MADAR_COLORS.danger;
+    badgeLabel = 'Cancelled';
+    BadgeIcon = X;
+  } else if (appt.status === 'no_show') {
+    badgeBg = 'rgba(232,84,84,0.15)';
+    badgeColor = MADAR_COLORS.danger;
+    badgeLabel = 'No show';
+    BadgeIcon = X;
+  } else if (appt.status === 'rescheduled') {
+    badgeBg = 'rgba(201,168,76,0.15)';
+    badgeColor = MADAR_COLORS.gold;
+    badgeLabel = 'Rescheduled';
+    BadgeIcon = RefreshCw;
+  }
+
+  const cancelReason = appt.cancel_reason;
 
   return (
     <View style={styles.container}>
@@ -158,14 +301,12 @@ export default function AppointmentDetailScreen() {
             colors={['rgba(0,0,0,0.3)', 'rgba(10,10,15,0.92)']}
             style={StyleSheet.absoluteFillObject}
           />
-          {/* Back button */}
           <AnimatedPressable
             onPress={handleBack}
             style={[styles.backBtn, { top: backBtnTop }]}
           >
             <ArrowLeft size={20} color="#fff" />
           </AnimatedPressable>
-          {/* Venue name overlay */}
           <View style={styles.heroNameContainer}>
             <Text style={styles.heroVenueName}>{appt.venue_name}</Text>
           </View>
@@ -173,24 +314,44 @@ export default function AppointmentDetailScreen() {
 
         {/* Main card */}
         <View style={styles.mainCard}>
-          {/* Confirmed badge */}
-          <View style={styles.confirmedBadge}>
-            <Check size={14} color={MADAR_COLORS.success} />
-            <Text style={styles.confirmedText}>Confirmed</Text>
+          {/* Status badge */}
+          <View style={[styles.confirmedBadge, { backgroundColor: badgeBg }]}>
+            <BadgeIcon size={14} color={badgeColor} />
+            <Text style={[styles.confirmedText, { color: badgeColor }]}>{badgeLabel}</Text>
           </View>
+
+          {/* Cancel reason box */}
+          {appt.status === 'cancelled' && cancelReason ? (
+            <View style={styles.cancelReasonBox}>
+              <Text style={styles.cancelReasonTitle}>Cancellation reason</Text>
+              <Text style={styles.cancelReasonText}>{cancelReason}</Text>
+            </View>
+          ) : null}
 
           {/* Date + duration */}
           <Text style={styles.dateText}>{appt.date}</Text>
           <Text style={styles.durationText}>{appt.duration} min duration</Text>
 
           {/* Action rows */}
-          <AnimatedPressable onPress={handleAddToCalendar} style={styles.actionRow}>
-            <View style={[styles.actionIcon, { backgroundColor: MADAR_COLORS.goldMuted }]}>
-              <Calendar size={18} color={MADAR_COLORS.gold} />
-            </View>
-            <Text style={styles.actionLabel}>Add to calendar</Text>
-            <ChevronRight size={18} color={MADAR_COLORS.textTertiary} />
-          </AnimatedPressable>
+          {!isPast && (
+            <AnimatedPressable onPress={handleAddToCalendar} style={styles.actionRow}>
+              <View style={[styles.actionIcon, { backgroundColor: MADAR_COLORS.goldMuted }]}>
+                <Calendar size={18} color={MADAR_COLORS.gold} />
+              </View>
+              <Text style={styles.actionLabel}>Add to calendar</Text>
+              <ChevronRight size={18} color={MADAR_COLORS.textTertiary} />
+            </AnimatedPressable>
+          )}
+
+          {isPast && (
+            <AnimatedPressable onPress={handleBookAgain} style={styles.actionRow}>
+              <View style={[styles.actionIcon, { backgroundColor: MADAR_COLORS.goldMuted }]}>
+                <RefreshCw size={18} color={MADAR_COLORS.gold} />
+              </View>
+              <Text style={styles.actionLabel}>Book again</Text>
+              <ChevronRight size={18} color={MADAR_COLORS.textTertiary} />
+            </AnimatedPressable>
+          )}
 
           <AnimatedPressable onPress={handleSendMessage} style={styles.actionRow}>
             <View style={[styles.actionIcon, { backgroundColor: 'rgba(123,94,167,0.15)' }]}>
@@ -235,33 +396,33 @@ export default function AppointmentDetailScreen() {
         {/* More details section */}
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>More details</Text>
-          {/* Cancellation policy */}
           <View style={styles.policyBox}>
             <Text style={styles.policyTitle}>Cancellation policy</Text>
             <Text style={styles.policyText}>You can cancel at any time before your appointment.</Text>
           </View>
-          {/* Reschedule row */}
-          <AnimatedPressable onPress={handleReschedule} style={styles.actionRow}>
-            <View style={[styles.actionIcon, { backgroundColor: MADAR_COLORS.goldMuted }]}>
-              <RefreshCw size={18} color={MADAR_COLORS.gold} />
-            </View>
-            <Text style={styles.actionLabel}>Reschedule appointment</Text>
-            <ChevronRight size={18} color={MADAR_COLORS.textTertiary} />
-          </AnimatedPressable>
-          {/* Cancel row */}
-          <AnimatedPressable onPress={handleCancelPress} style={styles.cancelRow}>
-            <View style={[styles.actionIcon, { backgroundColor: 'rgba(232,84,84,0.15)' }]}>
-              <X size={18} color={MADAR_COLORS.danger} />
-            </View>
-            <Text style={styles.cancelLabel}>Cancel appointment</Text>
-            <ChevronRight size={18} color={MADAR_COLORS.danger} />
-          </AnimatedPressable>
+          {!isPast && (
+            <>
+              <AnimatedPressable onPress={handleReschedule} style={styles.actionRow}>
+                <View style={[styles.actionIcon, { backgroundColor: MADAR_COLORS.goldMuted }]}>
+                  <RefreshCw size={18} color={MADAR_COLORS.gold} />
+                </View>
+                <Text style={styles.actionLabel}>Reschedule appointment</Text>
+                <ChevronRight size={18} color={MADAR_COLORS.textTertiary} />
+              </AnimatedPressable>
+              <AnimatedPressable onPress={handleCancelPress} style={styles.cancelRow}>
+                <View style={[styles.actionIcon, { backgroundColor: 'rgba(232,84,84,0.15)' }]}>
+                  <X size={18} color={MADAR_COLORS.danger} />
+                </View>
+                <Text style={styles.cancelLabel}>Cancel appointment</Text>
+                <ChevronRight size={18} color={MADAR_COLORS.danger} />
+              </AnimatedPressable>
+            </>
+          )}
         </View>
 
         {/* Getting there section */}
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Getting there</Text>
-          {/* Mini map */}
           <View style={styles.mapContainer}>
             <WebView
               source={{ html: mapHtml }}
@@ -270,7 +431,6 @@ export default function AppointmentDetailScreen() {
               originWhitelist={['*']}
             />
           </View>
-          {/* Address */}
           <View style={styles.addressRow}>
             <MapPin size={16} color={MADAR_COLORS.textSecondary} style={styles.addressIcon} />
             <Text style={styles.addressText}>{appt.venue_address}</Text>
@@ -280,7 +440,6 @@ export default function AppointmentDetailScreen() {
           </AnimatedPressable>
         </View>
 
-        {/* Booking ref */}
         <Text style={styles.bookingRef}>Booking ref: {appt.booking_ref}</Text>
       </ScrollView>
     </View>
@@ -295,7 +454,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 120,
   },
-  // Hero
   heroContainer: {
     height: 240,
     position: 'relative',
@@ -328,7 +486,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     lineHeight: 32,
   },
-  // Main card
   mainCard: {
     backgroundColor: MADAR_COLORS.surface,
     marginHorizontal: 16,
@@ -342,7 +499,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(76,175,125,0.15)',
     borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -352,7 +508,24 @@ const styles = StyleSheet.create({
   confirmedText: {
     fontSize: 13,
     fontWeight: '700',
-    color: MADAR_COLORS.success,
+  },
+  cancelReasonBox: {
+    backgroundColor: 'rgba(232,84,84,0.1)',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(232,84,84,0.3)',
+  },
+  cancelReasonTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: MADAR_COLORS.danger,
+    marginBottom: 4,
+  },
+  cancelReasonText: {
+    fontSize: 13,
+    color: MADAR_COLORS.textSecondary,
   },
   dateText: {
     fontSize: 22,
@@ -365,7 +538,6 @@ const styles = StyleSheet.create({
     color: MADAR_COLORS.textSecondary,
     marginBottom: 20,
   },
-  // Action rows
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -388,7 +560,6 @@ const styles = StyleSheet.create({
     color: MADAR_COLORS.text,
     fontWeight: '500',
   },
-  // Section cards
   sectionCard: {
     marginHorizontal: 16,
     marginTop: 16,
@@ -404,7 +575,6 @@ const styles = StyleSheet.create({
     color: MADAR_COLORS.text,
     marginBottom: 14,
   },
-  // Services
   serviceRow: {
     marginBottom: 12,
   },
@@ -447,7 +617,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: MADAR_COLORS.gold,
   },
-  // More details
   policyBox: {
     backgroundColor: MADAR_COLORS.surfaceSecondary,
     borderRadius: 12,
@@ -479,7 +648,6 @@ const styles = StyleSheet.create({
     color: MADAR_COLORS.danger,
     fontWeight: '500',
   },
-  // Map
   mapContainer: {
     height: 160,
     borderRadius: 12,
@@ -509,7 +677,6 @@ const styles = StyleSheet.create({
     color: MADAR_COLORS.gold,
     fontWeight: '600',
   },
-  // Booking ref
   bookingRef: {
     textAlign: 'center',
     fontSize: 12,

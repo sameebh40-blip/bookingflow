@@ -1,9 +1,10 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -11,6 +12,7 @@ import { ArrowLeft, Check } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { supabase } from '@/utils/supabase';
 
 interface Service {
   id: string;
@@ -42,11 +44,73 @@ function ProgressDots({ step }: { step: number }) {
   );
 }
 
+function SkeletonRow() {
+  return (
+    <View style={[styles.serviceRow, { opacity: 0.4 }]}>
+      <View style={styles.serviceInfo}>
+        <View style={{ height: 14, width: '60%', backgroundColor: MADAR_COLORS.surfaceSecondary, borderRadius: 7 }} />
+        <View style={{ height: 10, width: '40%', backgroundColor: MADAR_COLORS.surfaceSecondary, borderRadius: 5, marginTop: 4 }} />
+      </View>
+      <View style={[styles.checkbox]} />
+    </View>
+  );
+}
+
 export default function BookingServicesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { venueId } = useLocalSearchParams<{ venueId: string }>();
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [services, setServices] = useState<Service[]>([]);
+  const [shopName, setShopName] = useState<string>('Select services');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchServices();
+  }, [venueId]);
+
+  const fetchServices = async () => {
+    console.log('[Booking/Services] Fetching services for venueId:', venueId);
+    setLoading(true);
+    try {
+      const [servicesRes, shopRes] = await Promise.all([
+        supabase
+          .from('services')
+          .select('id, name, duration_minutes, price_bhd, category, is_active')
+          .eq('shop_id', venueId)
+          .eq('is_active', true)
+          .limit(30),
+        supabase
+          .from('barbershops')
+          .select('name')
+          .eq('id', venueId)
+          .single(),
+      ]);
+
+      if (shopRes.data?.name) {
+        setShopName(shopRes.data.name);
+      }
+
+      if (!servicesRes.error && servicesRes.data && servicesRes.data.length > 0) {
+        console.log('[Booking/Services] Loaded', servicesRes.data.length, 'services');
+        setServices(servicesRes.data.map((s: any) => ({
+          id: String(s.id),
+          name: s.name ?? 'Service',
+          duration: s.duration_minutes ?? 30,
+          price: Number(s.price_bhd) || 0,
+          category: s.category ?? 'Services',
+        })));
+      } else {
+        console.log('[Booking/Services] Using mock services:', servicesRes.error?.message);
+        setServices(MOCK_SERVICES);
+      }
+    } catch (err) {
+      console.log('[Booking/Services] Exception, using mock:', err);
+      setServices(MOCK_SERVICES);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const toggleService = useCallback((id: string, name: string) => {
     console.log('[Booking/Services] Toggle service:', id, name);
@@ -69,10 +133,10 @@ export default function BookingServicesScreen() {
     router.back();
   }, [router]);
 
-  const selectedServices = MOCK_SERVICES.filter(s => selected.has(s.id));
+  const selectedServices = services.filter(s => selected.has(s.id));
   const totalPrice = selectedServices.reduce((sum, s) => sum + s.price, 0);
 
-  const servicesByCategory = MOCK_SERVICES.reduce<Record<string, Service[]>>((acc, s) => {
+  const servicesByCategory = services.reduce<Record<string, Service[]>>((acc, s) => {
     if (!acc[s.category]) acc[s.category] = [];
     acc[s.category].push(s);
     return acc;
@@ -87,7 +151,7 @@ export default function BookingServicesScreen() {
         </AnimatedPressable>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>Select services</Text>
-          <Text style={styles.headerSubtitle}>Level Barber Shop</Text>
+          <Text style={styles.headerSubtitle}>{shopName}</Text>
         </View>
         <View style={{ width: 40 }} />
       </View>
@@ -99,29 +163,39 @@ export default function BookingServicesScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {Object.entries(servicesByCategory).map(([category, catServices]) => (
-          <View key={category} style={styles.categorySection}>
-            <Text style={styles.categoryTitle}>{category}</Text>
-            {catServices.map((service) => {
-              const isSelected = selected.has(service.id);
-              return (
-                <AnimatedPressable
-                  key={service.id}
-                  onPress={() => toggleService(service.id, service.name)}
-                  style={[styles.serviceRow, isSelected && styles.serviceRowSelected]}
-                >
-                  <View style={styles.serviceInfo}>
-                    <Text style={styles.serviceName}>{service.name}</Text>
-                    <Text style={styles.serviceMeta}>{service.duration} min · BHD {service.price}</Text>
-                  </View>
-                  <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-                    {isSelected && <Check size={14} color={MADAR_COLORS.background} strokeWidth={3} />}
-                  </View>
-                </AnimatedPressable>
-              );
-            })}
+        {loading ? (
+          <View style={styles.categorySection}>
+            <View style={{ height: 14, width: 80, backgroundColor: MADAR_COLORS.surfaceSecondary, borderRadius: 7, marginBottom: 12 }} />
+            <SkeletonRow />
+            <SkeletonRow />
+            <SkeletonRow />
           </View>
-        ))}
+        ) : (
+          Object.entries(servicesByCategory).map(([category, catServices]) => (
+            <View key={category} style={styles.categorySection}>
+              <Text style={styles.categoryTitle}>{category}</Text>
+              {catServices.map((service) => {
+                const isSelected = selected.has(service.id);
+                const metaText = `${service.duration} min · BHD ${service.price}`;
+                return (
+                  <AnimatedPressable
+                    key={service.id}
+                    onPress={() => toggleService(service.id, service.name)}
+                    style={[styles.serviceRow, isSelected && styles.serviceRowSelected]}
+                  >
+                    <View style={styles.serviceInfo}>
+                      <Text style={styles.serviceName}>{service.name}</Text>
+                      <Text style={styles.serviceMeta}>{metaText}</Text>
+                    </View>
+                    <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+                      {isSelected && <Check size={14} color={MADAR_COLORS.background} strokeWidth={3} />}
+                    </View>
+                  </AnimatedPressable>
+                );
+              })}
+            </View>
+          ))
+        )}
         <View style={{ height: 120 }} />
       </ScrollView>
 

@@ -46,9 +46,12 @@ export default function ChatScreen() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `venue_id=eq.${venueId}` },
         (payload) => {
-          console.log('[Chat] Realtime message received:', payload.new);
-          setMessages(prev => [...prev, payload.new as Message]);
-          setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+          const msg = payload.new as any;
+          console.log('[Chat] Realtime message received:', msg.id, 'from_venue:', msg.is_from_venue);
+          if (msg.sender_id === user?.id || msg.is_from_venue === true) {
+            setMessages(prev => [...prev, msg as Message]);
+            setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+          }
         }
       )
       .subscribe();
@@ -72,16 +75,22 @@ export default function ChatScreen() {
   };
 
   const fetchMessages = async () => {
-    console.log('[Chat] Fetching messages for venue:', venueId);
+    console.log('[Chat] Fetching messages for venue:', venueId, 'user:', user?.id ?? 'anonymous');
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('messages')
         .select('*')
         .eq('venue_id', venueId)
         .order('created_at', { ascending: true });
 
+      if (user) {
+        query = query.or(`sender_id.eq.${user.id},is_from_venue.eq.true`);
+      }
+
+      const { data, error } = await query;
+
       if (!error && data && data.length > 0) {
-        console.log('[Chat] Loaded', data.length, 'messages');
+        console.log('[Chat] Loaded', data.length, 'messages for user');
         setMessages(data);
         setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 100);
       } else {

@@ -78,6 +78,16 @@ interface RebookItem {
   image_url: string;
 }
 
+interface HomeBanner {
+  id: string;
+  title: string;
+  subtitle: string;
+  image_url: string;
+  button_text: string;
+  action_type: string;
+  action_target_id: string;
+}
+
 const MOCK_VENUES: Venue[] = [
   { id: '1', name: 'Level Barber Shop', category: 'Barber', rating: 5.0, review_count: 1336, distance_km: 0.75, address: 'Bu Ashira', image_url: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800', starting_price: 5, is_open: true },
   { id: '2', name: 'The Groom Room', category: 'Barber', rating: 4.7, review_count: 210, distance_km: 1.2, address: 'Seef District', image_url: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800', starting_price: 8, is_open: true },
@@ -218,6 +228,7 @@ export default function HomeScreen() {
   const [barbers, setBarbers] = useState<Barber[]>(MOCK_BARBERS);
   const [reels, setReels] = useState<ReelItem[]>(MOCK_REELS);
   const [rebook, setRebook] = useState<RebookItem[]>(MOCK_REBOOK);
+  const [banners, setBanners] = useState<HomeBanner[]>([]);
   const [loading, setLoading] = useState(true);
 
   const greeting = React.useMemo(() => {
@@ -235,7 +246,7 @@ export default function HomeScreen() {
   }, [user]);
 
   const fetchData = async () => {
-    console.log('[Home] Fetching barbershops, barbers, posts, and bookings from Supabase (hallaq)');
+    console.log('[Home] Fetching barbershops, barbers, posts, bookings, and banners from Supabase');
     setLoading(true);
     try {
       const promises: Promise<any>[] = [
@@ -258,6 +269,12 @@ export default function HomeScreen() {
           .eq('status', 'approved')
           .order('views_count', { ascending: false })
           .limit(8),
+        supabase
+          .from('home_banners')
+          .select('id, title, subtitle, image_url, button_text, action_type, action_target_id')
+          .eq('is_active', true)
+          .order('display_order')
+          .limit(3),
       ];
 
       if (user) {
@@ -274,7 +291,7 @@ export default function HomeScreen() {
         promises.push(Promise.resolve({ data: null, error: null }));
       }
 
-      const [venuesRes, barbersRes, postsRes, rebookRes] = await Promise.all(promises);
+      const [venuesRes, barbersRes, postsRes, bannersRes, rebookRes] = await Promise.all(promises);
 
       if (venuesRes.error || !venuesRes.data || venuesRes.data.length === 0) {
         console.log('[Home] Using mock venues:', venuesRes.error?.message);
@@ -289,7 +306,7 @@ export default function HomeScreen() {
           review_count: 0,
           distance_km: 0.5,
           address: b.address ?? '',
-          image_url: b.cover_url ?? 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800',
+          image_url: b.cover_url ?? b.logo_url ?? 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800',
           logo_url: b.logo_url,
           starting_price: 5,
           is_open: b.is_active,
@@ -313,11 +330,33 @@ export default function HomeScreen() {
         })));
       }
 
+      console.log('[Home] Banners fetch result:', bannersRes.error?.message ?? 'ok', 'count:', bannersRes.data?.length ?? 0);
+      if (!bannersRes.error && bannersRes.data && bannersRes.data.length > 0) {
+        setBanners(bannersRes.data.map((b: any) => ({
+          id: String(b.id),
+          title: b.title ?? '',
+          subtitle: b.subtitle ?? '',
+          image_url: b.image_url ?? '',
+          button_text: b.button_text ?? 'View',
+          action_type: b.action_type ?? '',
+          action_target_id: b.action_target_id ?? '',
+        })));
+      } else {
+        setBanners([]);
+      }
+
       console.log('[Home] Posts fetch result:', postsRes.error?.message ?? 'ok', 'count:', postsRes.data?.length ?? 0);
       if (!postsRes.error && postsRes.data && postsRes.data.length > 0) {
+        // Fetch shop names for posts
+        const shopIds = [...new Set(postsRes.data.map((p: any) => p.shop_id).filter(Boolean))] as string[];
+        let shopNames: Record<string, string> = {};
+        if (shopIds.length > 0) {
+          const { data: shops } = await supabase.from('barbershops').select('id, name').in('id', shopIds);
+          shops?.forEach((s: any) => { shopNames[s.id] = s.name; });
+        }
         const mappedReels: ReelItem[] = postsRes.data.map((p: any) => {
           const imageUrl: string = p.thumbnail_url ?? p.media_url ?? 'https://images.unsplash.com/photo-1599351431202-1e0f0137899a?w=400&h=600&fit=crop';
-          const business: string = p.caption ? String(p.caption).slice(0, 20) : 'Trending';
+          const business: string = shopNames[p.shop_id] ?? (p.caption ? String(p.caption).slice(0, 20) : 'Trending');
           return {
             id: String(p.id),
             business,
@@ -404,6 +443,13 @@ export default function HomeScreen() {
     router.push(`/barber/${id}`);
   }, [router]);
 
+  const handleBannerPress = useCallback((banner: HomeBanner) => {
+    console.log('[Home] Banner pressed:', banner.id, banner.action_type, banner.action_target_id);
+    if (banner.action_type === 'shop' && banner.action_target_id) {
+      router.push(`/venue/${banner.action_target_id}`);
+    }
+  }, [router]);
+
   return (
     <ScrollView
       style={styles.container}
@@ -425,6 +471,40 @@ export default function HomeScreen() {
           <Text style={styles.searchPlaceholder}>Any treatments, venues or professionals</Text>
         </AnimatedPressable>
       </View>
+
+      {/* Home banners */}
+      {banners.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 12 }}
+          style={{ marginHorizontal: -20, marginBottom: 20 }}
+          pagingEnabled={false}
+          decelerationRate="fast"
+          snapToInterval={screenWidth - 24}
+        >
+          {banners.map((banner) => (
+            <AnimatedPressable
+              key={banner.id}
+              onPress={() => handleBannerPress(banner)}
+              style={styles.bannerCard}
+            >
+              <Image source={resolveImageSource(banner.image_url)} style={styles.bannerImage} resizeMode="cover" />
+              <LinearGradient
+                colors={['transparent', 'rgba(0,0,0,0.75)']}
+                style={StyleSheet.absoluteFillObject}
+              />
+              <View style={styles.bannerContent}>
+                <Text style={styles.bannerTitle}>{banner.title}</Text>
+                {banner.subtitle ? <Text style={styles.bannerSubtitle}>{banner.subtitle}</Text> : null}
+                <View style={styles.bannerBtn}>
+                  <Text style={styles.bannerBtnText}>{banner.button_text}</Text>
+                </View>
+              </View>
+            </AnimatedPressable>
+          ))}
+        </ScrollView>
+      )}
 
       {/* Category chips */}
       <ScrollView
@@ -827,6 +907,47 @@ const styles = StyleSheet.create({
   barbersListContent: {
     paddingHorizontal: 20,
     gap: 12,
+  },
+  // Banners
+  bannerCard: {
+    width: screenWidth - 40,
+    height: 160,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginLeft: 20,
+  },
+  bannerImage: {
+    width: '100%',
+    height: '100%',
+  },
+  bannerContent: {
+    position: 'absolute',
+    bottom: 16,
+    left: 16,
+    right: 16,
+    gap: 4,
+  },
+  bannerTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#fff',
+  },
+  bannerSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.8)',
+  },
+  bannerBtn: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    backgroundColor: MADAR_COLORS.gold,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
+  bannerBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0A0A0F',
   },
   // Reels
   reelCard: {

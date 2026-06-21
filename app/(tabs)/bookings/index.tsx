@@ -102,10 +102,11 @@ function AnimatedListItem({ index, children }: { index: number; children: React.
   return <Animated.View style={{ opacity, transform: [{ translateY }] }}>{children}</Animated.View>;
 }
 
-function UpcomingCard({ appt, onViewDetails, onRebook }: {
+function UpcomingCard({ appt, onViewDetails, onRebook, onCancelled }: {
   appt: Appointment;
   onViewDetails: () => void;
   onRebook: () => void;
+  onCancelled?: () => void;
 }) {
   const router = useRouter();
   const totalDuration = (appt.services?.length ?? 1) * 30;
@@ -120,13 +121,18 @@ function UpcomingCard({ appt, onViewDetails, onRebook }: {
       'Are you sure you want to cancel this appointment?',
       [
         { text: 'Keep it', style: 'cancel' },
-        { text: 'Cancel appointment', style: 'destructive', onPress: () => {
-          console.log('[Bookings] Appointment cancelled:', appt.id);
-          // TODO: call supabase to update status
+        { text: 'Cancel appointment', style: 'destructive', onPress: async () => {
+          console.log('[Bookings] Cancelling appointment in Supabase:', appt.id);
+          await supabase.from('bookings').update({
+            status: 'cancelled',
+            cancel_reason: 'Customer cancelled via app',
+            cancelled_at: new Date().toISOString(),
+          }).eq('id', appt.id);
+          onCancelled?.();
         }},
       ]
     );
-  }, [appt.id]);
+  }, [appt.id, onCancelled]);
 
   const handleCardPress = useCallback(() => {
     console.log('[Bookings] UpcomingCard tapped, navigating to appointment detail:', appt.id);
@@ -260,8 +266,14 @@ const upcomingCardStyles = StyleSheet.create({
 });
 
 function PastCard({ appt, onRebook }: { appt: Appointment; onRebook: () => void }) {
+  const router = useRouter();
   const itemsLabel = appt.items === 1 ? 'item' : 'items';
   const priceStr = Number(appt.price).toFixed(3);
+
+  const handleCardPress = useCallback(() => {
+    console.log('[Bookings] PastCard tapped, navigating to appointment detail:', appt.id);
+    router.push(`/appointment/${appt.id}`);
+  }, [appt.id, router]);
 
   const handleRebookPress = useCallback(() => {
     console.log('[Bookings] Rebook pressed for past appointment:', appt.id, appt.venue_name);
@@ -269,16 +281,16 @@ function PastCard({ appt, onRebook }: { appt: Appointment; onRebook: () => void 
   }, [appt.id, appt.venue_name, onRebook]);
 
   return (
-    <AnimatedPressable onPress={handleRebookPress} style={pastRowStyles.row}>
+    <AnimatedPressable onPress={handleCardPress} style={pastRowStyles.row}>
       <Image source={resolveImageSource(appt.venue_image)} style={pastRowStyles.thumb} resizeMode="cover" />
       <View style={pastRowStyles.info}>
         <Text style={pastRowStyles.name} numberOfLines={1}>{appt.venue_name}</Text>
         <Text style={pastRowStyles.date} numberOfLines={1}>{appt.date}</Text>
         <Text style={pastRowStyles.meta}>BHD {priceStr} · {appt.items} {itemsLabel}</Text>
       </View>
-      <View style={pastRowStyles.rebookBtn}>
+      <AnimatedPressable onPress={handleRebookPress} style={pastRowStyles.rebookBtn}>
         <Text style={pastRowStyles.rebookText}>Rebook</Text>
-      </View>
+      </AnimatedPressable>
     </AnimatedPressable>
   );
 }
@@ -459,6 +471,7 @@ export default function BookingsScreen() {
                     appt={appt}
                     onViewDetails={() => handleViewDetails(appt.id)}
                     onRebook={() => handleRebook(appt.venue_id, appt.venue_name)}
+                    onCancelled={fetchAppointments}
                   />
                 ))}
               </View>
