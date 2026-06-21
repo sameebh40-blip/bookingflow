@@ -19,7 +19,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, Share2, Heart, Star, MapPin, Clock, X } from 'lucide-react-native';
+import { ArrowLeft, Share2, Heart, Star, MapPin, Clock, X, MessageCircle } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
@@ -841,13 +841,22 @@ export default function VenueDetailScreen() {
 
       {/* ── STICKY BOTTOM BAR ── */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
-        <Text style={styles.bottomBarText}>{servicesCountText}</Text>
+        <AnimatedPressable
+          onPress={() => {
+            console.log('[VenueDetail] Message pressed, venue:', id);
+            router.push(`/chat/${id}`);
+          }}
+          style={styles.messageBtn}
+        >
+          <MessageCircle size={18} color={MADAR_COLORS.gold} />
+          <Text style={styles.messageBtnText}>Message</Text>
+        </AnimatedPressable>
         <AnimatedPressable
           onPress={() => {
             console.log('[VenueDetail] Book now pressed, venue:', id);
             router.push(`/booking/services?venueId=${id}`);
           }}
-          style={styles.bookNowBtn}
+          style={[styles.bookNowBtn, { flex: 1, alignItems: 'center' }]}
         >
           <Text style={styles.bookNowBtnText}>Book now</Text>
         </AnimatedPressable>
@@ -1009,6 +1018,23 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
   },
   bookNowBtnText: { fontSize: 15, fontWeight: '800', color: '#0A0A0F' },
+  messageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: MADAR_COLORS.gold,
+    backgroundColor: 'transparent',
+    marginRight: 10,
+  },
+  messageBtnText: {
+    color: MADAR_COLORS.gold,
+    fontSize: 15,
+    fontWeight: '600',
+  },
   reviewSheet: {
     backgroundColor: MADAR_COLORS.surface,
     borderTopLeftRadius: 24,

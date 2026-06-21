@@ -44,49 +44,7 @@ function getCountdown(startAt?: string): string {
   return `In ${mins}m`;
 }
 
-const MOCK_APPOINTMENTS: Appointment[] = [
-  {
-    id: '1',
-    venue_name: 'Level Barber Shop',
-    venue_image: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800',
-    date: 'Fri, Jun 19, 2026 at 7:25 AM',
-    price: 7,
-    items: 2,
-    status: 'upcoming',
-    venue_id: '1',
-    services: [
-      { name: 'Haircut & Beard Trim', price: 5 },
-      { name: 'Hot Towel Shave', price: 2 },
-    ],
-  },
-  {
-    id: '2',
-    venue_name: 'Level Barber Shop',
-    venue_image: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800',
-    date: 'Fri, Jun 19, 2026 at 10:25 AM',
-    price: 14,
-    items: 2,
-    status: 'past',
-    venue_id: '2',
-    services: [
-      { name: 'Classic Fade', price: 8 },
-      { name: 'Beard Trim', price: 6 },
-    ],
-  },
-  {
-    id: '3',
-    venue_name: 'Elite Athlete Barber',
-    venue_image: 'https://images.unsplash.com/photo-1599351431202-1e0f0137899a?w=800',
-    date: 'Sat, Jun 6, 2026 at 11:15 AM',
-    price: 3,
-    items: 1,
-    status: 'past',
-    venue_id: '3',
-    services: [
-      { name: 'Skin Fade', price: 3 },
-    ],
-  },
-];
+const MOCK_APPOINTMENTS: Appointment[] = [];
 
 const MOCK_GIFT_CARDS = [
   { id: '1', code: 'MADAR-2024-XKQP', balance: 25, expiry: 'Dec 31, 2025' },

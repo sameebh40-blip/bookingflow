@@ -56,7 +56,7 @@ export default function ChatScreen() {
         (payload) => {
           const msg = payload.new as any;
           console.log('[Chat] Realtime message received:', msg.id, 'from_venue:', msg.is_from_venue);
-          if (msg.sender_id === user?.id || msg.is_from_venue === true || msg.client_id === user?.id) {
+          if (msg.sender_id === user?.id || msg.is_from_venue === true || msg.client_id === user?.id || msg.sender_id === null) {
             setMessages(prev => [...prev, msg as Message]);
             setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
           }
@@ -90,7 +90,7 @@ export default function ChatScreen() {
         .from('messages')
         .select('id, text, is_from_venue, created_at, sender_id, client_id')
         .eq('venue_id', venueId)
-        .or(`sender_id.eq.${user.id},client_id.eq.${user.id},is_from_venue.eq.true`)
+        .or(`sender_id.eq.${user.id},client_id.eq.${user.id},is_from_venue.eq.true,sender_id.is.null`)
         .order('created_at', { ascending: true });
 
       if (error) {
