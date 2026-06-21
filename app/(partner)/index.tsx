@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Bell, Plus, Calendar, TrendingUp, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react-native';
+import { Bell, Plus, Calendar, TrendingUp, Clock, CheckCircle, XCircle, AlertCircle, ChevronRight } from 'lucide-react-native';
 import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
@@ -52,6 +52,14 @@ interface Booking {
   profiles?: { full_name: string; avatar_url: string } | null;
   barbers?: { display_name: string } | null;
 }
+
+const DEMO_BOOKINGS: Booking[] = [
+  { id: 'd1', start_at: new Date(Date.now() - 2 * 3600000).toISOString(), status: 'confirmed', price_bhd: 5, customer_name: 'Ahmed Al-Mansoori', barber_id: null, customer_profile_id: null, profiles: null, barbers: { display_name: 'Majed' } },
+  { id: 'd2', start_at: new Date(Date.now() + 1 * 3600000).toISOString(), status: 'pending', price_bhd: 8, customer_name: 'Khalid Hassan', barber_id: null, customer_profile_id: null, profiles: null, barbers: { display_name: 'Omar' } },
+  { id: 'd3', start_at: new Date(Date.now() + 3 * 3600000).toISOString(), status: 'confirmed', price_bhd: 12, customer_name: 'Sara Al-Zahra', barber_id: null, customer_profile_id: null, profiles: null, barbers: { display_name: 'Majed' } },
+];
+const DEMO_REVENUE = 25;
+const DEMO_WEEK_COUNT = 14;
 
 function useCountUp(target: number, duration = 1000) {
   const [value, setValue] = useState(0);
@@ -115,12 +123,17 @@ export default function PartnerHome() {
   const [todayBookings, setTodayBookings] = useState<Booking[]>([]);
   const [todayRevenue, setTodayRevenue] = useState(0);
   const [weekCount, setWeekCount] = useState(0);
+  const [isDemo, setIsDemo] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const toastAnim = useRef(new Animated.Value(-80)).current;
 
-  const revenueDisplay = todayRevenue.toFixed(3);
-  const todayCount = useCountUp(todayBookings.length, 800);
-  const weekCountDisplay = useCountUp(weekCount, 800);
+  const displayBookings = isDemo ? DEMO_BOOKINGS : todayBookings;
+  const displayRevenue = isDemo ? DEMO_REVENUE : todayRevenue;
+  const displayWeekCount = isDemo ? DEMO_WEEK_COUNT : weekCount;
+
+  const revenueDisplay = Number(displayRevenue).toFixed(3);
+  const todayCount = useCountUp(displayBookings.length, 800);
+  const weekCountDisplay = useCountUp(displayWeekCount, 800);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -132,7 +145,13 @@ export default function PartnerHome() {
   }, [toastAnim]);
 
   const fetchData = useCallback(async () => {
-    if (!shopId) return;
+    if (!shopId) {
+      // No shop_id — show demo data
+      console.log('[PartnerHome] No shop_id, showing demo data');
+      setIsDemo(true);
+      setLoading(false);
+      return;
+    }
     console.log('[PartnerHome] Fetching dashboard data for shop:', shopId);
     try {
       const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
@@ -160,13 +179,20 @@ export default function PartnerHome() {
           .gte('start_at', weekStart.toISOString()),
       ]);
 
-      console.log('[PartnerHome] Bookings fetched:', bookingsRes.data?.length ?? 0);
-      setTodayBookings((bookingsRes.data as Booking[]) ?? []);
+      const fetchedBookings = (bookingsRes.data as Booking[]) ?? [];
       const rev = (revenueRes.data ?? []).reduce((sum: number, b: { price_bhd: number }) => sum + (Number(b.price_bhd) || 0), 0);
+      const wCount = weekRes.count ?? 0;
+
+      console.log('[PartnerHome] Bookings fetched:', fetchedBookings.length, 'revenue:', rev, 'week:', wCount);
+
+      const useDemo = fetchedBookings.length === 0;
+      setIsDemo(useDemo);
+      setTodayBookings(fetchedBookings);
       setTodayRevenue(rev);
-      setWeekCount(weekRes.count ?? 0);
+      setWeekCount(wCount);
     } catch (err) {
       console.log('[PartnerHome] fetchData error:', err);
+      setIsDemo(true);
     } finally {
       setLoading(false);
     }
@@ -190,7 +216,9 @@ export default function PartnerHome() {
           const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
           const bookingDate = new Date(newBooking.start_at);
           if (bookingDate >= todayStart && bookingDate <= todayEnd) {
-            return [...prev, newBooking].sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
+            const updated = [...prev, newBooking].sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
+            if (updated.length > 0) setIsDemo(false);
+            return updated;
           }
           return prev;
         });
@@ -231,22 +259,6 @@ export default function PartnerHome() {
   const greetingText = greeting();
   const firstName = profile?.full_name?.split(' ')[0] ?? 'Partner';
 
-  if (!shopId) {
-    return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
-        <View style={styles.emptyCenter}>
-          <Text style={styles.emptyTitle}>No shop found</Text>
-          <Text style={styles.emptySubtitle}>Set up your shop to get started</Text>
-          <AnimatedPressable onPress={() => { console.log('[PartnerHome] Setup shop pressed'); router.push('/(partner)/setup'); }}>
-            <View style={styles.setupBtn}>
-              <Text style={styles.setupBtnText}>Set Up Shop</Text>
-            </View>
-          </AnimatedPressable>
-        </View>
-      </View>
-    );
-  }
-
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Toast */}
@@ -268,11 +280,35 @@ export default function PartnerHome() {
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+        {/* Setup banner when no shop_id */}
+        {!shopId && (
+          <AnimatedPressable
+            onPress={() => {
+              console.log('[PartnerHome] Complete setup banner pressed');
+              router.push('/(partner)/setup');
+            }}
+            style={styles.setupBanner}
+          >
+            <Text style={styles.setupBannerText}>⚡ Complete your shop setup to go live</Text>
+            <ChevronRight size={16} color={P.accent} />
+          </AnimatedPressable>
+        )}
+
         {/* Stat cards */}
         <View style={styles.statsRow}>
-          <StatCard label="Today's Revenue" value={`BHD ${revenueDisplay}`} icon={TrendingUp} color={P.gold} />
-          <StatCard label="Today" value={String(todayCount)} icon={Calendar} color={P.accent} />
-          <StatCard label="This Week" value={String(weekCountDisplay)} icon={Clock} color={P.success} />
+          <View style={styles.statsHeader}>
+            <Text style={styles.statsTitle}>Today's overview</Text>
+            {isDemo && (
+              <View style={styles.demoBadge}>
+                <Text style={styles.demoBadgeText}>Demo data</Text>
+              </View>
+            )}
+          </View>
+          <View style={styles.statsCards}>
+            <StatCard label="Today's Revenue" value={`BHD ${revenueDisplay}`} icon={TrendingUp} color={P.gold} />
+            <StatCard label="Today" value={String(todayCount)} icon={Calendar} color={P.accent} />
+            <StatCard label="This Week" value={String(weekCountDisplay)} icon={Clock} color={P.success} />
+          </View>
         </View>
 
         {/* Today's schedule */}
@@ -282,14 +318,14 @@ export default function PartnerHome() {
             <View style={styles.loadingWrap}>
               <ActivityIndicator color={P.accent} />
             </View>
-          ) : todayBookings.length === 0 ? (
+          ) : displayBookings.length === 0 ? (
             <View style={styles.emptyState}>
               <Calendar size={40} color={P.textTertiary} />
               <Text style={styles.emptyStateTitle}>No bookings today</Text>
               <Text style={styles.emptyStateSubtitle}>Enjoy your day!</Text>
             </View>
           ) : (
-            todayBookings.map((booking) => {
+            displayBookings.map((booking) => {
               const timeText = formatTime(booking.start_at);
               const clientName = booking.profiles?.full_name ?? booking.customer_name ?? 'Walk-in';
               const barberName = booking.barbers?.display_name ?? 'Any';
@@ -302,7 +338,9 @@ export default function PartnerHome() {
                   key={booking.id}
                   onPress={() => {
                     console.log('[PartnerHome] Booking tapped:', booking.id);
-                    router.push(`/appointment/${booking.id}` as never);
+                    if (!booking.id.startsWith('d')) {
+                      router.push(`/appointment/${booking.id}` as never);
+                    }
                   }}
                 >
                   <View style={styles.bookingRow}>
@@ -365,11 +403,43 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  statsRow: {
+  setupBanner: {
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 16,
+    marginBottom: 16,
+    backgroundColor: P.accentLight,
+    borderRadius: 12,
     paddingHorizontal: 16,
-    gap: 10,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: P.accent + '44',
+  },
+  setupBannerText: { color: P.text, fontSize: 13, fontWeight: '600', flex: 1 },
+  statsRow: {
+    paddingHorizontal: 16,
     marginBottom: 24,
+  },
+  statsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  statsTitle: { color: P.text, fontSize: 16, fontWeight: '700' },
+  demoBadge: {
+    backgroundColor: P.surfaceElevated,
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: P.border,
+  },
+  demoBadgeText: { color: P.textTertiary, fontSize: 11, fontWeight: '600' },
+  statsCards: {
+    flexDirection: 'row',
+    gap: 10,
   },
   statCard: {
     flex: 1,
@@ -464,15 +534,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   toastText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  emptyCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  emptyTitle: { color: P.text, fontSize: 18, fontWeight: '700' },
-  emptySubtitle: { color: P.textSecondary, fontSize: 14 },
-  setupBtn: {
-    backgroundColor: P.accent,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
-    marginTop: 8,
-  },
-  setupBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });

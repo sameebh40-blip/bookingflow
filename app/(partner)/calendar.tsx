@@ -9,11 +9,12 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
-  FlatList,
+  Image,
+  ImageSourcePropType,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ChevronLeft, ChevronRight, Plus, X, Check } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Plus, X, Check, LayoutGrid, Calendar as CalIcon, CalendarDays, CalendarRange } from 'lucide-react-native';
 import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
@@ -40,6 +41,8 @@ const START_HOUR = 8;
 const END_HOUR = 22;
 const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
+type CalendarView = 'day' | '3day' | 'week' | 'month';
+
 interface Booking {
   id: string;
   start_at: string;
@@ -53,7 +56,37 @@ interface Booking {
   profiles?: { full_name: string; avatar_url: string } | null;
   barbers?: { display_name: string } | null;
   services?: { name: string; duration_minutes: number } | null;
+  booking_services?: { service_name_en: string }[] | null;
 }
+
+interface BarberChip {
+  id: string;
+  name: string;
+  avatar?: string;
+}
+
+function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
+  if (!source) return { uri: '' };
+  if (typeof source === 'string') return { uri: source };
+  return source as ImageSourcePropType;
+}
+
+function todayAt(h: number, m: number): string {
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  return d.toISOString();
+}
+
+const DEMO_CAL_BOOKINGS: Booking[] = [
+  { id: 'dc1', start_at: todayAt(9, 0), end_at: todayAt(9, 45), status: 'confirmed', price_bhd: 5, customer_name: 'Ahmed Al-Mansoori', barber_id: 'b1', customer_profile_id: null, service_id: null, profiles: null, barbers: { display_name: 'Majed' }, booking_services: [{ service_name_en: 'Haircut' }] },
+  { id: 'dc2', start_at: todayAt(10, 0), end_at: todayAt(10, 30), status: 'pending', price_bhd: 8, customer_name: 'Khalid Hassan', barber_id: 'b2', customer_profile_id: null, service_id: null, profiles: null, barbers: { display_name: 'Omar' }, booking_services: [{ service_name_en: 'Beard Trim' }] },
+  { id: 'dc3', start_at: todayAt(14, 0), end_at: todayAt(15, 0), status: 'confirmed', price_bhd: 12, customer_name: 'Sara Al-Zahra', barber_id: 'b1', customer_profile_id: null, service_id: null, profiles: null, barbers: { display_name: 'Majed' }, booking_services: [{ service_name_en: 'Color & Highlights' }] },
+];
+
+const DEMO_BARBERS: BarberChip[] = [
+  { id: 'b1', name: 'Majed' },
+  { id: 'b2', name: 'Omar' },
+];
 
 function getWeekDates(offset: number): Date[] {
   const now = new Date();
@@ -72,6 +105,7 @@ function statusColor(status: string) {
   if (status === 'pending') return P.warning;
   if (status === 'cancelled') return P.danger;
   if (status === 'completed') return P.accent;
+  if (status === 'in_progress') return '#4A90E2';
   return P.textSecondary;
 }
 
@@ -81,20 +115,53 @@ export default function PartnerCalendar() {
   const { profile } = useAuth();
   const shopId = profile?.shop_id;
 
+  const [calView, setCalView] = useState<CalendarView>('week');
+  const [showViewModal, setShowViewModal] = useState(false);
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [barbers, setBarbers] = useState<BarberChip[]>([]);
+  const [selectedBarberId, setSelectedBarberId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [showCancelInput, setShowCancelInput] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [isDemo, setIsDemo] = useState(false);
 
   const weekDates = getWeekDates(weekOffset);
   const slideAnim = useRef(new Animated.Value(0)).current;
 
+  const fetchBarbers = useCallback(async () => {
+    if (!shopId) {
+      setBarbers(DEMO_BARBERS);
+      return;
+    }
+    try {
+      const { data } = await supabase
+        .from('barbers')
+        .select('id, display_name, avatar_url')
+        .eq('shop_id', shopId)
+        .eq('status', 'approved')
+        .limit(20);
+      if (data && data.length > 0) {
+        setBarbers(data.map((b: any) => ({ id: b.id, name: b.display_name, avatar: b.avatar_url })));
+      } else {
+        setBarbers(DEMO_BARBERS);
+      }
+    } catch {
+      setBarbers(DEMO_BARBERS);
+    }
+  }, [shopId]);
+
   const fetchBookings = useCallback(async () => {
-    if (!shopId) return;
+    if (!shopId) {
+      console.log('[Calendar] No shop_id, showing demo bookings');
+      setBookings(DEMO_CAL_BOOKINGS);
+      setIsDemo(true);
+      setLoading(false);
+      return;
+    }
     const weekStart = weekDates[0];
     const weekEnd = weekDates[6];
     weekEnd.setHours(23, 59, 59, 999);
@@ -107,15 +174,28 @@ export default function PartnerCalendar() {
         .gte('start_at', weekStart.toISOString())
         .lte('start_at', weekEnd.toISOString())
         .order('start_at');
-      setBookings((data as Booking[]) ?? []);
-      console.log('[Calendar] Bookings loaded:', data?.length ?? 0);
+      const fetched = (data as Booking[]) ?? [];
+      if (fetched.length === 0) {
+        console.log('[Calendar] No bookings, showing demo');
+        setBookings(DEMO_CAL_BOOKINGS);
+        setIsDemo(true);
+      } else {
+        setBookings(fetched);
+        setIsDemo(false);
+      }
+      console.log('[Calendar] Bookings loaded:', fetched.length);
     } catch (err) {
       console.log('[Calendar] fetchBookings error:', err);
-      setBookings([]);
+      setBookings(DEMO_CAL_BOOKINGS);
+      setIsDemo(true);
     } finally {
       setLoading(false);
     }
   }, [shopId, weekOffset]);
+
+  useEffect(() => {
+    fetchBarbers();
+  }, [fetchBarbers]);
 
   useEffect(() => {
     fetchBookings();
@@ -143,7 +223,13 @@ export default function PartnerCalendar() {
     setWeekOffset(prev => prev + dir);
   };
 
-  const dayBookings = bookings.filter(b => {
+  // Filter by barber
+  const filteredBookings = selectedBarberId
+    ? bookings.filter(b => b.barber_id === selectedBarberId)
+    : bookings;
+
+  // Get bookings for selected date
+  const dayBookings = filteredBookings.filter(b => {
     const d = new Date(b.start_at);
     return d.toDateString() === selectedDate.toDateString();
   });
@@ -152,8 +238,10 @@ export default function PartnerCalendar() {
     console.log('[Calendar] Confirm booking:', id);
     setActionLoading(true);
     try {
-      await supabase.from('bookings').update({ status: 'confirmed' }).eq('id', id);
-      await fetchBookings();
+      if (!id.startsWith('d')) {
+        await supabase.from('bookings').update({ status: 'confirmed' }).eq('id', id);
+        await fetchBookings();
+      }
       setSelectedBooking(null);
     } catch (err) {
       console.log('[Calendar] confirmBooking error:', err);
@@ -166,8 +254,10 @@ export default function PartnerCalendar() {
     console.log('[Calendar] Cancel booking:', id, 'reason:', cancelReason);
     setActionLoading(true);
     try {
-      await supabase.from('bookings').update({ status: 'cancelled', cancel_reason: cancelReason }).eq('id', id);
-      await fetchBookings();
+      if (!id.startsWith('d')) {
+        await supabase.from('bookings').update({ status: 'cancelled', cancel_reason: cancelReason }).eq('id', id);
+        await fetchBookings();
+      }
       setSelectedBooking(null);
       setShowCancelInput(false);
       setCancelReason('');
@@ -178,17 +268,78 @@ export default function PartnerCalendar() {
     }
   };
 
+  const handleEmptySlotPress = (hour: number) => {
+    const dateStr = selectedDate.toISOString().split('T')[0];
+    const timeStr = `${String(hour).padStart(2, '0')}:00`;
+    console.log('[Calendar] Empty slot tapped, date:', dateStr, 'time:', timeStr);
+    router.push(`/(partner)/new-booking?date=${dateStr}&time=${timeStr}` as never);
+  };
+
   const hours = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i);
+
+  const VIEW_OPTIONS: { id: CalendarView; label: string; Icon: React.ElementType }[] = [
+    { id: 'day', label: 'Day', Icon: CalIcon },
+    { id: '3day', label: '3 day', Icon: CalendarRange },
+    { id: 'week', label: 'Week', Icon: CalendarDays },
+    { id: 'month', label: 'Month', Icon: LayoutGrid },
+  ];
+
+  const viewLabel = VIEW_OPTIONS.find(v => v.id === calView)?.label ?? 'Week';
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Calendar</Text>
-        <TouchableOpacity onPress={() => { console.log('[Calendar] New booking FAB'); router.push('/(partner)/new-booking' as never); }} style={styles.addBtn}>
-          <Plus size={18} color="#fff" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {isDemo && (
+            <View style={styles.demoBadge}>
+              <Text style={styles.demoBadgeText}>Demo</Text>
+            </View>
+          )}
+          <TouchableOpacity
+            onPress={() => { console.log('[Calendar] View switcher pressed'); setShowViewModal(true); }}
+            style={styles.viewSwitchBtn}
+          >
+            <Text style={styles.viewSwitchText}>{viewLabel}</Text>
+            <ChevronRight size={14} color={P.textSecondary} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => { console.log('[Calendar] New booking FAB'); router.push('/(partner)/new-booking' as never); }} style={styles.addBtn}>
+            <Plus size={18} color="#fff" />
+          </TouchableOpacity>
+        </View>
       </View>
+
+      {/* Barber filter chips */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.barberChipsContent}
+        style={styles.barberChipsScroll}
+      >
+        <TouchableOpacity
+          style={[styles.barberChip, !selectedBarberId && styles.barberChipActive]}
+          onPress={() => { console.log('[Calendar] Barber filter: All'); setSelectedBarberId(null); }}
+        >
+          <Text style={[styles.barberChipText, !selectedBarberId && styles.barberChipTextActive]}>All</Text>
+        </TouchableOpacity>
+        {barbers.map(b => (
+          <TouchableOpacity
+            key={b.id}
+            style={[styles.barberChip, selectedBarberId === b.id && styles.barberChipActive]}
+            onPress={() => { console.log('[Calendar] Barber filter:', b.name); setSelectedBarberId(b.id); }}
+          >
+            {b.avatar ? (
+              <Image source={resolveImageSource(b.avatar)} style={styles.barberChipAvatar} />
+            ) : (
+              <View style={styles.barberChipAvatarPlaceholder}>
+                <Text style={styles.barberChipAvatarText}>{b.name.charAt(0)}</Text>
+              </View>
+            )}
+            <Text style={[styles.barberChipText, selectedBarberId === b.id && styles.barberChipTextActive]}>{b.name}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
 
       {/* Week strip */}
       <View style={styles.weekNav}>
@@ -246,7 +397,12 @@ export default function PartnerCalendar() {
             {/* Booking blocks */}
             <View style={styles.gridContent}>
               {hours.map(h => (
-                <View key={h} style={styles.hourLine} />
+                <TouchableOpacity
+                  key={h}
+                  style={styles.hourLine}
+                  onPress={() => handleEmptySlotPress(h)}
+                  activeOpacity={0.6}
+                />
               ))}
               {dayBookings.map(booking => {
                 const start = new Date(booking.start_at);
@@ -256,7 +412,8 @@ export default function PartnerCalendar() {
                 const top = (startHour - START_HOUR) * HOUR_HEIGHT;
                 const height = Math.max((endHour - startHour) * HOUR_HEIGHT, 30);
                 const clientName = booking.profiles?.full_name ?? booking.customer_name ?? 'Walk-in';
-                const serviceName = booking.services?.name ?? 'Service';
+                const serviceName = booking.booking_services?.[0]?.service_name_en ?? booking.services?.name ?? 'Service';
+                const barberName = booking.barbers?.display_name ?? '';
                 const borderColor = statusColor(booking.status);
 
                 return (
@@ -270,6 +427,12 @@ export default function PartnerCalendar() {
                   >
                     <Text style={styles.blockClient} numberOfLines={1}>{clientName}</Text>
                     <Text style={styles.blockService} numberOfLines={1}>{serviceName}</Text>
+                    {barberName ? (
+                      <View style={styles.blockBarberRow}>
+                        <View style={[styles.blockBarberDot, { backgroundColor: borderColor }]} />
+                        <Text style={styles.blockBarber} numberOfLines={1}>{barberName}</Text>
+                      </View>
+                    ) : null}
                   </TouchableOpacity>
                 );
               })}
@@ -289,7 +452,42 @@ export default function PartnerCalendar() {
         <Plus size={24} color="#fff" />
       </TouchableOpacity>
 
-      {/* Bottom sheet */}
+      {/* View switcher modal */}
+      <Modal visible={showViewModal} transparent animationType="slide" onRequestClose={() => setShowViewModal(false)}>
+        <View style={styles.sheetOverlay}>
+          <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Calendar Views</Text>
+              <TouchableOpacity onPress={() => setShowViewModal(false)}>
+                <X size={20} color={P.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.viewGrid}>
+              {VIEW_OPTIONS.map(opt => {
+                const Icon = opt.Icon;
+                const isActive = calView === opt.id;
+                return (
+                  <TouchableOpacity
+                    key={opt.id}
+                    style={[styles.viewOption, isActive && styles.viewOptionActive]}
+                    onPress={() => {
+                      console.log('[Calendar] View changed to:', opt.id);
+                      setCalView(opt.id);
+                      setShowViewModal(false);
+                    }}
+                  >
+                    <Icon size={28} color={isActive ? P.accent : P.textSecondary} />
+                    <Text style={[styles.viewOptionText, isActive && styles.viewOptionTextActive]}>{opt.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Booking detail bottom sheet */}
       <Modal visible={!!selectedBooking} transparent animationType="slide" onRequestClose={() => setSelectedBooking(null)}>
         <View style={styles.sheetOverlay}>
           <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
@@ -308,7 +506,7 @@ export default function PartnerCalendar() {
                 </View>
                 <View style={styles.sheetRow}>
                   <Text style={styles.sheetLabel}>Service</Text>
-                  <Text style={styles.sheetValue}>{selectedBooking.services?.name ?? '—'}</Text>
+                  <Text style={styles.sheetValue}>{selectedBooking.booking_services?.[0]?.service_name_en ?? selectedBooking.services?.name ?? '—'}</Text>
                 </View>
                 <View style={styles.sheetRow}>
                   <Text style={styles.sheetLabel}>Time</Text>
@@ -381,6 +579,54 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16 },
   headerTitle: { color: P.text, fontSize: 20, fontWeight: '700' },
   addBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center' },
+  viewSwitchBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: P.surface,
+    borderWidth: 1,
+    borderColor: P.border,
+  },
+  viewSwitchText: { color: P.text, fontSize: 13, fontWeight: '600' },
+  demoBadge: {
+    backgroundColor: P.surfaceElevated,
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: P.border,
+    justifyContent: 'center',
+  },
+  demoBadgeText: { color: P.textTertiary, fontSize: 11, fontWeight: '600' },
+  barberChipsScroll: { maxHeight: 52, marginBottom: 4 },
+  barberChipsContent: { paddingHorizontal: 16, gap: 8, alignItems: 'center' },
+  barberChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: P.surface,
+    borderWidth: 1,
+    borderColor: P.border,
+  },
+  barberChipActive: { backgroundColor: P.accentLight, borderColor: P.accent },
+  barberChipText: { color: P.textSecondary, fontSize: 13, fontWeight: '500' },
+  barberChipTextActive: { color: P.accent, fontWeight: '600' },
+  barberChipAvatar: { width: 22, height: 22, borderRadius: 11 },
+  barberChipAvatarPlaceholder: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: P.accentLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  barberChipAvatarText: { color: P.accent, fontSize: 10, fontWeight: '700' },
   weekNav: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, marginBottom: 8 },
   weekArrow: { padding: 8 },
   weekStrip: { flex: 1, flexDirection: 'row', justifyContent: 'space-around' },
@@ -409,14 +655,32 @@ const styles = StyleSheet.create({
     padding: 6,
     overflow: 'hidden',
   },
-  blockClient: { color: P.text, fontSize: 12, fontWeight: '600' },
-  blockService: { color: P.textSecondary, fontSize: 10, marginTop: 2 },
+  blockClient: { color: P.text, fontSize: 12, fontWeight: '700' },
+  blockService: { color: P.textSecondary, fontSize: 10, marginTop: 1 },
+  blockBarberRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  blockBarberDot: { width: 6, height: 6, borderRadius: 3 },
+  blockBarber: { color: P.textTertiary, fontSize: 9 },
   fab: { position: 'absolute', right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center', elevation: 8 },
   sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   sheet: { backgroundColor: P.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 },
   sheetHandle: { width: 40, height: 4, backgroundColor: P.border, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
   sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
   sheetTitle: { color: P.text, fontSize: 18, fontWeight: '700' },
+  viewGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, paddingBottom: 8 },
+  viewOption: {
+    width: '46%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 20,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: P.border,
+    backgroundColor: P.surfaceElevated,
+  },
+  viewOptionActive: { borderColor: P.accent, backgroundColor: P.accentLight },
+  viewOptionText: { color: P.textSecondary, fontSize: 14, fontWeight: '600' },
+  viewOptionTextActive: { color: P.accent },
   sheetRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: P.divider },
   sheetLabel: { color: P.textSecondary, fontSize: 14 },
   sheetValue: { color: P.text, fontSize: 14, fontWeight: '600' },

@@ -69,6 +69,10 @@ export default function PartnerLayout() {
   const pathname = usePathname();
   const { profile, signOut } = useAuth();
 
+  // Allow access if role is shop_owner or barber (even without shop_id — demo mode)
+  // Only redirect to auth if not a partner role at all
+  const isPartnerRole = profile?.role === 'shop_owner' || profile?.role === 'barber';
+
   const handleSignOut = async () => {
     console.log('[Partner] Sign out pressed');
     await signOut();

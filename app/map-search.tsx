@@ -9,11 +9,13 @@ import {
   ScrollView,
   Image,
   ImageSourcePropType,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { WebView } from 'react-native-webview';
-import { Search, SlidersHorizontal, Heart, Star, MapPin, AlignJustify, ChevronDown, X, Store, Users } from 'lucide-react-native';
+import { Search, SlidersHorizontal, Heart, Star, MapPin, AlignJustify, ChevronDown, X, Store, Users, Crosshair } from 'lucide-react-native';
+import * as Location from 'expo-location';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { supabase } from '@/utils/supabase';
@@ -23,6 +25,9 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const SNAP_COLLAPSED = 80;
 const SNAP_HALF = screenHeight * 0.45;
 const SNAP_FULL = screenHeight * 0.82;
+
+const DEFAULT_LAT = 26.2235;
+const DEFAULT_LNG = 50.5876;
 
 interface Venue {
   id: string;
@@ -50,15 +55,28 @@ const MOCK_VENUES: Venue[] = [
   { id: '5', name: 'Fade Masters', category: 'Barber', rating: 4.7, review_count: 156, distance_km: 0.9, address: 'Gudaibiya, Manama', image_url: 'https://images.unsplash.com/photo-1599351431202-1e0f0137899a?w=800', starting_price: 6, is_open: true, next_slot: '8:00 PM', latitude: 26.2260, longitude: 50.5820, is_top_rated: false, men_only: true },
 ];
 
-
-
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: '' };
   if (typeof source === 'string') return { uri: source };
   return source as ImageSourcePropType;
 }
 
-const MAP_HTML_TEMPLATE = `<!DOCTYPE html>
+function haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function generateMapHtml(venues: Venue[], userLat: number, userLng: number): string {
+  const venueData = venues
+    .filter(v => v.latitude && v.longitude)
+    .map(v => ({ id: v.id, rating: v.rating, lat: v.latitude, lng: v.longitude }));
+
+  const venueJson = JSON.stringify(venueData);
+
+  return `<!DOCTYPE html>
 <html>
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -106,12 +124,12 @@ const MAP_HTML_TEMPLATE = `<!DOCTYPE html>
 <body>
   <div id="map"></div>
   <script>
-    var map = L.map('map', { zoomControl: false, attributionControl: false }).setView([26.2235, 50.5876], 13);
+    var map = L.map('map', { zoomControl: false, attributionControl: false }).setView([${userLat}, ${userLng}], 13);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       maxZoom: 19
     }).addTo(map);
     
-    var venues = VENUES_JSON_PLACEHOLDER;
+    var venues = ${venueJson};
     var markers = {};
     var selectedId = null;
     
@@ -133,6 +151,19 @@ const MAP_HTML_TEMPLATE = `<!DOCTYPE html>
       });
       markers[venue.id] = marker;
     });
+
+    // User location dot
+    var userLat = ${userLat};
+    var userLng = ${userLng};
+    if (userLat && userLng) {
+      var userIcon = L.divIcon({
+        className: '',
+        html: '<div style="background:#4A90E2;border-radius:50%;width:14px;height:14px;border:3px solid #fff;box-shadow:0 0 0 4px rgba(74,144,226,0.3)"></div>',
+        iconSize: [14, 14],
+        iconAnchor: [7, 7]
+      });
+      L.marker([userLat, userLng], { icon: userIcon }).addTo(map);
+    }
     
     map.on('moveend', function() {
       var center = map.getCenter();
@@ -148,15 +179,13 @@ const MAP_HTML_TEMPLATE = `<!DOCTYPE html>
         document.getElementById('marker-' + id).classList.add('selected');
       }
     };
+
+    window.centerOnUser = function(lat, lng) {
+      map.setView([lat, lng], 14);
+    };
   </script>
 </body>
 </html>`;
-
-function generateMapHtml(venues: Venue[]): string {
-  const venueData = venues
-    .filter(v => v.latitude && v.longitude)
-    .map(v => ({ id: v.id, rating: v.rating, lat: v.latitude, lng: v.longitude }));
-  return MAP_HTML_TEMPLATE.replace('VENUES_JSON_PLACEHOLDER', JSON.stringify(venueData));
 }
 
 export default function MapSearchScreen() {
@@ -178,10 +207,44 @@ export default function MapSearchScreen() {
   const [showSearchByModal, setShowSearchByModal] = useState(false);
   const [showSortModal, setShowSortModal] = useState(false);
   const [showPriceModal, setShowPriceModal] = useState(false);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [locating, setLocating] = useState(true);
+
+  // Request location on mount
+  useEffect(() => {
+    const requestLocation = async () => {
+      console.log('[MapSearch] Requesting location permission');
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          const lat = loc.coords.latitude;
+          const lng = loc.coords.longitude;
+          console.log('[MapSearch] User location obtained:', lat, lng);
+          setUserLocation({ lat, lng });
+          // Update venue distances
+          setVenues(prev => prev.map(v => ({
+            ...v,
+            distance_km: (v.latitude && v.longitude)
+              ? haversine(lat, lng, v.latitude, v.longitude)
+              : v.distance_km,
+          })).sort((a, b) => a.distance_km - b.distance_km));
+          setMapKey(k => k + 1);
+        } else {
+          console.log('[MapSearch] Location permission denied, using default');
+        }
+      } catch (err) {
+        console.log('[MapSearch] Location error:', err);
+      } finally {
+        setLocating(false);
+      }
+    };
+    requestLocation();
+  }, []);
 
   useEffect(() => {
     const fetchVenues = async () => {
-      console.log('[MapSearch] Fetching barbershops from Supabase (hallaq)');
+      console.log('[MapSearch] Fetching barbershops from Supabase');
       try {
         const { data, error } = await supabase
           .from('barbershops')
@@ -190,21 +253,28 @@ export default function MapSearchScreen() {
           .limit(20);
         if (!error && data && data.length > 0) {
           console.log('[MapSearch] Loaded', data.length, 'barbershops');
-          setVenues(data.map((b: any) => ({
-            id: b.id,
-            name: b.name,
-            category: b.category ?? 'Barber',
-            rating: Number(b.rating_avg) || 0,
-            review_count: 0,
-            distance_km: 0.5,
-            address: b.address ?? '',
-            image_url: b.cover_url ?? 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800',
-            latitude: b.lat,
-            longitude: b.lng,
-            is_open: b.is_active,
-            starting_price: 5,
-            next_slot: '',
-          })));
+          const userLat = userLocation?.lat ?? DEFAULT_LAT;
+          const userLng = userLocation?.lng ?? DEFAULT_LNG;
+          const mapped: Venue[] = data.map((b: any) => {
+            const vLat = b.lat ?? DEFAULT_LAT;
+            const vLng = b.lng ?? DEFAULT_LNG;
+            return {
+              id: b.id,
+              name: b.name,
+              category: b.category ?? 'Barber',
+              rating: Number(b.rating_avg) || 0,
+              review_count: 0,
+              distance_km: haversine(userLat, userLng, vLat, vLng),
+              address: b.address ?? '',
+              image_url: b.cover_url?.startsWith('http') ? b.cover_url : 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800',
+              latitude: vLat,
+              longitude: vLng,
+              is_open: b.is_active,
+              starting_price: 5,
+              next_slot: '',
+            };
+          }).sort((a: Venue, b: Venue) => a.distance_km - b.distance_km);
+          setVenues(mapped);
           setMapKey(k => k + 1);
         } else {
           console.log('[MapSearch] Using mock venues:', error?.message);
@@ -214,9 +284,11 @@ export default function MapSearchScreen() {
       }
     };
     fetchVenues();
-  }, []);
+  }, [userLocation]);
 
-  const mapHtml = generateMapHtml(venues);
+  const effectiveLat = userLocation?.lat ?? DEFAULT_LAT;
+  const effectiveLng = userLocation?.lng ?? DEFAULT_LNG;
+  const mapHtml = generateMapHtml(venues, effectiveLat, effectiveLng);
 
   const filteredVenues = venues.filter(v =>
     !searchQuery ||
@@ -262,6 +334,13 @@ export default function MapSearchScreen() {
     webViewRef.current?.injectJavaScript(`window.selectMarker('${id}'); true;`);
   }, []);
 
+  const handleMyLocation = useCallback(() => {
+    console.log('[MapSearch] My location button pressed');
+    if (userLocation) {
+      webViewRef.current?.injectJavaScript(`window.centerOnUser(${userLocation.lat}, ${userLocation.lng}); true;`);
+    }
+  }, [userLocation]);
+
   const handleWebViewMessage = useCallback((event: { nativeEvent: { data: string } }) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
@@ -269,7 +348,6 @@ export default function MapSearchScreen() {
         console.log('[MapSearch] Marker pressed for venue:', data.venueId);
         setSelectedVenueId(data.venueId);
         snapToPoint(SNAP_HALF);
-        // scroll venue list to show selected venue
         const idx = venues.findIndex(v => v.id === data.venueId);
         if (idx >= 0) {
           setTimeout(() => {
@@ -315,6 +393,24 @@ export default function MapSearchScreen() {
         scrollEnabled={false}
         javaScriptEnabled
       />
+
+      {/* Locating indicator */}
+      {locating && (
+        <View style={[styles.locatingBadge, { top: insets.top + 70 }]}>
+          <ActivityIndicator size="small" color="#4A90E2" />
+          <Text style={styles.locatingText}>Locating you...</Text>
+        </View>
+      )}
+
+      {/* My location button */}
+      {userLocation && (
+        <AnimatedPressable
+          onPress={handleMyLocation}
+          style={[styles.myLocationBtn, { top: insets.top + 70 }]}
+        >
+          <Crosshair size={20} color={MADAR_COLORS.text} />
+        </AnimatedPressable>
+      )}
 
       {/* Search bar */}
       <View style={[styles.searchBarContainer, { top: insets.top + 12 }]}>
@@ -384,7 +480,7 @@ export default function MapSearchScreen() {
             const distanceAddress = `${distanceStr} · ${venue.address}`;
             const categoryReviews = `${venue.category} · ${venue.review_count} reviews`;
             const fromPrice = `From BHD ${venue.starting_price}`;
-            const nextSlot = `Next: ${venue.next_slot}`;
+            const nextSlot = venue.next_slot ? `Next: ${venue.next_slot}` : '';
 
             return (
               <AnimatedPressable
@@ -426,7 +522,7 @@ export default function MapSearchScreen() {
                   {/* Row 4: price + next slot */}
                   <View style={styles.venuePriceRow}>
                     <Text style={styles.venuePrice}>{fromPrice}</Text>
-                    <Text style={styles.venueNextSlot}>{nextSlot}</Text>
+                    {nextSlot ? <Text style={styles.venueNextSlot}>{nextSlot}</Text> : null}
                   </View>
                 </View>
               </AnimatedPressable>
@@ -553,6 +649,44 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+  },
+  locatingBadge: {
+    position: 'absolute',
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    zIndex: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  locatingText: {
+    fontSize: 12,
+    color: '#333',
+    fontWeight: '600',
+  },
+  myLocationBtn: {
+    position: 'absolute',
+    right: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.97)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
   },
   searchBarContainer: {
     position: 'absolute',
