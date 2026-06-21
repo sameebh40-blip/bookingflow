@@ -325,7 +325,6 @@ const DateColHeader = React.memo(({ col, colWidth, isToday, isSelected, onPress 
 ));
 
 function PartnerCalendarInner({ router: expoRouter }: { router: ReturnType<typeof useRouter> }) {
-  const navState = useRootNavigationState();
   const insets = useSafeInsets();
   const { profile } = useAuth();
   const shopId = profile?.shop_id;
@@ -896,14 +895,6 @@ function PartnerCalendarInner({ router: expoRouter }: { router: ReturnType<typeo
     return (
       <View style={{ flex: 1, backgroundColor: P.bg, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color={P.accent} size="large" />
-      </View>
-    );
-  }
-
-  if (!navState?.routes) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#0F0F1A', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color="#7C3AED" size="large" />
       </View>
     );
   }

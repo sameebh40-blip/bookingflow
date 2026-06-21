@@ -63,7 +63,7 @@ export default function PartnerChatThread() {
         .from('messages')
         .select('id, sender_id, text, created_at, is_from_venue')
         .eq('venue_id', shopId)
-        .or(`sender_id.eq.${clientId},client_id.eq.${clientId},is_from_venue.eq.true,sender_id.is.null`)
+        .eq('client_id', clientId)
         .order('created_at', { ascending: true });
       setMessages((data as Message[]) ?? []);
     } catch (err) {
@@ -88,7 +88,7 @@ export default function PartnerChatThread() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `venue_id=eq.${shopId}` }, (payload) => {
         console.log('[PartnerChatThread] New message:', payload.new);
         const msg = payload.new as Message;
-        if (msg.sender_id === clientId || msg.is_from_venue) {
+        if (msg.client_id === clientId) {
           setMessages(prev => [...prev, msg]);
           setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
         }
