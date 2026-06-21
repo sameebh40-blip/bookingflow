@@ -209,6 +209,7 @@ export default function BookingConfirmScreen() {
           const { error: msgErr } = await supabase.from('messages').insert({
             venue_id: venueId,
             sender_id: null,
+            client_id: user.id,
             text: confirmMsg,
             is_from_venue: true,
           });

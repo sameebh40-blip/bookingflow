@@ -35,6 +35,31 @@ import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/utils/supabase';
+import { filterStore } from '@/utils/filterStore';
+
+function isVenueOpenNow(openingHours?: Record<string, { open: string; close: string; enabled: boolean }>): boolean {
+  if (!openingHours) return false;
+  const now = new Date();
+  const dayIndex = now.getDay();
+  const dayHours = openingHours[String(dayIndex)];
+  if (!dayHours?.enabled) return false;
+  const [openH, openM] = dayHours.open.split(':').map(Number);
+  const [closeH, closeM] = dayHours.close.split(':').map(Number);
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const openMinutes = openH * 60 + openM;
+  const closeMinutes = closeH * 60 + closeM;
+  return nowMinutes >= openMinutes && nowMinutes < closeMinutes;
+}
+
+function applyFilters(venues: Venue[], filters: { options: string[]; serviceTypes: string[] }): Venue[] {
+  let result = [...venues];
+  if (filters.options.includes('Open now')) result = result.filter(v => v.is_open);
+  if (filters.options.includes('Top rated')) result = result.sort((a, b) => b.rating - a.rating);
+  if (filters.serviceTypes.length > 0) {
+    result = result.filter(v => filters.serviceTypes.some(t => v.category?.toLowerCase().includes(t.toLowerCase())));
+  }
+  return result;
+}
 
 const { width: screenWidth } = Dimensions.get('window');
 const CAROUSEL_CARD_WIDTH = screenWidth * 0.44;
@@ -223,6 +248,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const [activeCategory, setActiveCategory] = useState('all');
+  const [allVenues, setAllVenues] = useState<Venue[]>([]);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [barbers, setBarbers] = useState<Barber[]>(MOCK_BARBERS);
   const [reels, setReels] = useState<ReelItem[]>(MOCK_REELS);
@@ -243,6 +269,14 @@ export default function HomeScreen() {
     fetchData();
   }, [user]);
 
+  useEffect(() => {
+    return filterStore.subscribe(() => {
+      const f = filterStore.get();
+      console.log('[Home] Filter changed, applying:', f);
+      setVenues(applyFilters(allVenues, f));
+    });
+  }, [allVenues]);
+
   const fetchData = async () => {
     console.log('[Home] Fetching barbershops, barbers, posts, bookings from Supabase');
     setLoading(true);
@@ -250,7 +284,7 @@ export default function HomeScreen() {
       const promises: Promise<any>[] = [
         supabase
           .from('barbershops')
-          .select('id, name, category, rating_avg, address, cover_url, logo_url, lat, lng, is_active, status')
+          .select('id, name, category, rating_avg, address, cover_url, logo_url, lat, lng, is_active, status, opening_hours')
           .eq('status', 'approved')
           .eq('is_active', true)
           .limit(10),
@@ -287,10 +321,11 @@ export default function HomeScreen() {
 
       if (venuesRes.error || !venuesRes.data || venuesRes.data.length === 0) {
         console.log('[Home] Using mock venues:', venuesRes.error?.message);
-        setVenues(MOCK_VENUES);
+        setAllVenues(MOCK_VENUES);
+        setVenues(applyFilters(MOCK_VENUES, filterStore.get()));
       } else {
         console.log('[Home] Loaded', venuesRes.data.length, 'barbershops');
-        setVenues(venuesRes.data.map((b: any) => ({
+        const mapped: Venue[] = venuesRes.data.map((b: any) => ({
           id: b.id,
           name: b.name,
           category: b.category ?? 'Barber',
@@ -301,8 +336,10 @@ export default function HomeScreen() {
           image_url: getPublicUrl(b.cover_url) ?? getPublicUrl(b.logo_url, 'avatars') ?? 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800',
           logo_url: getPublicUrl(b.logo_url, 'avatars') ?? undefined,
           starting_price: 5,
-          is_open: b.is_active,
-        })));
+          is_open: isVenueOpenNow(b.opening_hours) || b.is_active,
+        }));
+        setAllVenues(mapped);
+        setVenues(applyFilters(mapped, filterStore.get()));
       }
 
       if (barbersRes.error || !barbersRes.data || barbersRes.data.length === 0) {

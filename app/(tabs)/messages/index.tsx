@@ -26,11 +26,6 @@ interface Conversation {
   unread: number;
 }
 
-const MOCK_CONVERSATIONS: Conversation[] = [
-  { id: '11111111-1111-1111-1111-111111111111', venue_name: 'Level Barber Shop', avatar: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=100', last_message: 'Your appointment is confirmed for tomorrow at 7:25 AM', timestamp: '2h ago', unread: 2 },
-  { id: '22222222-2222-2222-2222-222222222222', venue_name: 'The Groom Room', avatar: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=100', last_message: 'Thank you for your visit! We hope to see you again.', timestamp: 'Yesterday', unread: 0 },
-  { id: '33333333-3333-3333-3333-333333333333', venue_name: 'Luxe Spa & Wellness', avatar: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=100', last_message: 'We have a special offer for you this weekend!', timestamp: 'Mon', unread: 1 },
-];
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: '' };
@@ -71,7 +66,7 @@ export default function MessagesScreen() {
   }, [user]);
 
   const fetchConversations = async () => {
-    console.log('[Messages] Fetching conversations from Supabase (hallaq), user:', user?.id);
+    console.log('[Messages] Fetching conversations from Supabase, user:', user?.id);
     if (!user) {
       setConversations([]);
       setLoading(false);
@@ -80,51 +75,37 @@ export default function MessagesScreen() {
     try {
       const { data: msgs, error } = await supabase
         .from('messages')
-        .select('id, venue_id, text, created_at, sender_id, is_from_venue')
-        .or(`sender_id.eq.${user.id},is_from_venue.eq.true`)
+        .select('id, venue_id, text, created_at, is_from_venue, client_id, sender_id')
+        .or(`sender_id.eq.${user.id},client_id.eq.${user.id}`)
         .order('created_at', { ascending: false })
-        .limit(100);
+        .limit(200);
 
-      if (error) {
-        console.log('[Messages] Messages fetch error:', error.message);
+      if (error || !msgs || msgs.length === 0) {
+        console.log('[Messages] No messages found for user:', error?.message);
         setConversations([]);
-        return;
-      }
-
-      if (!msgs || msgs.length === 0) {
-        console.log('[Messages] No messages found for user');
-        setConversations([]);
+        setLoading(false);
         return;
       }
 
       console.log('[Messages] Loaded', msgs.length, 'messages, fetching shop details');
       const venueIds = [...new Set(msgs.map((m: any) => m.venue_id).filter(Boolean))] as string[];
 
-      const { data: shops, error: shopsError } = await supabase
+      const { data: shops } = await supabase
         .from('barbershops')
         .select('id, name, cover_url')
         .in('id', venueIds);
 
-      if (shopsError) {
-        console.log('[Messages] Shops fetch error:', shopsError.message);
-      }
-
       const shopMap: Record<string, { name: string; cover_url: string }> = {};
-      if (shops) {
-        for (const shop of shops) {
-          shopMap[shop.id] = { name: shop.name, cover_url: shop.cover_url ?? '' };
-        }
-      }
+      for (const shop of (shops ?? [])) shopMap[shop.id] = shop;
 
       const seen = new Set<string>();
       const convs: Conversation[] = [];
       for (const msg of msgs) {
-        const venueId: string = msg.venue_id;
-        if (!venueId || seen.has(venueId)) continue;
-        seen.add(venueId);
-        const shop = shopMap[venueId];
+        if (!msg.venue_id || seen.has(msg.venue_id)) continue;
+        seen.add(msg.venue_id);
+        const shop = shopMap[msg.venue_id];
         convs.push({
-          id: venueId,
+          id: msg.venue_id,
           venue_name: shop?.name ?? 'Venue',
           avatar: shop?.cover_url ?? '',
           last_message: msg.text ?? '',

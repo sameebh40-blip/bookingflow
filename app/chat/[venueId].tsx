@@ -48,7 +48,7 @@ export default function ChatScreen() {
         (payload) => {
           const msg = payload.new as any;
           console.log('[Chat] Realtime message received:', msg.id, 'from_venue:', msg.is_from_venue);
-          if (msg.sender_id === user?.id || msg.is_from_venue === true) {
+          if (msg.sender_id === user?.id || msg.is_from_venue === true || msg.client_id === user?.id) {
             setMessages(prev => [...prev, msg as Message]);
             setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
           }
@@ -84,7 +84,7 @@ export default function ChatScreen() {
         .order('created_at', { ascending: true });
 
       if (user) {
-        query = query.or(`sender_id.eq.${user.id},is_from_venue.eq.true`);
+        query = query.or(`sender_id.eq.${user.id},is_from_venue.eq.true,client_id.eq.${user.id}`);
       }
 
       const { data, error } = await query;
@@ -127,6 +127,7 @@ export default function ChatScreen() {
       const { error } = await supabase.from('messages').insert({
         venue_id: venueId,
         sender_id: user?.id ?? null,
+        client_id: user?.id ?? null,
         text,
         is_from_venue: false,
       });

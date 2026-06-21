@@ -10,6 +10,7 @@ import { useRouter } from 'expo-router';
 import { X } from 'lucide-react-native';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { filterStore } from '@/utils/filterStore';
 
 const OPTIONS = [
   'Open now', 'Top rated', 'New venues', 'Instant booking',
@@ -33,7 +34,9 @@ export default function FilterOptionsScreen() {
   }, []);
 
   const handleApply = useCallback(() => {
-    console.log('[FilterOptions] Apply pressed, selected:', Array.from(selected));
+    const selectedArr = Array.from(selected);
+    console.log('[FilterOptions] Apply pressed, selected:', selectedArr);
+    filterStore.setOptions(selectedArr);
     router.back();
   }, [selected, router]);
 

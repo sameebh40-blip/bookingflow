@@ -114,6 +114,20 @@ const DAY_KEY_MAP: Record<string, string> = {
   'Sunday': '0',
 };
 
+function isVenueOpenNow(openingHours?: Record<string, { open: string; close: string; enabled: boolean }>): boolean {
+  if (!openingHours) return false;
+  const now = new Date();
+  const dayIndex = now.getDay();
+  const dayHours = openingHours[String(dayIndex)];
+  if (!dayHours?.enabled) return false;
+  const [openH, openM] = dayHours.open.split(':').map(Number);
+  const [closeH, closeM] = dayHours.close.split(':').map(Number);
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const openMinutes = openH * 60 + openM;
+  const closeMinutes = closeH * 60 + closeM;
+  return nowMinutes >= openMinutes && nowMinutes < closeMinutes;
+}
+
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: '' };
   if (typeof source === 'string') return { uri: source };
@@ -189,6 +203,7 @@ export default function VenueDetailScreen() {
       } else {
         const data = venueRes.data;
         coverUrl = data.cover_url ?? coverUrl;
+        const openNow = isVenueOpenNow(data.opening_hours ?? undefined);
         setVenue({
           id: data.id,
           name: data.name,
@@ -199,7 +214,7 @@ export default function VenueDetailScreen() {
           address: data.address ?? '',
           image_url: coverUrl,
           description: data.description ?? '',
-          is_open: data.is_active,
+          is_open: openNow || data.is_active,
           open_until: '21:00',
           starting_price: 5,
           opening_hours: data.opening_hours ?? undefined,

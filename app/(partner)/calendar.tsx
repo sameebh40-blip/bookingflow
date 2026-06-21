@@ -500,6 +500,19 @@ function PartnerCalendarInner({ router: expoRouter }: { router: ReturnType<typeo
     setDetailTab('details');
   }, []);
 
+  // ── Accept / Decline handler ──
+  const handleUpdateBookingStatus = useCallback(async (bookingId: string, newStatus: 'confirmed' | 'cancelled') => {
+    console.log('[Calendar] Updating booking status:', bookingId, '->', newStatus);
+    const { error } = await supabase.from('bookings').update({ status: newStatus }).eq('id', bookingId);
+    if (error) {
+      console.log('[Calendar] Status update error:', error.message);
+      return;
+    }
+    setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: newStatus } : b));
+    setSelectedBooking(null);
+    console.log('[Calendar] Booking status updated successfully');
+  }, []);
+
   if (!navState?.key) {
     return (
       <View style={{ flex: 1, backgroundColor: '#0F0F1A', alignItems: 'center', justifyContent: 'center' }}>
@@ -1204,6 +1217,29 @@ function PartnerCalendarInner({ router: expoRouter }: { router: ReturnType<typeo
                 </View>
               )}
             </ScrollView>
+
+            {selectedBooking?.status === 'pending' && (
+              <View style={{ flexDirection: 'row', gap: 10, marginHorizontal: 20, marginBottom: 12 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: '#4CAF7D', borderRadius: 10, paddingVertical: 12, alignItems: 'center' }}
+                  onPress={() => {
+                    console.log('[Calendar] Accept booking pressed:', selectedBooking.id);
+                    handleUpdateBookingStatus(selectedBooking.id, 'confirmed');
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>✓ Accept</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: '#E85454', borderRadius: 10, paddingVertical: 12, alignItems: 'center' }}
+                  onPress={() => {
+                    console.log('[Calendar] Decline booking pressed:', selectedBooking.id);
+                    handleUpdateBookingStatus(selectedBooking.id, 'cancelled');
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>✕ Decline</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             <View style={styles.sheetFooter}>
               <TouchableOpacity

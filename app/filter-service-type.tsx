@@ -10,6 +10,7 @@ import { useRouter } from 'expo-router';
 import { X } from 'lucide-react-native';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { filterStore } from '@/utils/filterStore';
 
 const SERVICE_TYPES = [
   'Haircut', 'Beard trim', 'Shave', 'Fade', 'Coloring',
@@ -35,7 +36,9 @@ export default function FilterServiceTypeScreen() {
   }, []);
 
   const handleApply = useCallback(() => {
-    console.log('[FilterServiceType] Apply pressed, selected:', Array.from(selected));
+    const selectedArr = Array.from(selected);
+    console.log('[FilterServiceType] Apply pressed, selected:', selectedArr);
+    filterStore.setServiceTypes(selectedArr);
     router.back();
   }, [selected, router]);
 

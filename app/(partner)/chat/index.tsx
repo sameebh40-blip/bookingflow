@@ -75,9 +75,10 @@ export default function PartnerChatList() {
         .eq('venue_id', shopId)
         .order('created_at', { ascending: false });
 
+      const allMsgs = (msgs ?? []) as Message[];
+      const clientMsgs = allMsgs.filter(m => !m.is_from_venue && m.sender_id);
       const grouped = new Map<string, Message[]>();
-      for (const m of (msgs ?? []) as Message[]) {
-        if (m.is_from_venue) continue;
+      for (const m of clientMsgs) {
         if (!grouped.has(m.sender_id)) grouped.set(m.sender_id, []);
         grouped.get(m.sender_id)!.push(m);
       }
