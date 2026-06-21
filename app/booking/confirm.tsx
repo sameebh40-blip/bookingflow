@@ -204,6 +204,19 @@ export default function BookingConfirmScreen() {
           console.log('[Booking/Confirm] Supabase insert error (non-fatal):', error.message);
         } else {
           console.log('[Booking/Confirm] Booking saved to Supabase (hallaq)');
+          // Auto-send confirmation message from venue to client
+          const confirmMsg = `✅ Booking confirmed! Your appointment at ${shopName} is scheduled for ${dateDisplay} at ${timeDisplay}. We look forward to seeing you!`;
+          const { error: msgErr } = await supabase.from('messages').insert({
+            venue_id: venueId,
+            sender_id: null,
+            text: confirmMsg,
+            is_from_venue: true,
+          });
+          if (msgErr) {
+            console.log('[Booking/Confirm] Could not insert confirmation message:', msgErr.message);
+          } else {
+            console.log('[Booking/Confirm] Auto-confirmation message sent to messages table');
+          }
         }
       }
       setConfirmed(true);
@@ -213,7 +226,7 @@ export default function BookingConfirmScreen() {
     } finally {
       setLoading(false);
     }
-  }, [user, venueId, serviceIds, staffId, date, time, totalPrice]);
+  }, [user, venueId, serviceIds, staffId, date, time, totalPrice, shopName, dateDisplay, timeDisplay]);
 
   const handleViewBookings = useCallback(() => {
     console.log('[Booking/Confirm] View Booking pressed, navigating to bookings');

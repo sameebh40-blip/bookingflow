@@ -137,10 +137,6 @@ export default function OnlineBooking() {
     console.log('[OnlineBooking] View all activity pressed');
   };
 
-  const handleIntegrationSetup = (name: string) => {
-    console.log('[OnlineBooking] Integration setup pressed:', name);
-  };
-
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
@@ -273,60 +269,6 @@ export default function OnlineBooking() {
           })}
         </View>
 
-        {/* Add-ons and integrations */}
-        <View style={styles.sectionBlock}>
-          <Text style={styles.sectionTitle}>Add-ons and integrations</Text>
-          <Text style={styles.sectionSubtitle}>
-            Boost your online profile by activating add-ons and integrations
-          </Text>
-
-          <View style={styles.integrationsCard}>
-            {/* Google Ratings Boost */}
-            <View style={styles.integrationRow}>
-              <View style={[styles.integrationIcon, { backgroundColor: '#FEF3C7' }]}>
-                <Text style={{ fontSize: 16 }}>⭐</Text>
-              </View>
-              <Text style={styles.integrationLabel}>Google Ratings Boost</Text>
-              <TouchableOpacity
-                style={styles.setupPill}
-                onPress={() => handleIntegrationSetup('Google Ratings Boost')}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.setupPillText}>Set up</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.integrationDivider} />
-
-            {/* Google Reserve */}
-            <View style={styles.integrationRow}>
-              <View style={[styles.integrationIcon, { backgroundColor: '#EFF6FF' }]}>
-                <Text style={{ fontSize: 15, color: '#4285F4', fontWeight: '800' }}>G</Text>
-              </View>
-              <Text style={styles.integrationLabel}>Google Reserve</Text>
-              <View style={styles.activePill}>
-                <Text style={styles.activePillText}>Active</Text>
-              </View>
-            </View>
-
-            <View style={styles.integrationDivider} />
-
-            {/* Facebook and Instagram */}
-            <View style={styles.integrationRow}>
-              <View style={[styles.integrationIcon, { backgroundColor: '#EFF6FF' }]}>
-                <Text style={{ fontSize: 15, color: '#1877F2', fontWeight: '800' }}>f</Text>
-              </View>
-              <Text style={styles.integrationLabel}>Facebook and Instagram</Text>
-              <TouchableOpacity
-                style={styles.setupPill}
-                onPress={() => handleIntegrationSetup('Facebook and Instagram')}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.setupPillText}>Set up</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
       </ScrollView>
     </View>
   );
@@ -536,60 +478,5 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: F.border,
     marginLeft: 60,
-  },
-  integrationsCard: {
-    backgroundColor: F.surface,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: F.border,
-    overflow: 'hidden',
-  },
-  integrationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 12,
-  },
-  integrationIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  integrationLabel: {
-    flex: 1,
-    color: F.text,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  integrationDivider: {
-    height: 1,
-    backgroundColor: F.border,
-    marginHorizontal: 16,
-  },
-  setupPill: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: F.border,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  setupPillText: {
-    color: F.text,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  activePill: {
-    borderRadius: 999,
-    backgroundColor: F.greenBg,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  activePillText: {
-    color: F.green,
-    fontSize: 12,
-    fontWeight: '700',
   },
 });

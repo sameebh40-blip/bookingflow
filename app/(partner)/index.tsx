@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Bell, Plus, Calendar, TrendingUp, Clock, CheckCircle, XCircle, AlertCircle, ChevronRight } from 'lucide-react-native';
+import { MessageCircle, Plus, Calendar, TrendingUp, Clock, CheckCircle, XCircle, AlertCircle, ChevronRight } from 'lucide-react-native';
 import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
@@ -229,6 +229,16 @@ export default function PartnerHome() {
         const customerName = newBooking.customer_name ?? 'A client';
         showToast(`New booking from ${customerName}!`);
         playBeep();
+        // Insert a system message so partner can see it in messages
+        supabase.from('messages').insert({
+          venue_id: shopId,
+          sender_id: newBooking.customer_profile_id ?? null,
+          text: `📅 New booking from ${customerName}! Check your schedule.`,
+          is_from_venue: false,
+        }).then(({ error: msgErr }) => {
+          if (msgErr) console.log('[PartnerHome] Could not insert booking notification message:', msgErr.message);
+          else console.log('[PartnerHome] Booking notification message inserted for venue:', shopId);
+        });
       })
       .subscribe();
 
@@ -278,8 +288,14 @@ export default function PartnerHome() {
           <Text style={styles.greeting}>{greetingText}, {firstName}</Text>
           <Text style={styles.shopSubtitle}>Partner Dashboard</Text>
         </View>
-        <TouchableOpacity style={styles.bellBtn} onPress={() => console.log('[PartnerHome] Bell pressed')}>
-          <Bell size={20} color={P.text} />
+        <TouchableOpacity
+          style={styles.bellBtn}
+          onPress={() => {
+            console.log('[PartnerHome] Messages icon pressed');
+            router.push('/(partner)/chat' as never);
+          }}
+        >
+          <MessageCircle size={20} color={P.text} />
         </TouchableOpacity>
       </View>
 

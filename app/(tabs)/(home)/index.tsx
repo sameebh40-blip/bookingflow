@@ -28,6 +28,7 @@ import {
   Star,
   RefreshCw,
   Play,
+  MessageCircle,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MADAR_COLORS } from '@/constants/Colors';
@@ -425,11 +426,22 @@ export default function HomeScreen() {
     >
       {/* Header */}
       <View style={styles.header}>
-        <AnimatedPressable onPress={() => console.log('[Home] Location pressed')} style={styles.locationRow}>
-          <MapPin size={16} color={MADAR_COLORS.gold} strokeWidth={2} />
-          <Text style={styles.locationText}>Current location</Text>
-          <ChevronDown size={14} color={MADAR_COLORS.textSecondary} />
-        </AnimatedPressable>
+        <View style={styles.headerTopRow}>
+          <AnimatedPressable onPress={() => console.log('[Home] Location pressed')} style={styles.locationRow}>
+            <MapPin size={16} color={MADAR_COLORS.gold} strokeWidth={2} />
+            <Text style={styles.locationText}>Current location</Text>
+            <ChevronDown size={14} color={MADAR_COLORS.textSecondary} />
+          </AnimatedPressable>
+          <AnimatedPressable
+            onPress={() => {
+              console.log('[Home] Messages icon pressed');
+              router.push('/(tabs)/messages');
+            }}
+            style={styles.headerIconBtn}
+          >
+            <MessageCircle size={22} color={MADAR_COLORS.text} strokeWidth={1.8} />
+          </AnimatedPressable>
+        </View>
 
         <Text style={styles.greeting}>{greetingText}</Text>
 
@@ -628,11 +640,22 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: 20,
   },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  headerIconBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 12,
   },
   locationText: {
     fontSize: 14,

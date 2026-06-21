@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ChevronLeft, X, Plus, Image as ImageIcon, ChevronRight } from 'lucide-react-native';
+import { ChevronLeft, X, Plus, Image as ImageIcon, ChevronRight, Camera } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/utils/supabase';
@@ -42,7 +42,7 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
 
 const PREVIEW_TABS = ['Profile', 'Portfolio', 'Reviews', 'Workspaces'];
 
-function VenuePreviewCard({ images }: { images: string[] }) {
+function VenuePreviewCard({ images, onCoverPress }: { images: string[]; onCoverPress?: () => void }) {
   return (
     <View style={styles.previewCard}>
       <View style={styles.previewTabBar}>
@@ -55,7 +55,17 @@ function VenuePreviewCard({ images }: { images: string[] }) {
         ))}
       </View>
 
-      <View style={styles.coverSlot}>
+      <TouchableOpacity
+        style={styles.coverSlot}
+        onPress={() => {
+          if (onCoverPress) {
+            console.log('[ObImages] Cover slot tapped — replace cover');
+            onCoverPress();
+          }
+        }}
+        activeOpacity={onCoverPress ? 0.8 : 1}
+        disabled={!onCoverPress}
+      >
         {images[0] ? (
           <Image source={resolveImageSource(images[0])} style={styles.coverImage} />
         ) : (
@@ -66,7 +76,13 @@ function VenuePreviewCard({ images }: { images: string[] }) {
         <View style={styles.coverBadge}>
           <Text style={styles.coverBadgeText}>Cover image</Text>
         </View>
-      </View>
+        {onCoverPress && (
+          <View style={styles.replaceCoverOverlay}>
+            <Camera size={14} color="#fff" />
+            <Text style={styles.replaceCoverText}>Replace cover</Text>
+          </View>
+        )}
+      </TouchableOpacity>
 
       <View style={styles.thumbGrid}>
         {[0, 1].map((col) => (
@@ -130,6 +146,28 @@ export default function ObImages() {
     setModalVisible(true);
   };
 
+  const uploadImageAsset = async (uri: string): Promise<string | null> => {
+    try {
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      const fileName = `venue/${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
+      console.log('[ObImages] Uploading image to shop-covers:', fileName);
+      const { data, error } = await supabase.storage
+        .from('shop-covers')
+        .upload(fileName, blob, { contentType: 'image/jpeg', upsert: true });
+      if (error) {
+        console.log('[ObImages] Upload error:', error.message);
+        return null;
+      }
+      const { data: urlData } = supabase.storage.from('shop-covers').getPublicUrl(data.path);
+      console.log('[ObImages] Image uploaded, url:', urlData.publicUrl);
+      return urlData.publicUrl;
+    } catch (err) {
+      console.log('[ObImages] Unexpected upload error:', err);
+      return null;
+    }
+  };
+
   const pickAndUploadImage = async () => {
     console.log('[ObImages] Pick image pressed');
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -149,24 +187,38 @@ export default function ObImages() {
     console.log('[ObImages] Images selected, count:', result.assets.length);
     setUploading(true);
     for (const asset of result.assets) {
-      try {
-        const response = await fetch(asset.uri);
-        const blob = await response.blob();
-        const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
-        console.log('[ObImages] Uploading image:', fileName);
-        const { data, error } = await supabase.storage
-          .from('venue-images')
-          .upload(fileName, blob, { contentType: 'image/jpeg', upsert: true });
-        if (error) {
-          console.log('[ObImages] Upload error:', error.message);
-        } else {
-          const { data: urlData } = supabase.storage.from('venue-images').getPublicUrl(data.path);
-          console.log('[ObImages] Image uploaded, url:', urlData.publicUrl);
-          setEditImages((prev) => [...prev, urlData.publicUrl]);
-        }
-      } catch (err) {
-        console.log('[ObImages] Unexpected upload error:', err);
+      const url = await uploadImageAsset(asset.uri);
+      if (url) {
+        setEditImages((prev) => [...prev, url]);
       }
+    }
+    setUploading(false);
+  };
+
+  const pickAndUploadCover = async () => {
+    console.log('[ObImages] Pick cover image pressed');
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      console.log('[ObImages] Media library permission denied');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.9,
+      allowsMultipleSelection: false,
+    });
+    if (result.canceled) {
+      console.log('[ObImages] Cover picker cancelled');
+      return;
+    }
+    setUploading(true);
+    const url = await uploadImageAsset(result.assets[0].uri);
+    if (url) {
+      setEditImages((prev) => {
+        const updated = [...prev];
+        updated[0] = url;
+        return updated;
+      });
     }
     setUploading(false);
   };
@@ -180,15 +232,19 @@ export default function ObImages() {
     if (!profile?.shop_id) return;
     console.log('[ObImages] Save images pressed, count:', editImages.length);
     setSaving(true);
+    const updatePayload: Record<string, unknown> = { venue_images: editImages };
+    if (editImages.length > 0) {
+      updatePayload.cover_url = editImages[0];
+    }
     const { error } = await supabase
       .from('barbershops')
-      .update({ venue_images: editImages } as never)
+      .update(updatePayload as never)
       .eq('id', profile.shop_id);
     setSaving(false);
     if (error) {
-      console.log('[ObImages] Error saving images (venue_images column may not exist):', error.message);
+      console.log('[ObImages] Error saving images:', error.message);
     } else {
-      console.log('[ObImages] Images saved successfully');
+      console.log('[ObImages] Images saved successfully, cover_url updated to:', editImages[0] ?? 'none');
       setImages(editImages);
       setModalVisible(false);
     }
@@ -294,7 +350,7 @@ export default function ObImages() {
                 File type .jpg, .png • minimum dimensions 916 x 500 pixels • max size 10 MB
               </Text>
 
-              <VenuePreviewCard images={editImages} />
+              <VenuePreviewCard images={editImages} onCoverPress={pickAndUploadCover} />
 
               <View style={styles.editThumbGrid}>
                 {editImages.map((img, idx) => (
@@ -307,6 +363,11 @@ export default function ObImages() {
                     >
                       <X size={10} color="#fff" />
                     </TouchableOpacity>
+                    {idx === 0 && (
+                      <View style={styles.coverThumbBadge}>
+                        <Text style={styles.coverThumbBadgeText}>Cover</Text>
+                      </View>
+                    )}
                   </View>
                 ))}
                 {editImages.length < 10 && (
@@ -458,6 +519,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
   },
+  replaceCoverOverlay: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: P.accent,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  replaceCoverText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '600',
+  },
   thumbGrid: {
     flexDirection: 'row',
     padding: 8,
@@ -600,6 +678,20 @@ const styles = StyleSheet.create({
   minError: {
     color: P.danger,
     fontSize: 12,
+  },
+  coverThumbBadge: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    backgroundColor: P.accent,
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  coverThumbBadgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '700',
   },
   modalFooter: {
     paddingHorizontal: 20,
