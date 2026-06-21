@@ -32,6 +32,7 @@ import {
   X,
   ChevronRight,
   ArrowUp,
+  Video,
 } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/utils/supabase';
@@ -204,6 +205,7 @@ export default function PartnerMore() {
     { label: 'Home', icon: <Home size={18} color={P.accent} />, onPress: () => navigate('/(partner)') },
     { label: 'Clients', icon: <Users size={18} color={P.accent} />, onPress: () => navigate('/(partner)/clients') },
     { label: 'Online booking', icon: <Globe size={18} color={P.accent} />, onPress: () => navigate('/(partner)/online-booking') },
+    { label: 'Upload Reel', icon: <Video size={18} color={P.accent} />, onPress: () => navigate('/(partner)/posts') },
     { label: 'Catalog', icon: <BookOpen size={18} color={P.accent} />, onPress: () => navigate('/(partner)/catalog') },
     { label: 'Marketing', icon: <Megaphone size={18} color={P.accent} />, onPress: () => showToast('Coming soon') },
     { label: 'Team', icon: <UserCheck size={18} color={P.accent} />, onPress: () => navigate('/(partner)/team') },

@@ -846,7 +846,8 @@ export default function VenueDetailScreen() {
         <AnimatedPressable
           onPress={() => {
             console.log('[VenueDetail] Message pressed, venue:', id);
-            router.push(`/chat/${id}`);
+            const venueId = Array.isArray(id) ? id[0] : id;
+            router.push(`/chat/${venueId}` as never);
           }}
           style={styles.messageBtn}
         >
