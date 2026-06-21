@@ -312,7 +312,7 @@ const DateColHeader = React.memo(({ col, colWidth, isToday, isSelected, onPress 
   </TouchableOpacity>
 ));
 
-export default function PartnerCalendar() {
+function PartnerCalendarInner() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const safePush = React.useCallback((href: string) => {
@@ -320,9 +320,6 @@ export default function PartnerCalendar() {
   }, [router]);
   const { profile } = useAuth();
   const shopId = profile?.shop_id;
-
-  const [mounted, setMounted] = React.useState(false);
-  React.useEffect(() => { setMounted(true); }, []);
 
   const [calView, setCalView] = useState<'day' | '3day' | 'week' | 'month'>('day');
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -826,14 +823,6 @@ export default function PartnerCalendar() {
       ))}
     </ScrollView>
   );
-
-  if (!mounted) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#0F0F1A', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color="#7C3AED" size="large" />
-      </View>
-    );
-  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -1698,3 +1687,16 @@ const styles = StyleSheet.create({
   pickerDayNumToday: { color: P.accent, fontWeight: '700' },
   pickerDayNumSelected: { color: '#fff', fontWeight: '700' },
 });
+
+export default function PartnerCalendar() {
+  const [ready, setReady] = React.useState(false);
+  React.useEffect(() => { setReady(true); }, []);
+  if (!ready) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#0F0F1A', alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color="#7C3AED" size="large" />
+      </View>
+    );
+  }
+  return <PartnerCalendarInner />;
+}
