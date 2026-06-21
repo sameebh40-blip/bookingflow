@@ -25,6 +25,7 @@ import {
   Tag,
   Plus,
   LayoutGrid,
+  ShoppingBag,
 } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -59,6 +60,7 @@ const SIDEBAR_ITEMS = [
   { route: '/(partner)/more', label: 'More', icon: Grid3x3 },
   { route: '/(partner)/portal', label: 'Portal', icon: LayoutGrid },
   { route: '/(partner)/analytics', label: 'Analytics', icon: BarChart2 },
+  { label: 'POS', icon: ShoppingBag, route: '/(partner)/pos' },
 ];
 
 const MOBILE_TABS = [
@@ -194,6 +196,9 @@ export default function PartnerLayout() {
             <Stack.Screen name="profile" />
             <Stack.Screen name="portal" />
             <Stack.Screen name="analytics" />
+            <Stack.Screen name="pos/index" />
+            <Stack.Screen name="pos/new" />
+            <Stack.Screen name="pos/[id]" />
           </Stack>
         </View>
       </View>
@@ -223,6 +228,9 @@ export default function PartnerLayout() {
           <Stack.Screen name="profile" />
           <Stack.Screen name="portal" />
           <Stack.Screen name="analytics" />
+          <Stack.Screen name="pos/index" />
+          <Stack.Screen name="pos/new" />
+          <Stack.Screen name="pos/[id]" />
         </Stack>
       </View>
       {/* Bottom tab bar */}
