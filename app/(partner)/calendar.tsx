@@ -16,7 +16,7 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router as expoRouter, useRootNavigationState } from 'expo-router';
+import { useRootNavigationState, useRouter } from 'expo-router';
 import {
   CalendarDays,
   Tag,
@@ -327,6 +327,7 @@ const DateColHeader = React.memo(({ col, colWidth, isToday, isSelected, onPress 
 ));
 
 function PartnerCalendarInner() {
+  const expoRouter = useRouter();
   const insets = useSafeInsets();
   const { profile } = useAuth();
   const shopId = profile?.shop_id;
@@ -386,6 +387,8 @@ function PartnerCalendarInner() {
   }, []);
 
   useEffect(() => { setClientReady(true); }, []);
+
+  const navState = useRootNavigationState();
 
   const nowTop = ((nowMinutes - START_HOUR * 60) / 60) * HOUR_HEIGHT;
   const nowHour = Math.floor(nowMinutes / 60);
@@ -497,6 +500,14 @@ function PartnerCalendarInner() {
     setSelectedBooking(b);
     setDetailTab('details');
   }, []);
+
+  if (!navState?.key) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#0F0F1A', alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color="#7C3AED" size="large" />
+      </View>
+    );
+  }
 
   if (!clientReady) {
     return (
