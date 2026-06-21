@@ -557,6 +557,14 @@ function PartnerCalendarInner() {
     setSelectedDate(d);
   };
 
+  if (!clientReady) {
+    return (
+      <View style={{ flex: 1, backgroundColor: P.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={P.accent} size="large" />
+      </View>
+    );
+  }
+
   // ── Filtered bookings ──
   const filteredBookings = selectedBarberId
     ? bookings.filter(b => b.barber_id === selectedBarberId)
@@ -829,14 +837,6 @@ function PartnerCalendarInner() {
       ))}
     </ScrollView>
   );
-
-  if (!clientReady) {
-    return (
-      <View style={{ flex: 1, backgroundColor: P.bg, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color={P.accent} size="large" />
-      </View>
-    );
-  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
