@@ -114,12 +114,18 @@ export default function PartnerNotifications() {
       return;
     }
     setLoading(true);
+    if (!profile?.id) {
+      console.log('[Notifications] No profile.id yet, showing demo notifications');
+      setNotifications(DEMO_NOTIFICATIONS);
+      setLoading(false);
+      return;
+    }
     console.log('[Notifications] fetchNotifications called, shopId:', shopId);
     try {
       const { data, error } = await supabase
         .from('notifications')
         .select('*')
-        .eq('profile_id', profile?.id ?? '')
+        .eq('profile_id', profile.id)
         .order('created_at', { ascending: false })
         .limit(50);
       console.log('[Notifications] fetchNotifications result:', data?.length, 'items, error:', error?.message);
