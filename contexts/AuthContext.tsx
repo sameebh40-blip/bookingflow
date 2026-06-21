@@ -108,7 +108,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         full_name: user.user_metadata?.full_name ?? '',
         role: role,
         updated_at: new Date().toISOString(),
-      }, { onConflict: 'id', ignoreDuplicates: true });
+      }, { onConflict: 'id' });
       if (error) console.log('[Auth] Profile upsert error (non-fatal):', error.message);
       else console.log('[Auth] Profile upserted successfully');
     } catch (err) {

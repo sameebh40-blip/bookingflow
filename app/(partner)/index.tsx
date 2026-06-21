@@ -314,112 +314,113 @@ export default function PartnerHome() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
-        {/* Setup required card when no shop_id */}
-        {isDemo && !shopId && (
-          <View style={{ margin: 20, padding: 20, backgroundColor: P.surface, borderRadius: 16, borderWidth: 1, borderColor: P.gold, gap: 12 }}>
-            <Text style={{ color: P.gold, fontSize: 16, fontWeight: '700' }}>⚠️ Setup Required</Text>
-            <Text style={{ color: P.textSecondary, fontSize: 14, lineHeight: 20 }}>
-              Your shop profile is not linked to your account. Please complete the onboarding setup to activate your dashboard.
-            </Text>
-            <AnimatedPressable
-              onPress={() => {
-                console.log('[PartnerHome] Complete Setup button pressed');
-                router.push('/(partner)/ob-welcome' as never);
-              }}
-              style={{ backgroundColor: P.gold, borderRadius: 12, paddingVertical: 12, alignItems: 'center' }}
-            >
-              <Text style={{ color: '#000', fontWeight: '700', fontSize: 15 }}>Complete Setup →</Text>
-            </AnimatedPressable>
-          </View>
-        )}
-
-        {/* Stat cards */}
-        <View style={styles.statsRow}>
-          <View style={styles.statsHeader}>
-            <Text style={styles.statsTitle}>Today's overview</Text>
-            {isDemo && (
-              <View style={styles.demoBadge}>
-                <Text style={styles.demoBadgeText}>Demo data</Text>
-              </View>
-            )}
-          </View>
-          <View style={styles.statsCards}>
-            <StatCard label="Today's Revenue" value={`BHD ${revenueDisplay}`} icon={TrendingUp} color={P.gold} />
-            <StatCard label="Today" value={String(todayCount)} icon={Calendar} color={P.accent} />
-            <StatCard label="This Week" value={String(weekCountDisplay)} icon={Clock} color={P.success} />
-          </View>
+      {isDemo && !shopId ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 16 }}>
+          <Text style={{ color: P.gold, fontSize: 20, fontWeight: '700', textAlign: 'center' }}>Setup Required</Text>
+          <Text style={{ color: P.textSecondary, fontSize: 14, textAlign: 'center', lineHeight: 22 }}>
+            Your shop profile is not linked to your account. Complete onboarding to activate your dashboard.
+          </Text>
+          <AnimatedPressable
+            onPress={() => {
+              console.log('[PartnerHome] Complete Setup button pressed');
+              router.push('/(partner)/ob-welcome' as never);
+            }}
+            style={{ backgroundColor: P.gold, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 24 }}
+          >
+            <Text style={{ color: '#000', fontWeight: '700', fontSize: 15 }}>Complete Setup →</Text>
+          </AnimatedPressable>
         </View>
-
-        {/* Today's schedule */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Today's Schedule</Text>
-          {loading ? (
-            <View style={styles.loadingWrap}>
-              <ActivityIndicator color={P.accent} />
-            </View>
-          ) : displayBookings.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Calendar size={40} color={P.textTertiary} />
-              <Text style={styles.emptyStateTitle}>No bookings today</Text>
-              <Text style={styles.emptyStateSubtitle}>Enjoy your day!</Text>
-            </View>
-          ) : (
-            displayBookings.map((booking) => {
-              const timeText = formatTime(booking.start_at);
-              const clientName = booking.profiles?.full_name ?? booking.customer_name ?? 'Walk-in';
-              const barberName = booking.barbers?.display_name ?? 'Any';
-              const avatarUrl = booking.profiles?.avatar_url;
-              const initials = clientName.charAt(0).toUpperCase();
-              const priceText = `BHD ${Number(booking.total_price ?? booking.price_bhd ?? 0).toFixed(3)}`;
-
-              return (
-                <AnimatedPressable
-                  key={booking.id}
-                  onPress={() => {
-                    console.log('[PartnerHome] Booking tapped:', booking.id);
-                    if (!booking.id.startsWith('d')) {
-                      router.push(`/appointment/${booking.id}` as never);
-                    }
-                  }}
-                >
-                  <View style={styles.bookingRow}>
-                    <View style={styles.timePill}>
-                      <Text style={styles.timePillText}>{timeText}</Text>
-                    </View>
-                    {avatarUrl ? (
-                      <Image source={resolveImageSource(avatarUrl)} style={styles.clientAvatar} />
-                    ) : (
-                      <View style={styles.clientAvatarPlaceholder}>
-                        <Text style={styles.clientAvatarInitial}>{initials}</Text>
-                      </View>
-                    )}
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.clientName}>{clientName}</Text>
-                      <Text style={styles.barberName}>with {barberName}</Text>
-                    </View>
-                    <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                      <StatusBadge status={booking.status} />
-                      <Text style={styles.priceText}>{priceText}</Text>
-                    </View>
+      ) : (
+        <>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+            {/* Stat cards */}
+            <View style={styles.statsRow}>
+              <View style={styles.statsHeader}>
+                <Text style={styles.statsTitle}>Today's overview</Text>
+                {isDemo && (
+                  <View style={styles.demoBadge}>
+                    <Text style={styles.demoBadgeText}>Demo data</Text>
                   </View>
-                </AnimatedPressable>
-              );
-            })
-          )}
-        </View>
-      </ScrollView>
+                )}
+              </View>
+              <View style={styles.statsCards}>
+                <StatCard label="Today's Revenue" value={`BHD ${revenueDisplay}`} icon={TrendingUp} color={P.gold} />
+                <StatCard label="Today" value={String(todayCount)} icon={Calendar} color={P.accent} />
+                <StatCard label="This Week" value={String(weekCountDisplay)} icon={Clock} color={P.success} />
+              </View>
+            </View>
 
-      {/* FAB */}
-      <TouchableOpacity
-        style={[styles.fab, { bottom: insets.bottom + 80 }]}
-        onPress={() => {
-          console.log('[PartnerHome] FAB pressed — new booking');
-          router.push('/(partner)/new-booking' as never);
-        }}
-      >
-        <Plus size={24} color="#fff" />
-      </TouchableOpacity>
+            {/* Today's schedule */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Today's Schedule</Text>
+              {loading ? (
+                <View style={styles.loadingWrap}>
+                  <ActivityIndicator color={P.accent} />
+                </View>
+              ) : displayBookings.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Calendar size={40} color={P.textTertiary} />
+                  <Text style={styles.emptyStateTitle}>No bookings today</Text>
+                  <Text style={styles.emptyStateSubtitle}>Enjoy your day!</Text>
+                </View>
+              ) : (
+                displayBookings.map((booking) => {
+                  const timeText = formatTime(booking.start_at);
+                  const clientName = booking.profiles?.full_name ?? booking.customer_name ?? 'Walk-in';
+                  const barberName = booking.barbers?.display_name ?? 'Any';
+                  const avatarUrl = booking.profiles?.avatar_url;
+                  const initials = clientName.charAt(0).toUpperCase();
+                  const priceText = `BHD ${Number(booking.total_price ?? booking.price_bhd ?? 0).toFixed(3)}`;
+
+                  return (
+                    <AnimatedPressable
+                      key={booking.id}
+                      onPress={() => {
+                        console.log('[PartnerHome] Booking tapped:', booking.id);
+                        if (!booking.id.startsWith('d')) {
+                          router.push(`/appointment/${booking.id}` as never);
+                        }
+                      }}
+                    >
+                      <View style={styles.bookingRow}>
+                        <View style={styles.timePill}>
+                          <Text style={styles.timePillText}>{timeText}</Text>
+                        </View>
+                        {avatarUrl ? (
+                          <Image source={resolveImageSource(avatarUrl)} style={styles.clientAvatar} />
+                        ) : (
+                          <View style={styles.clientAvatarPlaceholder}>
+                            <Text style={styles.clientAvatarInitial}>{initials}</Text>
+                          </View>
+                        )}
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.clientName}>{clientName}</Text>
+                          <Text style={styles.barberName}>with {barberName}</Text>
+                        </View>
+                        <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                          <StatusBadge status={booking.status} />
+                          <Text style={styles.priceText}>{priceText}</Text>
+                        </View>
+                      </View>
+                    </AnimatedPressable>
+                  );
+                })
+              )}
+            </View>
+          </ScrollView>
+
+          {/* FAB */}
+          <TouchableOpacity
+            style={[styles.fab, { bottom: insets.bottom + 80 }]}
+            onPress={() => {
+              console.log('[PartnerHome] FAB pressed — new booking');
+              router.push('/(partner)/new-booking' as never);
+            }}
+          >
+            <Plus size={24} color="#fff" />
+          </TouchableOpacity>
+        </>
+      )}
     </View>
   );
 }
