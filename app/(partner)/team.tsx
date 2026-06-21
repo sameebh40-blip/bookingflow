@@ -9,6 +9,8 @@ import {
   Image,
   Modal,
   ImageSourcePropType,
+  TextInput,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -70,6 +72,9 @@ export default function PartnerTeam() {
   const [barbers, setBarbers] = useState<Barber[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInvite, setShowInvite] = useState(false);
+  const [addName, setAddName] = useState('');
+  const [addSpecialty, setAddSpecialty] = useState('');
+  const [addSaving, setAddSaving] = useState(false);
 
   const fetchBarbers = useCallback(async () => {
     if (!shopId) return;
@@ -163,21 +168,76 @@ export default function PartnerTeam() {
         <Plus size={24} color="#fff" />
       </TouchableOpacity>
 
-      {/* Invite modal */}
+      {/* Add Barber modal */}
       <Modal visible={showInvite} transparent animationType="slide" onRequestClose={() => setShowInvite(false)}>
         <View style={styles.sheetOverlay}>
           <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Invite Barber</Text>
-              <TouchableOpacity onPress={() => setShowInvite(false)}>
+              <Text style={styles.sheetTitle}>Add Barber</Text>
+              <TouchableOpacity onPress={() => {
+                setShowInvite(false);
+                setAddName('');
+                setAddSpecialty('');
+              }}>
                 <X size={20} color={P.textSecondary} />
               </TouchableOpacity>
             </View>
-            <View style={styles.comingSoon}>
-              <Text style={styles.comingSoonIcon}>🚀</Text>
-              <Text style={styles.comingSoonTitle}>Coming Soon</Text>
-              <Text style={styles.comingSoonSub}>Barber invitations will be available in the next update.</Text>
+            <View style={styles.addForm}>
+              <Text style={styles.addLabel}>Display name *</Text>
+              <TextInput
+                style={styles.addInput}
+                placeholder="e.g. Ahmed Al-Rashid"
+                placeholderTextColor={P.textTertiary}
+                value={addName}
+                onChangeText={v => { console.log('[Team] Add barber name changed'); setAddName(v); }}
+              />
+              <Text style={[styles.addLabel, { marginTop: 12 }]}>Specialty</Text>
+              <TextInput
+                style={styles.addInput}
+                placeholder="e.g. Fades, Beard Styling"
+                placeholderTextColor={P.textTertiary}
+                value={addSpecialty}
+                onChangeText={v => { console.log('[Team] Add barber specialty changed'); setAddSpecialty(v); }}
+              />
+              <TouchableOpacity
+                style={[styles.addSaveBtn, (!addName.trim() || addSaving) && { opacity: 0.5 }]}
+                disabled={!addName.trim() || addSaving}
+                onPress={async () => {
+                  if (!shopId || !addName.trim()) return;
+                  console.log('[Team] Add barber pressed, name:', addName, 'specialty:', addSpecialty, 'shopId:', shopId);
+                  setAddSaving(true);
+                  try {
+                    const { error } = await supabase.from('barbers').insert({
+                      shop_id: shopId,
+                      display_name: addName.trim(),
+                      specialty: addSpecialty.trim() || null,
+                      status: 'approved',
+                      is_active: true,
+                    });
+                    if (error) {
+                      console.log('[Team] Insert barber error:', error.message);
+                      Alert.alert('Error', error.message);
+                    } else {
+                      console.log('[Team] Barber added successfully');
+                      setAddName('');
+                      setAddSpecialty('');
+                      setShowInvite(false);
+                      fetchBarbers();
+                    }
+                  } catch (err) {
+                    console.log('[Team] Exception adding barber:', err);
+                  } finally {
+                    setAddSaving(false);
+                  }
+                }}
+              >
+                {addSaving ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.addSaveBtnText}>Add to Team</Text>
+                )}
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -210,8 +270,25 @@ const styles = StyleSheet.create({
   sheetHandle: { width: 40, height: 4, backgroundColor: P.border, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
   sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
   sheetTitle: { color: P.text, fontSize: 18, fontWeight: '700' },
-  comingSoon: { alignItems: 'center', paddingVertical: 32, gap: 10 },
-  comingSoonIcon: { fontSize: 40 },
-  comingSoonTitle: { color: P.text, fontSize: 18, fontWeight: '700' },
-  comingSoonSub: { color: P.textSecondary, fontSize: 14, textAlign: 'center' },
+  addForm: { paddingTop: 4, gap: 4 },
+  addLabel: { color: P.textSecondary, fontSize: 13, fontWeight: '600', marginBottom: 4 },
+  addInput: {
+    backgroundColor: P.surfaceElevated,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: P.border,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    color: P.text,
+    fontSize: 15,
+  },
+  addSaveBtn: {
+    backgroundColor: P.accent,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+  },
+  addSaveBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });
