@@ -1900,7 +1900,6 @@ const styles = StyleSheet.create({
 
 export default function PartnerCalendar() {
   const navState = useRootNavigationState();
-  const router = useRouter();
   const [ready, setReady] = React.useState(false);
 
   React.useEffect(() => {
@@ -1916,5 +1915,10 @@ export default function PartnerCalendar() {
       </View>
     );
   }
+  return <PartnerCalendarReady />;
+}
+
+function PartnerCalendarReady() {
+  const router = useRouter();
   return <PartnerCalendarInner router={router} />;
 }
