@@ -15,7 +15,7 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { router } from 'expo-router';
 import {
   CalendarDays,
   Tag,
@@ -314,10 +314,6 @@ const DateColHeader = React.memo(({ col, colWidth, isToday, isSelected, onPress 
 
 function PartnerCalendarInner() {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
-  const safePush = React.useCallback((href: string) => {
-    try { router.push(href as never); } catch (e) { console.log('[Calendar] nav error:', e); }
-  }, [router]);
   const { profile } = useAuth();
   const shopId = profile?.shop_id;
 
@@ -700,7 +696,7 @@ function PartnerCalendarInner() {
                           const dateStr = col.date.toISOString().split('T')[0];
                           const timeStr = `${String(h).padStart(2, '0')}:00`;
                           console.log('[Calendar] Empty slot tapped, date:', dateStr, 'time:', timeStr, 'barber:', col.barberId ?? 'any');
-                          safePush(`/(partner)/new-booking?date=${dateStr}&time=${timeStr}${col.barberId ? `&barberId=${col.barberId}` : ''}`);
+                          router.push(`/(partner)/new-booking?date=${dateStr}&time=${timeStr}${col.barberId ? `&barberId=${col.barberId}` : ''}` as never);
                         }}
                         activeOpacity={0.2}
                       />
@@ -864,11 +860,11 @@ function PartnerCalendarInner() {
           <TouchableOpacity style={styles.iconBtn} onPress={() => console.log('[Calendar] Messages pressed')}>
             <MessageCircle size={20} color={P.textSecondary} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => { console.log('[Calendar] Notifications pressed'); safePush('/(partner)/notifications'); }}>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => { console.log('[Calendar] Notifications pressed'); router.push('/(partner)/notifications' as never); }}>
             <Bell size={20} color={P.textSecondary} />
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => { console.log('[Calendar] New booking button pressed'); safePush('/(partner)/new-booking'); }}
+            onPress={() => { console.log('[Calendar] New booking button pressed'); router.push('/(partner)/new-booking' as never); }}
             style={styles.addBtn}
           >
             <Plus size={18} color="#fff" />
@@ -953,19 +949,19 @@ function PartnerCalendarInner() {
 
       {/* Bottom action bar */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 8 }]}>
-        <TouchableOpacity style={styles.bbBtn} onPress={() => { console.log('[Calendar] Bottom bar: Calendar pressed'); safePush('/(partner)/calendar'); }}>
+        <TouchableOpacity style={styles.bbBtn} onPress={() => { console.log('[Calendar] Bottom bar: Calendar pressed'); router.push('/(partner)/calendar' as never); }}>
           <CalendarDays size={22} color={P.accent} />
         </TouchableOpacity>
         <TouchableOpacity style={styles.bbBtn} onPress={() => console.log('[Calendar] Bottom bar: Tag pressed')}>
           <Tag size={22} color={P.textSecondary} />
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.bbBtn, styles.bbCenter]} onPress={() => { console.log('[Calendar] Bottom bar: New booking pressed'); safePush('/(partner)/new-booking'); }}>
+        <TouchableOpacity style={[styles.bbBtn, styles.bbCenter]} onPress={() => { console.log('[Calendar] Bottom bar: New booking pressed'); router.push('/(partner)/new-booking' as never); }}>
           <Plus size={24} color="#fff" />
         </TouchableOpacity>
         <TouchableOpacity style={styles.bbBtn} onPress={() => console.log('[Calendar] Bottom bar: Smile pressed')}>
           <Smile size={22} color={P.textSecondary} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.bbBtn} onPress={() => { console.log('[Calendar] Bottom bar: More pressed'); safePush('/(partner)/more'); }}>
+        <TouchableOpacity style={styles.bbBtn} onPress={() => { console.log('[Calendar] Bottom bar: More pressed'); router.push('/(partner)/more' as never); }}>
           <Grid3x3 size={22} color={P.textSecondary} />
         </TouchableOpacity>
       </View>
@@ -1002,7 +998,7 @@ function PartnerCalendarInner() {
                 onPress={() => {
                   console.log('[Calendar] Rebook pressed for booking:', selectedBooking?.id);
                   setSelectedBooking(null);
-                  safePush('/(partner)/new-booking');
+                  router.push('/(partner)/new-booking' as never);
                 }}
               >
                 <Text style={styles.rebookBtnText}>Rebook</Text>
