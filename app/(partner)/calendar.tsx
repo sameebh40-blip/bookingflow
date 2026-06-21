@@ -324,8 +324,7 @@ const DateColHeader = React.memo(({ col, colWidth, isToday, isSelected, onPress 
   </TouchableOpacity>
 ));
 
-function PartnerCalendarInner() {
-  const expoRouter = useRouter();
+function PartnerCalendarInner({ router: expoRouter }: { router: ReturnType<typeof useRouter> }) {
   const navState = useRootNavigationState();
   const insets = useSafeInsets();
   const { profile } = useAuth();
@@ -1952,5 +1951,6 @@ export default function PartnerCalendar() {
 }
 
 function PartnerCalendarReady() {
-  return <PartnerCalendarInner />;
+  const router = useRouter();
+  return <PartnerCalendarInner router={router} />;
 }
