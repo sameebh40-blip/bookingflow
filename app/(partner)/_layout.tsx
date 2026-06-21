@@ -143,7 +143,14 @@ export default function PartnerLayout() {
           {/* Bottom user section */}
           <View style={[styles.sidebarBottom, { paddingBottom: insets.bottom + 16 }]}>
             <View style={styles.sidebarDivider} />
-            <View style={styles.sidebarUser}>
+            <TouchableOpacity
+              style={styles.sidebarUser}
+              onPress={() => {
+                console.log('[Partner] Sidebar user avatar pressed — navigate to profile');
+                router.push('/(partner)/profile' as never);
+              }}
+              activeOpacity={0.7}
+            >
               {profile?.avatar_url ? (
                 <Image source={{ uri: profile.avatar_url }} style={styles.userAvatar} />
               ) : (
@@ -159,7 +166,7 @@ export default function PartnerLayout() {
               <TouchableOpacity onPress={handleSignOut} style={styles.signOutBtn}>
                 <LogOut size={16} color={P.textSecondary} />
               </TouchableOpacity>
-            </View>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -181,6 +188,7 @@ export default function PartnerLayout() {
             <Stack.Screen name="more" />
             <Stack.Screen name="setup" />
             <Stack.Screen name="client/[id]" />
+            <Stack.Screen name="profile" />
           </Stack>
         </View>
       </View>
@@ -207,6 +215,7 @@ export default function PartnerLayout() {
           <Stack.Screen name="more" />
           <Stack.Screen name="setup" />
           <Stack.Screen name="client/[id]" />
+          <Stack.Screen name="profile" />
         </Stack>
       </View>
       {/* Bottom tab bar */}
@@ -243,6 +252,26 @@ export default function PartnerLayout() {
             </TouchableOpacity>
           );
         })}
+        {/* Profile avatar tab */}
+        <TouchableOpacity
+          style={styles.tabItem}
+          onPress={() => {
+            console.log('[Partner] Mobile tab avatar pressed — navigate to profile');
+            router.push('/(partner)/profile' as never);
+          }}
+        >
+          <View style={[styles.tabIconWrap, isActive('/(partner)/profile') && styles.tabIconWrapActive]}>
+            {profile?.avatar_url ? (
+              <Image source={{ uri: profile.avatar_url }} style={styles.mobileTabAvatar} />
+            ) : (
+              <View style={styles.mobileTabAvatarPlaceholder}>
+                <Text style={styles.mobileTabAvatarText}>
+                  {profile?.full_name?.charAt(0) ?? 'U'}
+                </Text>
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -393,5 +422,23 @@ const styles = StyleSheet.create({
   tabLabelActive: {
     color: P.accent,
     fontWeight: '600',
+  },
+  mobileTabAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+  },
+  mobileTabAvatarPlaceholder: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: P.accentLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mobileTabAvatarText: {
+    color: P.accent,
+    fontSize: 10,
+    fontWeight: '700',
   },
 });
