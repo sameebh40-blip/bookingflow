@@ -512,14 +512,6 @@ function PartnerCalendarInner() {
     console.log('[Calendar] Booking status updated successfully');
   }, []);
 
-  if (!clientReady) {
-    return (
-      <View style={{ flex: 1, backgroundColor: P.bg, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color={P.accent} size="large" />
-      </View>
-    );
-  }
-
   // ── Payment ──
   const handlePayCash = async () => {
     if (!selectedBooking) return;
@@ -866,6 +858,14 @@ function PartnerCalendarInner() {
       ))}
     </ScrollView>
   );
+
+  if (!clientReady) {
+    return (
+      <View style={{ flex: 1, backgroundColor: P.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={P.accent} size="large" />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
