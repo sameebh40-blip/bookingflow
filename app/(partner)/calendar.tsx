@@ -84,9 +84,7 @@ interface Booking {
   payment_method?: string;
   cancel_reason?: string;
   source?: string;
-  profiles?: { full_name: string; avatar_url: string } | null;
-  barbers?: { display_name: string } | null;
-  booking_services?: { service_name_en: string; price_bhd: number; duration_minutes: number }[] | null;
+
 }
 
 interface BarberRow {
@@ -118,10 +116,10 @@ const todayAt = (h: number, m: number) => {
 };
 
 const DEMO_BOOKINGS: Booking[] = [
-  { id: 'dc1', start_at: todayAt(8, 45), end_at: todayAt(9, 30), status: 'confirmed', customer_name: 'John Doe', barber_id: 'b1', shop_id: '', profiles: null, barbers: { display_name: 'S2 Khaled' }, booking_services: [{ service_name_en: 'Haircut', price_bhd: 5, duration_minutes: 45 }] },
-  { id: 'dc2', start_at: todayAt(8, 45), end_at: todayAt(9, 30), status: 'confirmed', customer_name: 'John Doe', barber_id: 'b2', shop_id: '', profiles: null, barbers: { display_name: 'Wendy Smith' }, booking_services: [{ service_name_en: 'Haircut', price_bhd: 5, duration_minutes: 45 }] },
-  { id: 'dc3', start_at: todayAt(10, 0), end_at: todayAt(10, 35), status: 'confirmed', customer_name: 'Jack Doe', barber_id: 'b1', shop_id: '', profiles: null, barbers: { display_name: 'S2 Khaled' }, booking_services: [{ service_name_en: 'Blow Dry', price_bhd: 3, duration_minutes: 35 }] },
-  { id: 'dc4', start_at: todayAt(11, 0), end_at: todayAt(12, 15), status: 'confirmed', customer_name: 'Jane Doe', barber_id: 'b1', shop_id: '', profiles: null, barbers: { display_name: 'S2 Khaled' }, booking_services: [{ service_name_en: 'Hair Color', price_bhd: 12, duration_minutes: 75 }] },
+  { id: 'dc1', start_at: todayAt(8, 45), end_at: todayAt(9, 30), status: 'confirmed', customer_name: 'John Doe', barber_id: 'b1', shop_id: '' },
+  { id: 'dc2', start_at: todayAt(8, 45), end_at: todayAt(9, 30), status: 'confirmed', customer_name: 'John Doe', barber_id: 'b2', shop_id: '' },
+  { id: 'dc3', start_at: todayAt(10, 0), end_at: todayAt(10, 35), status: 'confirmed', customer_name: 'Jack Doe', barber_id: 'b1', shop_id: '' },
+  { id: 'dc4', start_at: todayAt(11, 0), end_at: todayAt(12, 15), status: 'confirmed', customer_name: 'Jane Doe', barber_id: 'b1', shop_id: '' },
 ];
 
 const DEMO_BARBERS: BarberRow[] = [
@@ -249,8 +247,8 @@ const BookingBlock = React.memo(({
   const top = (startMins / 60) * HOUR_HEIGHT;
   const height = Math.max(((endMins - startMins) / 60) * HOUR_HEIGHT, 32);
   const color = statusColor(booking.status);
-  const clientName = booking.profiles?.full_name ?? booking.customer_name ?? 'Walk-in';
-  const serviceName = booking.booking_services?.[0]?.service_name_en ?? 'Service';
+  const clientName = booking.customer_name ?? 'Walk-in';
+  const serviceName = 'Service';
   const startLabel = formatTime(start);
   const endLabel = formatTime(end);
 
@@ -438,7 +436,7 @@ function PartnerCalendarInner() {
     try {
       const { data } = await supabase
         .from('bookings')
-        .select('id, start_at, end_at, status, customer_name, barber_id, shop_id, payment_status, payment_method, cancel_reason, source, profiles!customer_profile_id(full_name, avatar_url), barbers!barber_id(display_name), booking_services(service_name_en, price_bhd, duration_minutes)')
+        .select('id, start_at, end_at, status, customer_name, barber_id, shop_id, payment_status, payment_method, cancel_reason, source')
         .eq('shop_id', shopId)
         .gte('start_at', rangeStart.toISOString())
         .lte('start_at', rangeEnd.toISOString())
@@ -653,9 +651,9 @@ function PartnerCalendarInner() {
   });
 
   // ── Selected booking helpers ──
-  const selectedBookingPrice = selectedBooking ? (selectedBooking.booking_services?.[0]?.price_bhd ?? 0) : 0;
+  const selectedBookingPrice = 0;
   const selectedBookingPriceStr = Number(selectedBookingPrice).toFixed(3);
-  const selectedBookingBarberName = selectedBooking?.barbers?.display_name ?? 'Staff';
+  const selectedBookingBarberName = 'Staff';
   const selectedBookingBarberInitial = selectedBookingBarberName.charAt(0);
 
   // ── Month picker ──
@@ -825,7 +823,7 @@ function PartnerCalendarInner() {
                   </View>
                   {dayBookings.slice(0, 2).map((b, bi) => {
                     const bColor = statusColor(b.status);
-                    const bName = b.profiles?.full_name ?? b.customer_name ?? 'Walk-in';
+                    const bName = b.customer_name ?? 'Walk-in';
                     return (
                       <View key={bi} style={{ backgroundColor: bColor + '33', borderLeftWidth: 2, borderLeftColor: bColor, borderRadius: 2, paddingHorizontal: 3, paddingVertical: 1, marginTop: 2 }}>
                         <Text style={{ color: bColor, fontSize: 9, fontWeight: '600' }} numberOfLines={1}>{bName}</Text>
@@ -1162,12 +1160,12 @@ function PartnerCalendarInner() {
                   <View style={styles.walkInRow}>
                     <View style={styles.walkInAvatar}>
                       <Text style={styles.walkInAvatarText}>
-                        {(selectedBooking.profiles?.full_name ?? selectedBooking.customer_name ?? 'W').charAt(0)}
+                        {(selectedBooking.customer_name ?? 'W').charAt(0)}
                       </Text>
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.walkInName}>
-                        {selectedBooking.profiles?.full_name ?? selectedBooking.customer_name ?? 'Walk-In'}
+                        {selectedBooking.customer_name ?? 'Walk-In'}
                       </Text>
                       {selectedBooking.source === 'walk_in' && (
                         <Text style={styles.walkInLabel}>Walk-in</Text>
@@ -1181,22 +1179,14 @@ function PartnerCalendarInner() {
                       {new Date(selectedBooking.start_at).toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                     </Text>
 
-                    {(selectedBooking.booking_services ?? []).map((svc, si) => {
-                      const svcPrice = Number(svc.price_bhd).toFixed(3);
-                      const svcTime = formatTime(new Date(selectedBooking.start_at));
-                      const svcDuration = svc.duration_minutes;
-                      const svcBarber = selectedBooking.barbers?.display_name ?? 'Barber';
-                      return (
-                        <View key={si} style={styles.saleServiceRow}>
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.saleServiceName}>{svc.service_name_en}</Text>
-                            <Text style={styles.saleServiceMeta}>{svcTime}</Text>
-                            <Text style={styles.saleServiceMeta}>{svcDuration}min · {svcBarber}</Text>
-                          </View>
-                          <Text style={styles.saleServicePrice}>BHD {svcPrice}</Text>
-                        </View>
-                      );
-                    })}
+                    <View style={styles.saleServiceRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.saleServiceName}>Service</Text>
+                        <Text style={styles.saleServiceMeta}>{formatTime(new Date(selectedBooking.start_at))}</Text>
+                        <Text style={styles.saleServiceMeta}>Staff</Text>
+                      </View>
+                      <Text style={styles.saleServicePrice}>BHD —</Text>
+                    </View>
 
                     <View style={styles.saleDivider} />
                     <View style={styles.saleTotalRow}>
@@ -1291,7 +1281,7 @@ function PartnerCalendarInner() {
                   console.log('[Calendar] Checkout pressed for booking:', selectedBooking.id, 'navigating to POS');
                   setSelectedBooking(null);
                   const clientName = encodeURIComponent(selectedBooking.customer_name ?? 'Walk-In');
-                  const serviceId = selectedBooking.booking_services?.[0]?.service_name_en ? encodeURIComponent(selectedBooking.booking_services[0].service_name_en) : '';
+                  const serviceId = '';
                   if (clientReady) expoRouter.push(`/(partner)/pos/new?clientName=${clientName}&serviceName=${serviceId}&bookingId=${selectedBooking.id}` as never);
                 }}
               >
@@ -1667,7 +1657,7 @@ function PartnerCalendarInner() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ color: P.text, fontSize: 14, fontWeight: '600' }}>
-                  Notify {pendingReschedule?.booking.profiles?.full_name ?? pendingReschedule?.booking.customer_name ?? 'client'} about reschedule
+                  Notify {pendingReschedule?.booking.customer_name ?? 'client'} about reschedule
                 </Text>
                 <Text style={{ color: P.textSecondary, fontSize: 12, marginTop: 2 }}>
                   Send a message informing their appointment was rescheduled
