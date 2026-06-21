@@ -72,6 +72,7 @@ interface ReelItem {
 
 interface RebookItem {
   id: string;
+  shopId?: string;
   name: string;
   price: number;
   items: number;
@@ -349,7 +350,8 @@ export default function HomeScreen() {
         const mappedRebook: RebookItem[] = rebookRes.data.map((b: any) => {
           const shop = b.barbershops ?? {};
           return {
-            id: b.shop_id ?? b.id,
+            id: b.id,
+            shopId: b.shop_id ?? b.id,
             name: shop.name ?? 'Barbershop',
             price: Number(b.price_bhd) || 0,
             items: 1,
@@ -402,9 +404,9 @@ export default function HomeScreen() {
     router.push('/(tabs)/discover');
   }, [router]);
 
-  const handleRebook = useCallback((id: string, name: string) => {
-    console.log('[Home] Rebook pressed:', id, name);
-    router.push(`/venue/${id}`);
+  const handleRebook = useCallback((item: RebookItem) => {
+    console.log('[Home] Rebook pressed:', item.shopId ?? item.id, item.name);
+    router.push(`/venue/${item.shopId ?? item.id}`);
   }, [router]);
 
   const handleReelPress = useCallback((id: string) => {
@@ -484,7 +486,7 @@ export default function HomeScreen() {
           {rebook.map((item, index) => (
             <AnimatedListItem key={item.id} index={index}>
               <AnimatedPressable
-                onPress={() => handleRebook(item.id, item.name)}
+                onPress={() => handleRebook(item)}
                 style={styles.rebookCard}
               >
                 <Image
@@ -498,7 +500,7 @@ export default function HomeScreen() {
                     BHD {Number(item.price).toFixed(3)}
                   </Text>
                   <AnimatedPressable
-                    onPress={() => handleRebook(item.id, item.name)}
+                    onPress={() => handleRebook(item)}
                     style={styles.rebookButton}
                   >
                     <RefreshCw size={12} color={MADAR_COLORS.gold} />

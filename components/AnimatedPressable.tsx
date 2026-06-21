@@ -34,8 +34,9 @@ export function AnimatedPressable({
     }).start();
   }, [scale]);
 
+  const { __sourceLocation, ...restProps } = props as any;
   const safeProps = Object.fromEntries(
-    Object.entries(props as Record<string, unknown>).filter(([k]) => !k.startsWith('__'))
+    Object.entries(restProps as Record<string, unknown>).filter(([k]) => !k.startsWith('__'))
   ) as typeof props;
 
   return (
