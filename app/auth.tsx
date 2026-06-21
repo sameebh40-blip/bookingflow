@@ -132,25 +132,15 @@ export default function AuthScreen() {
         }
       } else {
         // Sign up
-        const { error: signUpError } = await signUp(email.trim(), password, fullName.trim());
+        const role = userType === 'partner' ? 'shop_owner' : 'customer';
+        const { error: signUpError } = await signUp(email.trim(), password, fullName.trim(), role);
         if (signUpError) {
           setError(signUpError.message ?? 'Sign up failed. Please try again.');
           return;
         }
-        console.log('[Auth] Sign up success, userType:', userType);
+        console.log('[Auth] Sign up success, userType:', userType, 'role:', role);
 
         if (userType === 'partner') {
-          // Upsert profile with shop_owner role — must run AFTER signUp's upsertProfile
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user) {
-            await supabase.from('profiles').upsert({
-              id: user.id,
-              full_name: fullName.trim(),
-              role: 'shop_owner',
-              updated_at: new Date().toISOString(),
-            }, { onConflict: 'id' });
-            console.log('[Auth] Partner profile upserted with shop_owner role, navigating to setup');
-          }
           router.replace('/(partner)/setup');
         } else {
           router.replace('/(tabs)/(home)');

@@ -15,7 +15,7 @@ interface AuthContextType {
   loading: boolean;
   profile: ProfileData | null;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, fullName: string, role?: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   deleteAccount: () => Promise<{ error: Error | null }>;
   refreshProfile: () => Promise<void>;
@@ -98,15 +98,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const upsertProfile = async (user: User) => {
-    console.log('[Auth] Upserting profile for user:', user.id);
+  const upsertProfile = async (user: User, role: string = 'customer') => {
+    console.log('[Auth] Upserting profile for user:', user.id, 'role:', role);
     try {
       // ignoreDuplicates: true — only inserts if no row exists yet, never overwrites role
       const { error } = await supabase.from('profiles').upsert({
         id: user.id,
         email: user.email ?? '',
         full_name: user.user_metadata?.full_name ?? '',
-        role: 'customer',
+        role: role,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'id', ignoreDuplicates: true });
       if (error) console.log('[Auth] Profile upsert error (non-fatal):', error.message);
@@ -153,8 +153,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signUp = async (email: string, password: string, fullName: string) => {
-    console.log('[Auth] signUp attempt:', email, fullName);
+  const signUp = async (email: string, password: string, fullName: string, role: string = 'customer') => {
+    console.log('[Auth] signUp attempt:', email, fullName, 'role:', role);
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -167,7 +167,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       console.log('[Auth] signUp success');
       if (data.user) {
-        await upsertProfile(data.user);
+        await upsertProfile(data.user, role);
         await upsertCustomer(data.user);
         await fetchProfile(data.user.id);
       }
