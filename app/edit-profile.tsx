@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -15,6 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/utils/supabase';
 
 export default function EditProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -26,6 +28,19 @@ export default function EditProfileScreen() {
   const [phone, setPhone] = useState(user?.user_metadata?.phone ?? '');
   const [saving, setSaving] = useState(false);
 
+  // Load existing profile data from DB on mount
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('profiles')
+      .select('full_name, avatar_url')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => {
+        if (data?.full_name) setName(data.full_name);
+      });
+  }, [user?.id]);
+
   const initials = name
     .split(' ')
     .map((n: string) => n[0])
@@ -34,13 +49,28 @@ export default function EditProfileScreen() {
     .slice(0, 2) || 'ME';
 
   const handleSave = useCallback(async () => {
+    if (!user) return;
     console.log('[EditProfile] Save changes pressed, name:', name, 'phone:', phone);
     setSaving(true);
-    // Simulate save
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setSaving(false);
-    router.back();
-  }, [name, phone, router]);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ full_name: name })
+        .eq('id', user.id);
+      if (error) {
+        console.log('[EditProfile] Error saving profile:', error.message);
+        Alert.alert('Error', 'Could not save profile. Please try again.');
+      } else {
+        console.log('[EditProfile] Profile saved successfully');
+        router.back();
+      }
+    } catch (err) {
+      console.log('[EditProfile] Exception saving profile:', err);
+      Alert.alert('Error', 'Could not save profile.');
+    } finally {
+      setSaving(false);
+    }
+  }, [name, phone, router, user]);
 
   const handleBack = useCallback(() => {
     console.log('[EditProfile] Back pressed');
