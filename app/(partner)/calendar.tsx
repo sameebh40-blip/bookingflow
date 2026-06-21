@@ -16,7 +16,7 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRootNavigationState, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import {
   CalendarDays,
   Tag,
@@ -1929,22 +1929,6 @@ const styles = StyleSheet.create({
 });
 
 export default function PartnerCalendar() {
-  const navState = useRootNavigationState();
   const router = useRouter();
-  const [ready, setReady] = React.useState(false);
-
-  React.useEffect(() => {
-    if (navState?.key) {
-      setReady(true);
-    }
-  }, [navState?.key]);
-
-  if (!ready || !navState?.key) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#0F0F1A', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color="#7C3AED" size="large" />
-      </View>
-    );
-  }
   return <PartnerCalendarInner router={router} />;
 }
