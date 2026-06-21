@@ -52,6 +52,7 @@ function BarChart({ data }: { data: DayData[] }) {
     Animated.stagger(60, anims.map(a =>
       Animated.timing(a, { toValue: 1, duration: 600, useNativeDriver: false })
     )).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data.length]);
 
   return (

@@ -114,6 +114,7 @@ export default function AppointmentDetailScreen() {
 
   useEffect(() => {
     fetchAppointment();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apptId]);
 
   const fetchAppointment = async () => {

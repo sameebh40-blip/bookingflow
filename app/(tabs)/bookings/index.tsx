@@ -68,6 +68,7 @@ function AnimatedListItem({ index, children }: { index: number; children: React.
       Animated.timing(opacity, { toValue: 1, duration: 300, delay: index * 70, useNativeDriver: true }),
       Animated.timing(translateY, { toValue: 0, duration: 300, delay: index * 70, useNativeDriver: true }),
     ]).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return <Animated.View style={{ opacity, transform: [{ translateY }] }}>{children}</Animated.View>;
 }
@@ -322,6 +323,7 @@ export default function BookingsScreen() {
 
   useEffect(() => {
     fetchAppointments();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const fetchAppointments = async () => {

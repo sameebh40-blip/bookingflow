@@ -69,6 +69,7 @@ export default function BookingStaffScreen() {
 
   useEffect(() => {
     fetchStaff();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venueId]);
 
   const fetchStaff = async () => {

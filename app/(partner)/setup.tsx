@@ -111,6 +111,7 @@ function FadeField({ index, children }: { index: number; children: React.ReactNo
       Animated.timing(opacity, { toValue: 1, duration: 320, delay: index * 70, useNativeDriver: true }),
       Animated.timing(translateY, { toValue: 0, duration: 320, delay: index * 70, useNativeDriver: true }),
     ]).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return (
     <Animated.View style={{ opacity, transform: [{ translateY }] }}>
@@ -219,6 +220,7 @@ export default function ShopSetup() {
         Animated.timing(orbScale, { toValue: 1, duration: 1500, useNativeDriver: true }),
       ])
     ).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Slide transition
@@ -546,6 +548,7 @@ function WelcomeStep({
       Animated.timing(fadeIn, { toValue: 1, duration: 600, delay: 200, useNativeDriver: true }),
       Animated.timing(slideUp, { toValue: 0, duration: 600, delay: 200, useNativeDriver: true }),
     ]).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

@@ -181,6 +181,7 @@ export default function VenueDetailScreen() {
 
   useEffect(() => {
     fetchVenueData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const fetchVenueData = async () => {

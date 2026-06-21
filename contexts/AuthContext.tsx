@@ -143,7 +143,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       console.log('[Auth] signIn success');
       if (data.user) {
-        await upsertProfile(data.user);
         await fetchProfile(data.user.id);
       }
       return { error: null };

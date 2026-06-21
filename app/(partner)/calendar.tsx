@@ -512,6 +512,24 @@ function PartnerCalendarInner() {
     console.log('[Calendar] Booking status updated successfully');
   }, []);
 
+  // ── Early return for incomplete onboarding — after ALL hooks ──
+  if (!shopId) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#0F0F1A', alignItems: 'center', justifyContent: 'center', padding: 32, gap: 16 }}>
+        <Text style={{ color: '#C9A84C', fontSize: 20, fontWeight: '700', textAlign: 'center' }}>Setup Required</Text>
+        <Text style={{ color: '#9090B0', fontSize: 14, textAlign: 'center', lineHeight: 22 }}>
+          Complete your shop onboarding to access the calendar.
+        </Text>
+        <TouchableOpacity
+          onPress={() => expoRouter.push('/(partner)/ob-welcome' as never)}
+          style={{ backgroundColor: '#C9A84C', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 24 }}
+        >
+          <Text style={{ color: '#000', fontWeight: '700', fontSize: 15 }}>Complete Setup →</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   // ── Payment ──
   const handlePayCash = async () => {
     if (!selectedBooking) return;

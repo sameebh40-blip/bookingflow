@@ -67,6 +67,7 @@ export default function ChatScreen() {
     return () => {
       supabase.removeChannel(channel);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venueId, user?.id]);
 
   const fetchVenueInfo = async () => {

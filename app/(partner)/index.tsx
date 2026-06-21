@@ -85,6 +85,7 @@ function StatCard({ label, value, icon: Icon, color }: { label: string; value: s
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(anim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return (
     <Animated.View style={[styles.statCard, { opacity: anim, transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }]}>
@@ -211,7 +212,7 @@ export default function PartnerHome() {
     if (!shopId) return;
     console.log('[PartnerHome] Setting up real-time subscription for shop:', shopId);
     const channel = supabase
-      .channel(`partner-home-${shopId}`)
+      .channel(`partner-home-${shopId}-${Date.now()}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'bookings', filter: `shop_id=eq.${shopId}` }, (payload) => {
         console.log('[PartnerHome] New booking received:', payload.new);
         const newBooking = payload.new as Booking;

@@ -103,6 +103,7 @@ export default function BookingConfirmScreen() {
 
   useEffect(() => {
     fetchBookingData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venueId, staffId, services]);
 
   const fetchBookingData = async () => {

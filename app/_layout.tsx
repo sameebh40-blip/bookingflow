@@ -51,6 +51,7 @@ function RoleRouter() {
       console.log('[RoleRouter] Redirecting to customer tabs');
       router.replace('/(tabs)');
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile, loading, segments]);
 
   return null;

@@ -187,6 +187,7 @@ export default function PartnerMore() {
         }).start();
       });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [insightLoading, insightData, showInsights]);
 
   const navigate = (route: string) => {

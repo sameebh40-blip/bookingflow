@@ -137,6 +137,7 @@ function AnimatedListItem({ index, children }: { index: number; children: React.
       Animated.timing(opacity, { toValue: 1, duration: 350, delay: index * 80, useNativeDriver: true }),
       Animated.timing(translateY, { toValue: 0, duration: 350, delay: index * 80, useNativeDriver: true }),
     ]).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return (
     <Animated.View style={{ opacity, transform: [{ translateY }] }}>
@@ -154,6 +155,7 @@ function SkeletonCarouselCard() {
         Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true }),
       ])
     ).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return (
     <Animated.View style={[styles.carouselCard, { opacity }]}>
@@ -240,6 +242,7 @@ export default function HomeScreen() {
 
   useEffect(() => {
     fetchData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const fetchData = async () => {

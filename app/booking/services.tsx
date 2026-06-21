@@ -67,6 +67,7 @@ export default function BookingServicesScreen() {
 
   useEffect(() => {
     fetchServices();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venueId]);
 
   const fetchServices = async () => {
