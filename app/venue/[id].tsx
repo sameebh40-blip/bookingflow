@@ -104,7 +104,7 @@ const VENUE_IMAGES_FALLBACK = [
   'https://images.unsplash.com/photo-1599351431202-1e0f0137899a?w=800',
 ];
 
-const TABS = ['Photos', 'About', 'Services', 'Team', 'Reviews', 'Other'];
+const ALL_TABS = ['Photos', 'About', 'Services', 'Team', 'Reviews', 'Other'];
 
 // DAYS array: index 0=Sunday, 1=Monday, ..., 6=Saturday
 // opening_hours keys: "0"=Sun, "1"=Mon, ..., "6"=Sat
@@ -530,7 +530,7 @@ export default function VenueDetailScreen() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ paddingHorizontal: 16 }}
           >
-            {TABS.map((tab) => {
+            {ALL_TABS.filter(tab => tab !== 'Reviews' || reviews.length > 0).map((tab) => {
               const isActive = activeTab === tab;
               return (
                 <AnimatedPressable

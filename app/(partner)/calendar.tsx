@@ -325,7 +325,6 @@ const DateColHeader = React.memo(({ col, colWidth, isToday, isSelected, onPress 
 ));
 
 function PartnerCalendarInner({ router: expoRouter }: { router: ReturnType<typeof useRouter> }) {
-  const navState = useRootNavigationState();
   const insets = useSafeInsets();
   const { profile } = useAuth();
   const shopId = profile?.shop_id;
@@ -519,7 +518,7 @@ function PartnerCalendarInner({ router: expoRouter }: { router: ReturnType<typeo
           Complete your shop onboarding to access the calendar.
         </Text>
         <TouchableOpacity
-          onPress={() => expoRouter.push('/(partner)/ob-welcome' as never)}
+          onPress={() => expoRouter.push('/(partner)/ob-essentials' as never)}
           style={{ backgroundColor: '#C9A84C', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 24 }}
         >
           <Text style={{ color: '#000', fontWeight: '700', fontSize: 15 }}>Complete Setup →</Text>
@@ -883,7 +882,7 @@ function PartnerCalendarInner({ router: expoRouter }: { router: ReturnType<typeo
           Complete your shop onboarding to access the calendar.
         </Text>
         <TouchableOpacity
-          onPress={() => { console.log('[Calendar] Complete Setup pressed'); expoRouter.push('/(partner)/ob-welcome' as never); }}
+          onPress={() => { console.log('[Calendar] Complete Setup pressed'); expoRouter.push('/(partner)/ob-essentials' as never); }}
           style={{ backgroundColor: '#C9A84C', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 24 }}
         >
           <Text style={{ color: '#000', fontWeight: '700', fontSize: 15 }}>Complete Setup →</Text>
@@ -896,14 +895,6 @@ function PartnerCalendarInner({ router: expoRouter }: { router: ReturnType<typeo
     return (
       <View style={{ flex: 1, backgroundColor: P.bg, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color={P.accent} size="large" />
-      </View>
-    );
-  }
-
-  if (!navState?.routes) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#0F0F1A', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color="#7C3AED" size="large" />
       </View>
     );
   }
@@ -1046,10 +1037,16 @@ function PartnerCalendarInner({ router: expoRouter }: { router: ReturnType<typeo
               console.log('[Calendar] Reschedule bar save pressed, booking:', dragBooking.id, 'new time:', dragNewTime.toISOString());
               const duration = new Date(dragBooking.end_at ?? dragBooking.start_at).getTime() - new Date(dragBooking.start_at).getTime();
               const newEnd = new Date(dragNewTime.getTime() + duration);
-              await supabase.from('bookings').update({ start_at: dragNewTime.toISOString(), end_at: newEnd.toISOString() }).eq('id', dragBooking.id);
+              const newStart = dragNewTime.toISOString();
+              const newEndIso = newEnd.toISOString();
+              const bookingId = dragBooking.id;
+              const { error } = await supabase.from('bookings').update({ start_at: newStart, end_at: newEndIso }).eq('id', bookingId);
+              if (!error) {
+                setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, start_at: newStart, end_at: newEndIso } : b));
+              }
               setDragBooking(null);
               setDragNewTime(null);
-              fetchBookings();
+              if (error) fetchBookings();
             }}>
               <Text style={styles.rescheduleBarSaveText}>Save</Text>
             </TouchableOpacity>
@@ -1071,7 +1068,7 @@ function PartnerCalendarInner({ router: expoRouter }: { router: ReturnType<typeo
           <TouchableOpacity
             onPress={() => {
               console.log('[Calendar] Complete Setup button pressed');
-              expoRouter.push('/(partner)/ob-welcome' as never);
+              expoRouter.push('/(partner)/ob-essentials' as never);
             }}
             style={{ backgroundColor: P.gold, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 24, alignItems: 'center' }}
           >
