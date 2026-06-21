@@ -45,7 +45,8 @@ interface Booking {
   id: string;
   start_at: string;
   status: string;
-  price_bhd: number;
+  total_price?: number;
+  price_bhd?: number;
   customer_name: string;
   customer_profile_id: string | null;
   barber_id: string | null;
@@ -161,14 +162,14 @@ export default function PartnerHome() {
       const [bookingsRes, revenueRes, weekRes] = await Promise.all([
         supabase
           .from('bookings')
-          .select('id, status, start_at, price_bhd, customer_name, customer_profile_id, barber_id, profiles!customer_profile_id(full_name, avatar_url), barbers!barber_id(display_name)')
+          .select('id, status, start_at, total_price, price_bhd, customer_name, customer_profile_id, barber_id, profiles!customer_profile_id(full_name, avatar_url), barbers!barber_id(display_name)')
           .eq('shop_id', shopId)
           .gte('start_at', todayStart.toISOString())
           .lte('start_at', todayEnd.toISOString())
           .order('start_at'),
         supabase
           .from('bookings')
-          .select('price_bhd')
+          .select('total_price, price_bhd')
           .eq('shop_id', shopId)
           .eq('status', 'completed')
           .gte('start_at', todayStart.toISOString()),
@@ -180,7 +181,10 @@ export default function PartnerHome() {
       ]);
 
       const fetchedBookings = (bookingsRes.data as Booking[]) ?? [];
-      const rev = (revenueRes.data ?? []).reduce((sum: number, b: { price_bhd: number }) => sum + (Number(b.price_bhd) || 0), 0);
+      const rev = (revenueRes.data ?? []).reduce((sum: number, b: { total_price?: number; price_bhd?: number }) => {
+        const price = Number(b.total_price ?? b.price_bhd ?? 0);
+        return sum + price;
+      }, 0);
       const wCount = weekRes.count ?? 0;
 
       console.log('[PartnerHome] Bookings fetched:', fetchedBookings.length, 'revenue:', rev, 'week:', wCount);
@@ -331,7 +335,7 @@ export default function PartnerHome() {
               const barberName = booking.barbers?.display_name ?? 'Any';
               const avatarUrl = booking.profiles?.avatar_url;
               const initials = clientName.charAt(0).toUpperCase();
-              const priceText = `BHD ${Number(booking.price_bhd).toFixed(3)}`;
+              const priceText = `BHD ${Number(booking.total_price ?? booking.price_bhd ?? 0).toFixed(3)}`;
 
               return (
                 <AnimatedPressable

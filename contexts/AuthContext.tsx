@@ -101,12 +101,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const upsertProfile = async (user: User) => {
     console.log('[Auth] Upserting profile for user:', user.id);
     try {
+      // ignoreDuplicates: true — only inserts if no row exists yet, never overwrites role
       const { error } = await supabase.from('profiles').upsert({
         id: user.id,
-        email: user.email,
-        full_name: user.user_metadata?.full_name ?? null,
+        email: user.email ?? '',
+        full_name: user.user_metadata?.full_name ?? '',
         role: 'customer',
-        status: 'active',
+        updated_at: new Date().toISOString(),
       }, { onConflict: 'id', ignoreDuplicates: true });
       if (error) console.log('[Auth] Profile upsert error (non-fatal):', error.message);
       else console.log('[Auth] Profile upserted successfully');

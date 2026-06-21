@@ -140,15 +140,16 @@ export default function AuthScreen() {
         console.log('[Auth] Sign up success, userType:', userType);
 
         if (userType === 'partner') {
-          // Upsert profile with shop_owner role
+          // Upsert profile with shop_owner role — must run AFTER signUp's upsertProfile
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
             await supabase.from('profiles').upsert({
               id: user.id,
-              role: 'shop_owner',
               full_name: fullName.trim(),
-            });
-            console.log('[Auth] Partner profile upserted, navigating to setup');
+              role: 'shop_owner',
+              updated_at: new Date().toISOString(),
+            }, { onConflict: 'id' });
+            console.log('[Auth] Partner profile upserted with shop_owner role, navigating to setup');
           }
           router.replace('/(partner)/setup');
         } else {

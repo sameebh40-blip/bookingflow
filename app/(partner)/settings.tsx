@@ -10,14 +10,15 @@ import {
   ActivityIndicator,
   Image,
   Alert,
+  Modal,
   ImageSourcePropType,
-  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Camera, MapPin, Clock, Image as ImageIcon, Plus, Trash2 } from 'lucide-react-native';
+import { Camera, MapPin, Image as ImageIcon, Plus, Trash2, Building2, ChevronDown } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import * as FileSystem from 'expo-file-system/legacy';
+import { useRouter } from 'expo-router';
 import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -49,6 +50,7 @@ const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frida
 interface ShopData {
   id: string;
   name: string;
+  name_en?: string;
   description?: string;
   phone?: string;
   address?: string;
@@ -70,20 +72,48 @@ interface Post {
 
 async function uploadImage(bucket: string, localUri: string): Promise<string | null> {
   try {
-    console.log('[Settings] Uploading image to bucket:', bucket, 'uri:', localUri.slice(0, 60));
-    // Use base64 for React Native compatibility
-    const base64 = await FileSystem.readAsStringAsync(localUri, { encoding: FileSystem.EncodingType.Base64 });
+    console.log('[Settings] Uploading to bucket:', bucket);
     const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
-    const byteArray = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+
+    // Read as base64 using FileSystem (Hermes-safe)
+    const base64 = await FileSystem.readAsStringAsync(localUri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    // Decode base64 to binary without relying on global atob
+    const binaryStr = globalThis.atob ? globalThis.atob(base64) : Buffer.from(base64, 'base64').toString('binary');
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) {
+      bytes[i] = binaryStr.charCodeAt(i);
+    }
+
     const { data, error } = await supabase.storage
       .from(bucket)
-      .upload(fileName, byteArray, { contentType: 'image/jpeg', upsert: true });
+      .upload(fileName, bytes.buffer, {
+        contentType: 'image/jpeg',
+        upsert: true,
+      });
+
     if (error) {
-      console.log('[Settings] Upload error:', error.message, 'bucket:', bucket);
-      return null;
+      console.log('[Settings] Binary upload error:', error.message, '— trying blob fallback');
+      // Fallback: fetch blob
+      const response = await fetch(localUri);
+      const blob = await response.blob();
+      const fallbackName = fileName + '_b';
+      const { data: data2, error: error2 } = await supabase.storage
+        .from(bucket)
+        .upload(fallbackName, blob, { contentType: 'image/jpeg', upsert: true });
+      if (error2) {
+        console.log('[Settings] Blob upload also failed:', error2.message);
+        return null;
+      }
+      const { data: urlData2 } = supabase.storage.from(bucket).getPublicUrl(data2.path);
+      console.log('[Settings] Blob upload success:', urlData2.publicUrl);
+      return urlData2.publicUrl;
     }
+
     const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(data.path);
-    console.log('[Settings] Upload success, url:', urlData.publicUrl);
+    console.log('[Settings] Upload success:', urlData.publicUrl);
     return urlData.publicUrl;
   } catch (err) {
     console.log('[Settings] uploadImage exception:', err);
@@ -93,6 +123,7 @@ async function uploadImage(bucket: string, localUri: string): Promise<string | n
 
 export default function PartnerSettings() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { profile } = useAuth();
   const shopId = profile?.shop_id;
 
@@ -102,6 +133,15 @@ export default function PartnerSettings() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [openingHours, setOpeningHours] = useState<Record<string, { open: string; close: string; enabled: boolean }>>({});
   const [newPostCaption, setNewPostCaption] = useState('');
+
+  // Multi-shop state
+  const [myShops, setMyShops] = useState<ShopData[]>([]);
+  const [showShopPicker, setShowShopPicker] = useState(false);
+
+  // Image preview state
+  const [previewUri, setPreviewUri] = useState<string | null>(null);
+  const [previewBucket, setPreviewBucket] = useState<string>('shop-covers');
+  const [previewOnConfirm, setPreviewOnConfirm] = useState<((url: string) => void) | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!shopId) return;
@@ -115,6 +155,13 @@ export default function PartnerSettings() {
       setShop(shopData);
       setPosts((postsRes.data as Post[]) ?? []);
 
+      // Fetch all shops owned by this partner
+      const { data: allShops } = await supabase
+        .from('barbershops')
+        .select('id, name_en, logo_url, cover_url')
+        .eq('owner_profile_id', profile?.shop_id ?? '');
+      if (allShops) setMyShops(allShops as ShopData[]);
+
       // Build opening hours
       const defaultHours: Record<string, { open: string; close: string; enabled: boolean }> = {};
       for (let i = 0; i < 7; i++) {
@@ -126,23 +173,35 @@ export default function PartnerSettings() {
     } finally {
       setLoading(false);
     }
-  }, [shopId]);
+  }, [shopId, profile?.shop_id]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  const pickAndUploadImage = async (bucket: string, field: 'cover_url' | 'logo_url') => {
-    console.log('[Settings] Pick image for:', field);
+  const pickImage = async (bucket: string, onSuccess: (url: string) => void) => {
+    console.log('[Settings] Pick image for bucket:', bucket);
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') { Alert.alert('Permission required', 'Please allow photo access.'); return; }
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
-      if (result.canceled || !result.assets[0]) return;
-      const url = await uploadImage(bucket, result.assets[0].uri);
-      if (url) setShop(s => s ? { ...s, [field]: url } : s);
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Please allow photo access');
+        return;
+      }
+      const aspectRatio: [number, number] = bucket === 'shop-covers' ? [16, 9] : [1, 1];
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.9,
+        allowsEditing: true,
+        aspect: aspectRatio,
+      });
+      if (!result.canceled && result.assets[0]) {
+        console.log('[Settings] Image picked, showing preview');
+        setPreviewUri(result.assets[0].uri);
+        setPreviewBucket(bucket);
+        setPreviewOnConfirm(() => onSuccess);
+      }
     } catch (err) {
-      console.log('[Settings] pickAndUploadImage error:', err);
+      console.log('[Settings] pickImage error:', err);
     }
   };
 
@@ -224,6 +283,8 @@ export default function PartnerSettings() {
     }
   };
 
+  const shopDisplayName = shop?.name_en ?? shop?.name ?? 'My Shop';
+
   if (loading) {
     return (
       <View style={[styles.container, { paddingTop: insets.top, alignItems: 'center', justifyContent: 'center' }]}>
@@ -239,12 +300,31 @@ export default function PartnerSettings() {
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
+
+        {/* Shop switcher — only shown when partner has multiple shops */}
+        {myShops.length > 1 && (
+          <TouchableOpacity
+            style={styles.shopSwitcherRow}
+            onPress={() => {
+              console.log('[Settings] Shop switcher pressed');
+              setShowShopPicker(true);
+            }}
+          >
+            <Building2 size={18} color={P.accent} />
+            <Text style={styles.shopSwitcherLabel}>{shopDisplayName}</Text>
+            <ChevronDown size={16} color={P.textSecondary} />
+          </TouchableOpacity>
+        )}
+
         {/* Shop profile */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Shop Profile</Text>
 
           {/* Cover photo */}
-          <TouchableOpacity style={styles.coverWrap} onPress={() => pickAndUploadImage('shop-covers', 'cover_url')}>
+          <TouchableOpacity
+            style={styles.coverWrap}
+            onPress={() => pickImage('shop-covers', (url) => setShop(s => s ? { ...s, cover_url: url } : s))}
+          >
             {shop?.cover_url ? (
               <Image source={resolveImageSource(shop.cover_url)} style={styles.coverImg} />
             ) : (
@@ -259,7 +339,10 @@ export default function PartnerSettings() {
           </TouchableOpacity>
 
           {/* Logo */}
-          <TouchableOpacity style={styles.logoWrap} onPress={() => pickAndUploadImage('shop-logos', 'logo_url')}>
+          <TouchableOpacity
+            style={styles.logoWrap}
+            onPress={() => pickImage('shop-logos', (url) => setShop(s => s ? { ...s, logo_url: url } : s))}
+          >
             {shop?.logo_url ? (
               <Image source={resolveImageSource(shop.logo_url)} style={styles.logoImg} />
             ) : (
@@ -308,7 +391,10 @@ export default function PartnerSettings() {
               <View key={i} style={styles.hourRow}>
                 <Switch
                   value={h.enabled}
-                  onValueChange={v => setOpeningHours(prev => ({ ...prev, [i]: { ...h, enabled: v } }))}
+                  onValueChange={v => {
+                    console.log('[Settings] Toggle day', WEEKDAYS[i], v);
+                    setOpeningHours(prev => ({ ...prev, [i]: { ...h, enabled: v } }));
+                  }}
                   trackColor={{ false: P.border, true: P.accent }}
                   thumbColor="#fff"
                 />
@@ -366,7 +452,115 @@ export default function PartnerSettings() {
         <TouchableOpacity style={styles.saveBtn} onPress={saveShop} disabled={saving}>
           {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.saveBtnText}>Save All Changes</Text>}
         </TouchableOpacity>
+
+        {/* Add new branch */}
+        <TouchableOpacity
+          style={styles.addBranchBtn}
+          onPress={() => {
+            console.log('[Settings] Add new branch pressed');
+            router.push('/(partner)/setup' as never);
+          }}
+        >
+          <Plus size={18} color={P.accent} />
+          <Text style={styles.addBranchBtnText}>Add new branch / shop</Text>
+        </TouchableOpacity>
       </ScrollView>
+
+      {/* Image preview modal */}
+      <Modal
+        visible={!!previewUri}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPreviewUri(null)}
+      >
+        <View style={styles.previewOverlay}>
+          <Text style={styles.previewTitle}>Preview</Text>
+          {previewUri && (
+            <Image
+              source={resolveImageSource(previewUri)}
+              style={[
+                styles.previewImage,
+                { height: previewBucket === 'shop-covers' ? 180 : 320 },
+              ]}
+              resizeMode="cover"
+            />
+          )}
+          <View style={styles.previewActions}>
+            <TouchableOpacity
+              style={styles.previewCancelBtn}
+              onPress={() => {
+                console.log('[Settings] Preview cancelled');
+                setPreviewUri(null);
+              }}
+            >
+              <Text style={styles.previewCancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.previewConfirmBtn}
+              onPress={async () => {
+                if (!previewUri || !previewOnConfirm) return;
+                console.log('[Settings] Preview confirmed, uploading to:', previewBucket);
+                const uri = previewUri;
+                const bucket = previewBucket;
+                const onConfirm = previewOnConfirm;
+                setPreviewUri(null);
+                setSaving(true);
+                const url = await uploadImage(bucket, uri);
+                setSaving(false);
+                if (url) {
+                  onConfirm(url);
+                } else {
+                  Alert.alert('Upload failed', 'Could not upload image. Please try again.');
+                }
+              }}
+            >
+              <Text style={styles.previewConfirmText}>Use Photo</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Shop picker modal */}
+      <Modal
+        visible={showShopPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowShopPicker(false)}
+      >
+        <View style={styles.pickerOverlay}>
+          <View style={styles.pickerSheet}>
+            <Text style={styles.pickerTitle}>Switch Shop</Text>
+            {myShops.map(s => {
+              const name = s.name_en ?? s.name ?? 'Shop';
+              return (
+                <TouchableOpacity
+                  key={s.id}
+                  style={styles.pickerRow}
+                  onPress={() => {
+                    console.log('[Settings] Shop selected:', s.id, name);
+                    setShowShopPicker(false);
+                  }}
+                >
+                  {s.logo_url ? (
+                    <Image source={resolveImageSource(s.logo_url)} style={styles.pickerLogo} />
+                  ) : (
+                    <View style={[styles.pickerLogo, { backgroundColor: P.surfaceElevated, alignItems: 'center', justifyContent: 'center' }]}>
+                      <Building2 size={16} color={P.textTertiary} />
+                    </View>
+                  )}
+                  <Text style={styles.pickerRowText}>{name}</Text>
+                </TouchableOpacity>
+              );
+            })}
+            <TouchableOpacity
+              style={styles.pickerCancelBtn}
+              onPress={() => setShowShopPicker(false)}
+            >
+              <Text style={styles.pickerCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -377,6 +571,18 @@ const styles = StyleSheet.create({
   headerTitle: { color: P.text, fontSize: 20, fontWeight: '700' },
   section: { marginBottom: 28 },
   sectionTitle: { color: P.text, fontSize: 16, fontWeight: '700', marginBottom: 14 },
+  shopSwitcherRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: P.surface,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: P.border,
+  },
+  shopSwitcherLabel: { flex: 1, color: P.text, fontSize: 15, fontWeight: '600' },
   coverWrap: { height: 140, borderRadius: 14, overflow: 'hidden', marginBottom: 12, position: 'relative' },
   coverImg: { width: '100%', height: '100%' },
   coverPlaceholder: { flex: 1, backgroundColor: P.surface, alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderColor: P.border, borderRadius: 14 },
@@ -403,4 +609,74 @@ const styles = StyleSheet.create({
   addPostText: { color: P.accent, fontSize: 12, fontWeight: '600' },
   saveBtn: { backgroundColor: P.accent, paddingVertical: 16, borderRadius: 14, alignItems: 'center', marginTop: 8 },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  addBranchBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: P.surface,
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 8,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: P.accent + '44',
+  },
+  addBranchBtnText: { color: P.accent, fontSize: 15, fontWeight: '600' },
+  // Preview modal
+  previewOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  previewTitle: { color: '#fff', fontSize: 16, fontWeight: '700', marginBottom: 16 },
+  previewImage: { width: 320, borderRadius: 12 },
+  previewActions: { flexDirection: 'row', gap: 12, marginTop: 24 },
+  previewCancelBtn: {
+    backgroundColor: P.border,
+    borderRadius: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+  },
+  previewCancelText: { color: '#fff', fontWeight: '600' },
+  previewConfirmBtn: {
+    backgroundColor: P.accent,
+    borderRadius: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+  },
+  previewConfirmText: { color: '#fff', fontWeight: '700' },
+  // Shop picker modal
+  pickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  pickerSheet: {
+    backgroundColor: P.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 24,
+    gap: 4,
+  },
+  pickerTitle: { color: P.text, fontSize: 17, fontWeight: '700', marginBottom: 12 },
+  pickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: P.divider,
+  },
+  pickerLogo: { width: 40, height: 40, borderRadius: 20 },
+  pickerRowText: { color: P.text, fontSize: 15, fontWeight: '500', flex: 1 },
+  pickerCancelBtn: {
+    marginTop: 12,
+    backgroundColor: P.surfaceElevated,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  pickerCancelText: { color: P.textSecondary, fontSize: 15, fontWeight: '600' },
 });
