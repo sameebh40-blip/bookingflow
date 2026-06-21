@@ -36,6 +36,7 @@ import {
   Gift,
   Zap,
   DollarSign,
+  Menu,
 } from 'lucide-react-native';
 import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -127,6 +128,8 @@ const DEMO_BARBERS: BarberRow[] = [
   { id: 'b1', display_name: 'S2 Khaled', avatar_url: null },
   { id: 'b2', display_name: 'Wendy Smith (Demo)', avatar_url: null },
 ];
+
+const BARBER_COLORS = ['#7C3AED', '#0EA5E9', '#10B981', '#F59E0B', '#E85454', '#8B5CF6', '#06B6D4'];
 
 function statusColor(status: string) {
   if (status === 'confirmed') return '#5B9CF6';
@@ -261,6 +264,7 @@ const BookingBlock = React.memo(({
         right: 2,
         height,
         transform: [{ translateY: dragY }],
+        opacity: isDragging.current ? 0.4 : 1,
         borderRadius: 6,
         borderLeftWidth: 4,
         borderLeftColor: color,
@@ -350,6 +354,16 @@ function PartnerCalendarInner() {
   // Reschedule confirmation
   const [pendingReschedule, setPendingReschedule] = useState<{ booking: Booking; deltaMinutes: number } | null>(null);
   const [notifyClient, setNotifyClient] = useState(true);
+
+  // Drag reschedule bar
+  const [dragBooking, setDragBooking] = useState<Booking | null>(null);
+  const [dragNewTime, setDragNewTime] = useState<Date | null>(null);
+
+  // Status picker
+  const [showStatusPicker, setShowStatusPicker] = useState(false);
+
+  // Add sheet
+  const [showAddSheet, setShowAddSheet] = useState(false);
   const [clientReady, setClientReady] = React.useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const toastAnim = useRef(new Animated.Value(-60)).current;
@@ -472,9 +486,10 @@ function PartnerCalendarInner() {
 
   // ── Drag end handler ──
   const handleDragEnd = useCallback((booking: Booking, deltaMinutes: number) => {
-    console.log('[Calendar] Drag end — showing reschedule confirmation for booking:', booking.id, 'delta:', deltaMinutes);
-    setPendingReschedule({ booking, deltaMinutes });
-    setNotifyClient(true);
+    console.log('[Calendar] Drag end — showing reschedule bar for booking:', booking.id, 'delta:', deltaMinutes);
+    const newStart = new Date(new Date(booking.start_at).getTime() + deltaMinutes * 60000);
+    setDragBooking(booking);
+    setDragNewTime(newStart);
   }, []);
 
   // ── Booking press handler ──
@@ -578,7 +593,9 @@ function PartnerCalendarInner() {
     });
 
   // ── Column definitions ──
-  const dayViewBarbers = selectedBarberId ? barbers.filter(b => b.id === selectedBarberId) : barbers;
+  const dayViewBarbers = selectedBarberId
+    ? barbers.filter(b => b.id === selectedBarberId)
+    : (barbers.length > 0 ? barbers : DEMO_BARBERS);
 
   const dayColumns: ColDef[] = dayViewBarbers.length > 0
     ? dayViewBarbers.map(bar => ({
@@ -849,47 +866,57 @@ function PartnerCalendarInner() {
         </Animated.View>
       )}
 
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={{ padding: 6 }} onPress={goToPrev}>
-          <ChevronLeft size={20} color={P.text} />
+      {/* Top bar */}
+      <View style={styles.topBar}>
+        <TouchableOpacity style={styles.topBarBtn} onPress={() => { console.log('[Calendar] Menu button pressed'); setShowViewSwitcher(true); }}>
+          <Menu size={20} color={P.text} />
         </TouchableOpacity>
-        <TouchableOpacity
-          style={{ flex: 1, alignItems: 'center' }}
-          onPress={() => {
-            console.log('[Calendar] Month picker opened');
-            setMonthPickerDate(new Date(selectedDate));
-            setShowMonthPicker(true);
-          }}
-        >
-          <Text style={styles.headerDateText}>{headerDateText}</Text>
+        <TouchableOpacity style={styles.datePickerBtn} onPress={() => { console.log('[Calendar] Date picker opened'); setShowMonthPicker(true); }}>
+          <Text style={styles.datePickerText}>
+            {selectedDate.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' })}
+          </Text>
+          <ChevronDown size={14} color={P.textSecondary} />
         </TouchableOpacity>
-        <TouchableOpacity style={{ padding: 6 }} onPress={goToNext}>
-          <ChevronRight size={20} color={P.text} />
-        </TouchableOpacity>
-        <View style={styles.headerRight}>
-          {isDemo && (
-            <View style={styles.demoBadge}>
-              <Text style={styles.demoBadgeText}>Demo</Text>
+        <View style={styles.topBarRight}>
+          <TouchableOpacity style={styles.topBarBtn} onPress={() => { console.log('[Calendar] Chat button pressed'); expoRouter.push('/(partner)/chat' as never); }}>
+            <MessageCircle size={20} color={P.text} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.topBarBtn} onPress={() => { console.log('[Calendar] Notifications button pressed'); expoRouter.push('/(partner)/notifications' as never); }}>
+            <Bell size={20} color={P.text} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.avatarBtn} onPress={() => { console.log('[Calendar] Profile avatar pressed'); expoRouter.push('/(partner)/profile' as never); }}>
+            <View style={styles.avatarCircle}>
+              <Text style={styles.avatarInitials}>{(profile?.full_name ?? 'U').split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)}</Text>
             </View>
-          )}
-          <TouchableOpacity style={styles.iconBtn} onPress={() => console.log('[Calendar] Messages pressed')}>
-            <MessageCircle size={20} color={P.textSecondary} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => { console.log('[Calendar] Notifications pressed'); expoRouter.push('/(partner)/notifications' as never); }}>
-            <Bell size={20} color={P.textSecondary} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => { console.log('[Calendar] New booking button pressed'); expoRouter.push('/(partner)/new-booking' as never); }}
-            style={styles.addBtn}
-          >
-            <Plus size={18} color="#fff" />
-          </TouchableOpacity>
-          <View style={styles.avatarCircle}>
-            <Text style={styles.avatarText}>{profileInitial}</Text>
-          </View>
         </View>
       </View>
+
+      {/* Staff avatar filter row */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.staffRow} contentContainerStyle={{ paddingHorizontal: 12, gap: 12, alignItems: 'center' }}>
+        <TouchableOpacity style={styles.staffAvatarWrap} onPress={() => { console.log('[Calendar] Staff filter: All'); setSelectedBarberId(null); }}>
+          <View style={[styles.staffAvatar, !selectedBarberId && styles.staffAvatarActive, { backgroundColor: P.accent }]}>
+            <Text style={styles.staffAvatarText}>All</Text>
+          </View>
+          <Text style={styles.staffAvatarName} numberOfLines={1}>All</Text>
+        </TouchableOpacity>
+        {barbers.map(b => {
+          const initials = (b.display_name ?? 'B').split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2);
+          const isActive = selectedBarberId === b.id;
+          return (
+            <TouchableOpacity key={b.id} style={styles.staffAvatarWrap} onPress={() => { console.log('[Calendar] Staff filter:', b.display_name); setSelectedBarberId(isActive ? null : b.id); }}>
+              {b.avatar_url ? (
+                <Image source={{ uri: b.avatar_url }} style={[styles.staffAvatar, isActive && styles.staffAvatarActive]} />
+              ) : (
+                <View style={[styles.staffAvatar, isActive && styles.staffAvatarActive, { backgroundColor: BARBER_COLORS[barbers.indexOf(b) % BARBER_COLORS.length] }]}>
+                  <Text style={styles.staffAvatarText}>{initials}</Text>
+                </View>
+              )}
+              <Text style={[styles.staffAvatarName, isActive && { color: P.accent }]} numberOfLines={1}>{b.display_name?.split(' ')[0] ?? 'Staff'}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
 
       {/* View switcher row */}
       <View style={styles.viewSwitcherRow}>
@@ -949,6 +976,32 @@ function PartnerCalendarInner() {
       {/* Barber filter chips */}
       {calView !== 'month' && renderBarberChips()}
 
+      {/* Drag reschedule confirmation bar */}
+      {dragBooking && dragNewTime && (
+        <View style={styles.rescheduleBar}>
+          <Text style={styles.rescheduleBarText}>
+            {`Reschedule to ${dragNewTime.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' })} · ${dragNewTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`}
+          </Text>
+          <View style={styles.rescheduleBarActions}>
+            <TouchableOpacity style={styles.rescheduleBarCancel} onPress={() => { console.log('[Calendar] Reschedule bar cancelled'); setDragBooking(null); setDragNewTime(null); }}>
+              <Text style={styles.rescheduleBarCancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.rescheduleBarSave} onPress={async () => {
+              if (!dragBooking || !dragNewTime) return;
+              console.log('[Calendar] Reschedule bar save pressed, booking:', dragBooking.id, 'new time:', dragNewTime.toISOString());
+              const duration = new Date(dragBooking.end_at ?? dragBooking.start_at).getTime() - new Date(dragBooking.start_at).getTime();
+              const newEnd = new Date(dragNewTime.getTime() + duration);
+              await supabase.from('bookings').update({ start_at: dragNewTime.toISOString(), end_at: newEnd.toISOString() }).eq('id', dragBooking.id);
+              setDragBooking(null);
+              setDragNewTime(null);
+              fetchBookings();
+            }}>
+              <Text style={styles.rescheduleBarSaveText}>Save</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       {/* Calendar grid */}
       {loading ? (
         <View style={styles.loadingWrap}>
@@ -971,7 +1024,7 @@ function PartnerCalendarInner() {
         <TouchableOpacity style={styles.bbBtn} onPress={() => console.log('[Calendar] Bottom bar: Tag pressed')}>
           <Tag size={22} color={P.textSecondary} />
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.bbBtn, styles.bbCenter]} onPress={() => { console.log('[Calendar] Bottom bar: New booking pressed'); expoRouter.push('/(partner)/new-booking' as never); }}>
+        <TouchableOpacity style={[styles.bbBtn, styles.bbCenter]} onPress={() => { console.log('[Calendar] Bottom bar: Add sheet opened'); setShowAddSheet(true); }}>
           <Plus size={24} color="#fff" />
         </TouchableOpacity>
         <TouchableOpacity style={styles.bbBtn} onPress={() => console.log('[Calendar] Bottom bar: Smile pressed')}>
@@ -1003,12 +1056,12 @@ function PartnerCalendarInner() {
             </View>
 
             <View style={styles.statusRow}>
-              <View style={[styles.statusBadge, { backgroundColor: statusColor(selectedBooking?.status ?? '') + '22', borderColor: statusColor(selectedBooking?.status ?? '') }]}>
+              <TouchableOpacity onPress={() => { console.log('[Calendar] Status badge tapped, opening status picker'); setShowStatusPicker(true); }} style={[styles.statusBadge, { backgroundColor: statusColor(selectedBooking?.status ?? '') + '22', borderColor: statusColor(selectedBooking?.status ?? '') }]}>
                 <View style={[styles.statusDot, { backgroundColor: statusColor(selectedBooking?.status ?? '') }]} />
                 <Text style={[styles.statusBadgeText, { color: statusColor(selectedBooking?.status ?? '') }]}>
                   {statusLabel(selectedBooking?.status ?? '')}
                 </Text>
-              </View>
+              </TouchableOpacity>
               <TouchableOpacity
                 style={styles.rebookBtn}
                 onPress={() => {
@@ -1146,9 +1199,12 @@ function PartnerCalendarInner() {
               <TouchableOpacity
                 style={styles.checkoutBtn}
                 onPress={() => {
-                  console.log('[Calendar] Checkout pressed for booking:', selectedBooking?.id);
-                  setCashAmount(selectedBookingPriceStr);
-                  setShowPaymentSelect(true);
+                  if (!selectedBooking) return;
+                  console.log('[Calendar] Checkout pressed for booking:', selectedBooking.id, 'navigating to POS');
+                  setSelectedBooking(null);
+                  const clientName = encodeURIComponent(selectedBooking.customer_name ?? 'Walk-In');
+                  const serviceId = selectedBooking.booking_services?.[0]?.service_name_en ? encodeURIComponent(selectedBooking.booking_services[0].service_name_en) : '';
+                  expoRouter.push(`/(partner)/pos/new?clientName=${clientName}&serviceName=${serviceId}&bookingId=${selectedBooking.id}` as never);
                 }}
               >
                 <Text style={styles.checkoutBtnText}>Checkout</Text>
@@ -1442,6 +1498,64 @@ function PartnerCalendarInner() {
         </View>
       </Modal>
 
+      {/* ── Status Picker Sheet ── */}
+      <Modal visible={showStatusPicker} transparent animationType="slide" onRequestClose={() => setShowStatusPicker(false)}>
+        <View style={styles.sheetOverlay}>
+          <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
+            <View style={styles.sheetHandle} />
+            <Text style={[styles.sheetTitle, { marginBottom: 16 }]}>Appointment Status</Text>
+            {[
+              { key: 'pending', label: 'Booked', color: P.textSecondary, icon: '📅' },
+              { key: 'confirmed', label: 'Confirmed', color: '#7C3AED', icon: '✅' },
+              { key: 'arrived', label: 'Arrived', color: '#0EA5E9', icon: '🚶' },
+              { key: 'started', label: 'Started', color: '#F59E0B', icon: '✂️' },
+              { key: 'no_show', label: 'No-show', color: '#E85454', icon: '❌' },
+              { key: 'completed', label: 'Completed', color: '#10B981', icon: '🎉' },
+              { key: 'cancelled', label: 'Cancelled', color: '#E85454', icon: '🚫' },
+            ].map(s => (
+              <TouchableOpacity key={s.key} style={styles.statusPickerRow} onPress={async () => {
+                if (!selectedBooking) return;
+                console.log('[Calendar] Status picker: setting status to', s.key, 'for booking:', selectedBooking.id);
+                await supabase.from('bookings').update({ status: s.key }).eq('id', selectedBooking.id);
+                setSelectedBooking({ ...selectedBooking, status: s.key });
+                setShowStatusPicker(false);
+                fetchBookings();
+              }}>
+                <Text style={{ fontSize: 20 }}>{s.icon}</Text>
+                <Text style={[styles.statusPickerLabel, { color: s.color }]}>{s.label}</Text>
+                {selectedBooking?.status === s.key && <Check size={18} color={s.color} />}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Add Sheet ── */}
+      <Modal visible={showAddSheet} transparent animationType="slide" onRequestClose={() => setShowAddSheet(false)}>
+        <View style={styles.sheetOverlay}>
+          <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
+            <View style={styles.sheetHandle} />
+            <Text style={[styles.sheetTitle, { marginBottom: 16 }]}>Add</Text>
+            {[
+              { label: 'New Appointment', icon: '📅', route: '/(partner)/new-booking' },
+              { label: 'New Sale', icon: '🏷️', route: '/(partner)/pos/new' },
+              { label: 'Block Time', icon: '🚫', route: null },
+              { label: 'Quick Payment', icon: '💳', route: '/(partner)/pos/new' },
+            ].map((item, i) => (
+              <TouchableOpacity key={i} style={styles.addSheetRow} onPress={() => {
+                console.log('[Calendar] Add sheet item pressed:', item.label);
+                setShowAddSheet(false);
+                if (item.route) expoRouter.push(item.route as never);
+              }}>
+                <View style={styles.addSheetIcon}><Text style={{ fontSize: 22 }}>{item.icon}</Text></View>
+                <Text style={styles.addSheetLabel}>{item.label}</Text>
+                <ChevronRight size={16} color={P.textTertiary} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Modal>
+
       {/* ── Reschedule Confirmation Modal ── */}
       <Modal visible={!!pendingReschedule} transparent animationType="fade" onRequestClose={() => setPendingReschedule(null)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
@@ -1523,16 +1637,46 @@ const styles = StyleSheet.create({
   },
   toastText: { color: '#fff', fontSize: 13, fontWeight: '600' },
 
-  // Header
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 8 },
-  headerDateText: { color: P.text, fontSize: 15, fontWeight: '700' },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  iconBtn: { padding: 6 },
-  addBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center' },
-  avatarCircle: { width: 32, height: 32, borderRadius: 16, backgroundColor: P.accentLight, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: P.accent },
-  avatarText: { color: P.accent, fontSize: 12, fontWeight: '700' },
+  // Top bar
+  topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
+  topBarBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: P.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: P.border },
+  datePickerBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: P.surface, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: P.border },
+  datePickerText: { color: P.text, fontSize: 15, fontWeight: '700' },
+  topBarRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  avatarBtn: { marginLeft: 2 },
+  avatarCircle: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#4C1D95', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: P.accent },
+  avatarInitials: { color: '#fff', fontSize: 12, fontWeight: '700' },
   demoBadge: { backgroundColor: P.surfaceElevated, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: P.border },
   demoBadgeText: { color: P.textTertiary, fontSize: 10, fontWeight: '600' },
+
+  // Staff avatar row
+  staffRow: { flexGrow: 0, marginBottom: 8 },
+  staffAvatarWrap: { alignItems: 'center', gap: 4, minWidth: 52 },
+  staffAvatar: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'transparent' },
+  staffAvatarActive: { borderColor: P.accent, borderWidth: 2 },
+  staffAvatarText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  staffAvatarName: { color: P.textSecondary, fontSize: 10, maxWidth: 52, textAlign: 'center' },
+
+  // Reschedule bar
+  rescheduleBar: { backgroundColor: '#1E1040', borderRadius: 12, marginHorizontal: 12, marginBottom: 8, padding: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: P.accent },
+  rescheduleBarText: { color: P.text, fontSize: 13, fontWeight: '600', flex: 1 },
+  rescheduleBarActions: { flexDirection: 'row', gap: 8 },
+  rescheduleBarCancel: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8, backgroundColor: P.surface, borderWidth: 1, borderColor: P.border },
+  rescheduleBarCancelText: { color: P.textSecondary, fontSize: 13, fontWeight: '600' },
+  rescheduleBarSave: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8, backgroundColor: P.accent },
+  rescheduleBarSaveText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+
+  // Sheet title
+  sheetTitle: { color: P.text, fontSize: 20, fontWeight: '700', paddingHorizontal: 20 },
+
+  // Status picker
+  statusPickerRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: P.divider, paddingHorizontal: 20 },
+  statusPickerLabel: { flex: 1, fontSize: 16, fontWeight: '600' },
+
+  // Add sheet
+  addSheetRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: P.divider, paddingHorizontal: 20 },
+  addSheetIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: P.surfaceElevated, alignItems: 'center', justifyContent: 'center' },
+  addSheetLabel: { flex: 1, color: P.text, fontSize: 16, fontWeight: '500' },
 
   // View switcher row (inline tabs)
   viewSwitcherRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, gap: 6, borderBottomWidth: 1, borderBottomColor: P.divider },

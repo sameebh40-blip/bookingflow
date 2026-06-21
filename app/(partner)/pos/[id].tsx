@@ -132,6 +132,11 @@ function SaleDetailInner() {
         <View style={[styles.statusBadge, { backgroundColor: statusColor + '22', borderColor: statusColor + '44' }]}>
           <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
         </View>
+        {sale.status === 'completed' && (
+          <TouchableOpacity style={styles.rebookBtn} onPress={() => { console.log('[POS/Detail] Rebook button pressed for sale:', id); router.push('/(partner)/new-booking' as never); }}>
+            <Text style={styles.rebookBtnText}>Rebook</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Tabs */}
@@ -266,20 +271,32 @@ function SaleDetailInner() {
             {activity.length === 0 ? (
               <Text style={{ color: P.textSec, textAlign: 'center', padding: 20 }}>No activity recorded</Text>
             ) : (
-              activity.map((a, i) => {
-                const activityTime = new Date(a.created_at).toLocaleTimeString();
-                const isLast = i === activity.length - 1;
-                return (
-                  <View key={a.id} style={[styles.activityRow, !isLast && styles.activityDivider]}>
-                    <View style={styles.activityDot} />
-                    <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text style={styles.activityAction}>{a.action}</Text>
-                      {a.detail ? <Text style={styles.activityDetail}>{a.detail}</Text> : null}
-                      <Text style={styles.activityTime}>{a.actor_name} · {activityTime}</Text>
+              <>
+                {activity.map((a, i) => {
+                  const initials = (a.actor_name ?? 'S').split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2);
+                  const isPayment = a.action?.toLowerCase().includes('payment');
+                  return (
+                    <View key={a.id} style={[styles.activityRow, i < activity.length - 1 && styles.activityDivider]}>
+                      <View style={styles.activityAvatar}>
+                        <Text style={styles.activityAvatarText}>{initials}</Text>
+                      </View>
+                      <View style={{ flex: 1, marginLeft: 12 }}>
+                        <Text style={styles.activityAction}>{a.action}</Text>
+                        {a.detail ? <Text style={styles.activityDetail}>{a.detail}</Text> : null}
+                        <Text style={styles.activityTime}>
+                          {`${a.actor_name} · ${new Date(a.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`}
+                        </Text>
+                      </View>
+                      {isPayment && (
+                        <TouchableOpacity style={styles.activityActions} onPress={() => console.log('[POS/Detail] Activity actions pressed for:', a.id)}>
+                          <Text style={styles.activityActionsText}>Actions ▾</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
-                  </View>
-                );
-              })
+                  );
+                })}
+                <Text style={styles.activityFooter}>Activity shown for the last 90 days only.</Text>
+              </>
             )}
           </View>
         )}
@@ -334,8 +351,14 @@ const styles = StyleSheet.create({
   cancelReasonText: { color: P.danger, fontSize: 13, flex: 1 },
   activityRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 12 },
   activityDivider: { borderBottomWidth: 1, borderBottomColor: P.divider },
-  activityDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: P.accent, marginTop: 4 },
+  activityAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#4C1D95', alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+  activityAvatarText: { color: '#fff', fontSize: 11, fontWeight: '700' },
   activityAction: { color: P.text, fontSize: 14, fontWeight: '600' },
   activityDetail: { color: P.textSec, fontSize: 13, marginTop: 2 },
   activityTime: { color: P.textTer, fontSize: 11, marginTop: 4 },
+  activityActions: { paddingHorizontal: 10, paddingVertical: 5, backgroundColor: '#1E1E35', borderRadius: 8, borderWidth: 1, borderColor: '#2A2A45' },
+  activityActionsText: { color: '#9090B0', fontSize: 12, fontWeight: '600' },
+  activityFooter: { color: '#5A5A7A', fontSize: 11, textAlign: 'center', marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#1E1E35' },
+  rebookBtn: { paddingHorizontal: 14, paddingVertical: 7, backgroundColor: '#7C3AED' + '33', borderRadius: 10, borderWidth: 1, borderColor: '#7C3AED' + '66' },
+  rebookBtnText: { color: '#7C3AED', fontSize: 13, fontWeight: '700' },
 });

@@ -4,7 +4,7 @@ import {
   Modal, ActivityIndicator, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRootNavigationState, router } from 'expo-router';
+import { useRootNavigationState, router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Plus, Minus, Trash2, User, Tag, Percent, ChevronRight, CreditCard, Banknote, Gift, X, Check } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/utils/supabase';
@@ -25,6 +25,7 @@ function NewSaleInner() {
   const insets = useSafeAreaInsets();
   const { profile } = useAuth();
   const shopId = (profile as any)?.shop_id;
+  const params = useLocalSearchParams<{ clientName?: string; serviceName?: string; bookingId?: string }>();
 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [services, setServices] = useState<any[]>([]);
@@ -54,6 +55,15 @@ function NewSaleInner() {
       }
     });
   }, [shopId]);
+
+  // Pre-fill from calendar checkout
+  useEffect(() => {
+    if (params.clientName) {
+      const decoded = decodeURIComponent(params.clientName);
+      console.log('[POS/New] Pre-filling client name from calendar:', decoded);
+      setClientName(decoded);
+    }
+  }, [params.clientName]);
 
   const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const discountAmt = discountType === 'percent' ? subtotal * (discount / 100) : discount;
