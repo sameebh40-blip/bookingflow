@@ -11,13 +11,29 @@ import {
   ActivityIndicator,
   Image,
   ImageSourcePropType,
+  PanResponder,
+  Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ChevronLeft, ChevronRight, Plus, X, Check, LayoutGrid, Calendar as CalIcon, CalendarDays, CalendarRange } from 'lucide-react-native';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  X,
+  Check,
+  MoreVertical,
+  RefreshCw,
+  DollarSign,
+  Gift,
+  Layers,
+  CreditCard,
+  User,
+  MessageSquare,
+  Bell,
+} from 'lucide-react-native';
 import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { AnimatedPressable } from '@/components/AnimatedPressable';
 
 const P = {
   bg: '#0F0F1A',
@@ -36,12 +52,13 @@ const P = {
   divider: '#1E1E35',
 };
 
-const HOUR_HEIGHT = 60;
-const START_HOUR = 8;
+const HOUR_HEIGHT = 64;
+const COL_WIDTH = 130;
+const TIME_COL_WIDTH = 52;
+const START_HOUR = 6;
 const END_HOUR = 22;
 const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-
-type CalendarView = 'day' | '3day' | 'week' | 'month';
+const SCREEN_W = Dimensions.get('window').width;
 
 interface Booking {
   id: string;
@@ -53,6 +70,8 @@ interface Booking {
   customer_profile_id: string | null;
   barber_id: string | null;
   service_id: string | null;
+  payment_status?: string;
+  payment_method?: string;
   profiles?: { full_name: string; avatar_url: string } | null;
   barbers?: { display_name: string } | null;
   services?: { name: string; duration_minutes: number } | null;
@@ -78,24 +97,24 @@ function todayAt(h: number, m: number): string {
 }
 
 const DEMO_CAL_BOOKINGS: Booking[] = [
-  { id: 'dc1', start_at: todayAt(9, 0), end_at: todayAt(9, 45), status: 'confirmed', price_bhd: 5, customer_name: 'Ahmed Al-Mansoori', barber_id: 'b1', customer_profile_id: null, service_id: null, profiles: null, barbers: { display_name: 'Majed' }, booking_services: [{ service_name_en: 'Haircut' }] },
-  { id: 'dc2', start_at: todayAt(10, 0), end_at: todayAt(10, 30), status: 'pending', price_bhd: 8, customer_name: 'Khalid Hassan', barber_id: 'b2', customer_profile_id: null, service_id: null, profiles: null, barbers: { display_name: 'Omar' }, booking_services: [{ service_name_en: 'Beard Trim' }] },
-  { id: 'dc3', start_at: todayAt(14, 0), end_at: todayAt(15, 0), status: 'confirmed', price_bhd: 12, customer_name: 'Sara Al-Zahra', barber_id: 'b1', customer_profile_id: null, service_id: null, profiles: null, barbers: { display_name: 'Majed' }, booking_services: [{ service_name_en: 'Color & Highlights' }] },
+  { id: 'dc1', start_at: todayAt(8, 20), end_at: todayAt(9, 5), status: 'confirmed', price_bhd: 40, customer_name: 'John Doe', barber_id: 'b1', customer_profile_id: null, service_id: null, profiles: null, barbers: { display_name: 'S2 Khaled' }, booking_services: [{ service_name_en: 'Haircut' }] },
+  { id: 'dc2', start_at: todayAt(9, 0), end_at: todayAt(9, 45), status: 'confirmed', price_bhd: 40, customer_name: 'John Doe', barber_id: 'b2', customer_profile_id: null, service_id: null, profiles: null, barbers: { display_name: 'Wendy Smith' }, booking_services: [{ service_name_en: 'Haircut' }] },
+  { id: 'dc3', start_at: todayAt(10, 0), end_at: todayAt(10, 35), status: 'confirmed', price_bhd: 30, customer_name: 'Jack Doe', barber_id: 'b1', customer_profile_id: null, service_id: null, profiles: null, barbers: { display_name: 'S2 Khaled' }, booking_services: [{ service_name_en: 'Blow Dry' }] },
 ];
 
 const DEMO_BARBERS: BarberChip[] = [
-  { id: 'b1', name: 'Majed' },
-  { id: 'b2', name: 'Omar' },
+  { id: 'b1', name: 'S2 Khaled' },
+  { id: 'b2', name: 'Wendy Smith (Demo)' },
 ];
 
 function getWeekDates(offset: number): Date[] {
   const now = new Date();
   const day = now.getDay();
-  const monday = new Date(now);
-  monday.setDate(now.getDate() - day + offset * 7);
+  const sunday = new Date(now);
+  sunday.setDate(now.getDate() - day + offset * 7);
   return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
+    const d = new Date(sunday);
+    d.setDate(sunday.getDate() + i);
     return d;
   });
 }
@@ -109,34 +128,84 @@ function statusColor(status: string) {
   return P.textSecondary;
 }
 
+function formatTime(date: Date): string {
+  const h = date.getHours();
+  const m = date.getMinutes();
+  const ampm = h >= 12 ? 'pm' : 'am';
+  const hh = h % 12 === 0 ? 12 : h % 12;
+  return `${hh}:${String(m).padStart(2, '0')}${ampm}`;
+}
+
+function formatHour(h: number): string {
+  if (h === 0) return '12am';
+  if (h < 12) return `${h}am`;
+  if (h === 12) return '12pm';
+  return `${h - 12}pm`;
+}
+
 export default function PartnerCalendar() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { profile } = useAuth();
   const shopId = profile?.shop_id;
 
-  const [calView, setCalView] = useState<CalendarView>('week');
-  const [showViewModal, setShowViewModal] = useState(false);
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [barbers, setBarbers] = useState<BarberChip[]>([]);
   const [selectedBarberId, setSelectedBarberId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
-  const [cancelReason, setCancelReason] = useState('');
-  const [showCancelInput, setShowCancelInput] = useState(false);
-  const [actionLoading, setActionLoading] = useState(false);
   const [isDemo, setIsDemo] = useState(false);
 
-  const weekDates = getWeekDates(weekOffset);
+  // Detail sheet
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [detailTab, setDetailTab] = useState<'details' | 'activity'>('details');
+
+  // Payment flow
+  const [showPaymentSelect, setShowPaymentSelect] = useState(false);
+  const [showCashModal, setShowCashModal] = useState(false);
+  const [cashAmount, setCashAmount] = useState('');
+
+  // Drag
+  const [dragOffsets, setDragOffsets] = useState<Record<string, number>>({});
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+
+  // Toast
+  const [toast, setToast] = useState<string | null>(null);
+  const toastAnim = useRef(new Animated.Value(-60)).current;
+
+  // Scroll refs
+  const timeScrollRef = useRef<ScrollView>(null);
   const slideAnim = useRef(new Animated.Value(0)).current;
 
+  const weekDates = getWeekDates(weekOffset);
+
+  const [nowMinutes, setNowMinutes] = useState(() => {
+    const n = new Date();
+    return (n.getHours() - START_HOUR) * 60 + n.getMinutes();
+  });
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      const n = new Date();
+      setNowMinutes((n.getHours() - START_HOUR) * 60 + n.getMinutes());
+    }, 60000);
+    return () => clearInterval(t);
+  }, []);
+
+  const nowTop = (nowMinutes / 60) * HOUR_HEIGHT;
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    Animated.sequence([
+      Animated.timing(toastAnim, { toValue: 0, duration: 250, useNativeDriver: true }),
+      Animated.delay(2500),
+      Animated.timing(toastAnim, { toValue: -60, duration: 250, useNativeDriver: true }),
+    ]).start(() => setToast(null));
+  }, [toastAnim]);
+
   const fetchBarbers = useCallback(async () => {
-    if (!shopId) {
-      setBarbers(DEMO_BARBERS);
-      return;
-    }
+    if (!shopId) { setBarbers(DEMO_BARBERS); return; }
     try {
       const { data } = await supabase
         .from('barbers')
@@ -163,13 +232,13 @@ export default function PartnerCalendar() {
       return;
     }
     const weekStart = weekDates[0];
-    const weekEnd = weekDates[6];
+    const weekEnd = new Date(weekDates[6]);
     weekEnd.setHours(23, 59, 59, 999);
     console.log('[Calendar] Fetching bookings for week:', weekStart.toDateString());
     try {
       const { data } = await supabase
         .from('bookings')
-        .select('id, start_at, end_at, status, price_bhd, customer_name, customer_profile_id, barber_id, service_id, profiles!customer_profile_id(full_name, avatar_url), barbers!barber_id(display_name), services!service_id(name, duration_minutes)')
+        .select('id, start_at, end_at, status, price_bhd, customer_name, customer_profile_id, barber_id, service_id, payment_status, payment_method, profiles!customer_profile_id(full_name, avatar_url), barbers!barber_id(display_name), services!service_id(name, duration_minutes)')
         .eq('shop_id', shopId)
         .gte('start_at', weekStart.toISOString())
         .lte('start_at', weekEnd.toISOString())
@@ -193,15 +262,9 @@ export default function PartnerCalendar() {
     }
   }, [shopId, weekOffset]);
 
-  useEffect(() => {
-    fetchBarbers();
-  }, [fetchBarbers]);
+  useEffect(() => { fetchBarbers(); }, [fetchBarbers]);
+  useEffect(() => { fetchBookings(); }, [fetchBookings]);
 
-  useEffect(() => {
-    fetchBookings();
-  }, [fetchBookings]);
-
-  // Real-time
   useEffect(() => {
     if (!shopId) return;
     const channel = supabase
@@ -214,103 +277,176 @@ export default function PartnerCalendar() {
     return () => { supabase.removeChannel(channel); };
   }, [shopId, fetchBookings]);
 
+  // Auto-scroll to current time
+  useEffect(() => {
+    setTimeout(() => {
+      const scrollTo = Math.max(0, nowTop - 100);
+      timeScrollRef.current?.scrollTo({ y: scrollTo, animated: true });
+    }, 600);
+  }, []);
+
   const changeWeek = (dir: number) => {
     console.log('[Calendar] Week changed:', dir > 0 ? 'next' : 'prev');
     Animated.sequence([
-      Animated.timing(slideAnim, { toValue: dir * -30, duration: 150, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 150, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: dir * -20, duration: 120, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 120, useNativeDriver: true }),
     ]).start();
     setWeekOffset(prev => prev + dir);
   };
 
-  // Filter by barber
-  const filteredBookings = selectedBarberId
-    ? bookings.filter(b => b.barber_id === selectedBarberId)
-    : bookings;
-
-  // Get bookings for selected date
-  const dayBookings = filteredBookings.filter(b => {
+  const dayBookings = bookings.filter(b => {
     const d = new Date(b.start_at);
     return d.toDateString() === selectedDate.toDateString();
   });
 
-  const confirmBooking = async (id: string) => {
-    console.log('[Calendar] Confirm booking:', id);
-    setActionLoading(true);
-    try {
-      if (!id.startsWith('d')) {
-        await supabase.from('bookings').update({ status: 'confirmed' }).eq('id', id);
-        await fetchBookings();
+  // Columns: if barber selected, show only that barber; else show all
+  const visibleBarbers = selectedBarberId
+    ? barbers.filter(b => b.id === selectedBarberId)
+    : barbers;
+
+  const bookingsForBarber = (barberId: string) =>
+    dayBookings.filter(b => b.barber_id === barberId);
+
+  const createDragResponder = (booking: Booking) =>
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dy) > 5,
+      onPanResponderGrant: () => {
+        console.log('[Calendar] Drag started for booking:', booking.id);
+        setDraggingId(booking.id);
+      },
+      onPanResponderMove: (_, gs) => {
+        setDragOffsets(prev => ({ ...prev, [booking.id]: gs.dy }));
+      },
+      onPanResponderRelease: async (_, gs) => {
+        console.log('[Calendar] Drag released for booking:', booking.id, 'dy:', gs.dy);
+        const deltaMinutes = Math.round((gs.dy / HOUR_HEIGHT) * 60 / 15) * 15;
+        const newStart = new Date(new Date(booking.start_at).getTime() + deltaMinutes * 60000);
+        const newEnd = new Date(new Date(booking.end_at ?? booking.start_at).getTime() + deltaMinutes * 60000);
+        if (!booking.id.startsWith('d')) {
+          try {
+            await supabase.from('bookings').update({
+              start_at: newStart.toISOString(),
+              end_at: newEnd.toISOString(),
+            }).eq('id', booking.id);
+            console.log('[Calendar] Booking rescheduled:', booking.id, 'to', newStart.toISOString());
+          } catch (err) {
+            console.log('[Calendar] Reschedule error:', err);
+          }
+        }
+        setDragOffsets(prev => ({ ...prev, [booking.id]: 0 }));
+        setDraggingId(null);
+        fetchBookings();
+        showToast('Appointment rescheduled');
+      },
+    });
+
+  const handlePayCash = async () => {
+    if (!selectedBooking) return;
+    const amount = parseFloat(cashAmount) || 0;
+    console.log('[Calendar] Cash payment pressed, amount:', amount, 'booking:', selectedBooking.id);
+    if (!selectedBooking.id.startsWith('d')) {
+      try {
+        await supabase.from('bookings').update({
+          payment_status: 'paid',
+          payment_method: 'cash',
+          status: 'completed',
+        }).eq('id', selectedBooking.id);
+        console.log('[Calendar] Payment recorded for booking:', selectedBooking.id);
+      } catch (err) {
+        console.log('[Calendar] Payment error:', err);
       }
-      setSelectedBooking(null);
-    } catch (err) {
-      console.log('[Calendar] confirmBooking error:', err);
-    } finally {
-      setActionLoading(false);
     }
+    setShowCashModal(false);
+    setShowPaymentSelect(false);
+    setSelectedBooking(null);
+    setCashAmount('');
+    fetchBookings();
+    showToast('Payment recorded');
   };
 
-  const cancelBooking = async (id: string) => {
-    console.log('[Calendar] Cancel booking:', id, 'reason:', cancelReason);
-    setActionLoading(true);
-    try {
-      if (!id.startsWith('d')) {
-        await supabase.from('bookings').update({ status: 'cancelled', cancel_reason: cancelReason }).eq('id', id);
-        await fetchBookings();
-      }
-      setSelectedBooking(null);
-      setShowCancelInput(false);
-      setCancelReason('');
-    } catch (err) {
-      console.log('[Calendar] cancelBooking error:', err);
-    } finally {
-      setActionLoading(false);
+  const handleKeypad = (key: string) => {
+    if (key === '⌫') {
+      setCashAmount(prev => prev.slice(0, -1));
+    } else if (key === '.') {
+      if (!cashAmount.includes('.')) setCashAmount(prev => prev + '.');
+    } else {
+      setCashAmount(prev => (prev.length < 8 ? prev + key : prev));
     }
-  };
-
-  const handleEmptySlotPress = (hour: number) => {
-    const dateStr = selectedDate.toISOString().split('T')[0];
-    const timeStr = `${String(hour).padStart(2, '0')}:00`;
-    console.log('[Calendar] Empty slot tapped, date:', dateStr, 'time:', timeStr);
-    router.push(`/(partner)/new-booking?date=${dateStr}&time=${timeStr}` as never);
   };
 
   const hours = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i);
+  const totalGridHeight = hours.length * HOUR_HEIGHT;
 
-  const VIEW_OPTIONS: { id: CalendarView; label: string; Icon: React.ElementType }[] = [
-    { id: 'day', label: 'Day', Icon: CalIcon },
-    { id: '3day', label: '3 day', Icon: CalendarRange },
-    { id: 'week', label: 'Week', Icon: CalendarDays },
-    { id: 'month', label: 'Month', Icon: LayoutGrid },
-  ];
+  const selectedBookingPrice = selectedBooking ? Number(selectedBooking.price_bhd) : 0;
+  const selectedBookingPriceStr = selectedBookingPrice.toFixed(3);
 
-  const viewLabel = VIEW_OPTIONS.find(v => v.id === calView)?.label ?? 'Week';
+  const nowHour = Math.floor(nowMinutes / 60) + START_HOUR;
+  const nowMin = nowMinutes % 60;
+  const nowLabel = `${nowHour % 12 === 0 ? 12 : nowHour % 12}:${String(nowMin).padStart(2, '0')}`;
+
+  const selectedDateLabel = selectedDate.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
+
+  // Booking dots per day
+  const bookingDotsForDay = (date: Date) => {
+    return bookings.filter(b => new Date(b.start_at).toDateString() === date.toDateString());
+  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
+      {/* Toast */}
+      {toast !== null && (
+        <Animated.View style={[styles.toast, { top: insets.top + 8, transform: [{ translateY: toastAnim }] }]}>
+          <Check size={14} color="#fff" />
+          <Text style={styles.toastText}>{toast}</Text>
+          <TouchableOpacity onPress={() => setToast(null)}>
+            <X size={14} color="rgba(255,255,255,0.7)" />
+          </TouchableOpacity>
+        </Animated.View>
+      )}
+
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Calendar</Text>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity onPress={() => changeWeek(-1)} style={styles.headerArrow}>
+            <ChevronLeft size={20} color={P.textSecondary} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerDateBtn}>
+            <Text style={styles.headerDateText}>{selectedDateLabel}</Text>
+            <ChevronRight size={14} color={P.textSecondary} style={{ transform: [{ rotate: '90deg' }] }} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => changeWeek(1)} style={styles.headerArrow}>
+            <ChevronRight size={20} color={P.textSecondary} />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.headerRight}>
           {isDemo && (
             <View style={styles.demoBadge}>
               <Text style={styles.demoBadgeText}>Demo</Text>
             </View>
           )}
-          <TouchableOpacity
-            onPress={() => { console.log('[Calendar] View switcher pressed'); setShowViewModal(true); }}
-            style={styles.viewSwitchBtn}
-          >
-            <Text style={styles.viewSwitchText}>{viewLabel}</Text>
-            <ChevronRight size={14} color={P.textSecondary} />
+          <TouchableOpacity style={styles.headerIconBtn} onPress={() => console.log('[Calendar] Messages pressed')}>
+            <MessageSquare size={18} color={P.textSecondary} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => { console.log('[Calendar] New booking FAB'); router.push('/(partner)/new-booking' as never); }} style={styles.addBtn}>
+          <TouchableOpacity style={styles.headerIconBtn} onPress={() => console.log('[Calendar] Notifications pressed')}>
+            <Bell size={18} color={P.textSecondary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.addBtn}
+            onPress={() => {
+              console.log('[Calendar] New booking button pressed');
+              router.push('/(partner)/new-booking' as never);
+            }}
+          >
             <Plus size={18} color="#fff" />
           </TouchableOpacity>
+          <View style={styles.avatarCircle}>
+            <Text style={styles.avatarText}>{profile?.full_name?.charAt(0) ?? 'S'}</Text>
+          </View>
         </View>
       </View>
 
-      {/* Barber filter chips */}
+      {/* Barber column headers (scrollable chips) */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -343,13 +479,11 @@ export default function PartnerCalendar() {
 
       {/* Week strip */}
       <View style={styles.weekNav}>
-        <TouchableOpacity onPress={() => changeWeek(-1)} style={styles.weekArrow}>
-          <ChevronLeft size={20} color={P.textSecondary} />
-        </TouchableOpacity>
         <Animated.View style={[styles.weekStrip, { transform: [{ translateX: slideAnim }] }]}>
           {weekDates.map((date, i) => {
             const isSelected = date.toDateString() === selectedDate.toDateString();
             const isToday = date.toDateString() === new Date().toDateString();
+            const dots = bookingDotsForDay(date).slice(0, 3);
             return (
               <TouchableOpacity
                 key={i}
@@ -367,13 +501,15 @@ export default function PartnerCalendar() {
                     {date.getDate()}
                   </Text>
                 </View>
+                <View style={styles.dayDots}>
+                  {dots.map((b, di) => (
+                    <View key={di} style={[styles.dayDot, { backgroundColor: statusColor(b.status) }]} />
+                  ))}
+                </View>
               </TouchableOpacity>
             );
           })}
         </Animated.View>
-        <TouchableOpacity onPress={() => changeWeek(1)} style={styles.weekArrow}>
-          <ChevronRight size={20} color={P.textSecondary} />
-        </TouchableOpacity>
       </View>
 
       {/* Time grid */}
@@ -382,61 +518,122 @@ export default function PartnerCalendar() {
           <ActivityIndicator color={P.accent} />
         </View>
       ) : (
-        <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-          <View style={styles.grid}>
-            {/* Hour labels */}
-            <View style={styles.hourLabels}>
+        <ScrollView ref={timeScrollRef} style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+          <View style={{ flexDirection: 'row' }}>
+            {/* Fixed time column */}
+            <View style={[styles.timeCol, { height: totalGridHeight }]}>
               {hours.map(h => (
-                <View key={h} style={styles.hourLabel}>
-                  <Text style={styles.hourText}>
-                    {h === 12 ? '12 PM' : h < 12 ? `${h} AM` : `${h - 12} PM`}
-                  </Text>
+                <View key={h} style={styles.hourLabelWrap}>
+                  <Text style={styles.hourText}>{formatHour(h)}</Text>
                 </View>
               ))}
             </View>
-            {/* Booking blocks */}
-            <View style={styles.gridContent}>
-              {hours.map(h => (
-                <TouchableOpacity
-                  key={h}
-                  style={styles.hourLine}
-                  onPress={() => handleEmptySlotPress(h)}
-                  activeOpacity={0.6}
-                />
-              ))}
-              {dayBookings.map(booking => {
-                const start = new Date(booking.start_at);
-                const end = booking.end_at ? new Date(booking.end_at) : new Date(start.getTime() + 30 * 60000);
-                const startHour = start.getHours() + start.getMinutes() / 60;
-                const endHour = end.getHours() + end.getMinutes() / 60;
-                const top = (startHour - START_HOUR) * HOUR_HEIGHT;
-                const height = Math.max((endHour - startHour) * HOUR_HEIGHT, 30);
-                const clientName = booking.profiles?.full_name ?? booking.customer_name ?? 'Walk-in';
-                const serviceName = booking.booking_services?.[0]?.service_name_en ?? booking.services?.name ?? 'Service';
-                const barberName = booking.barbers?.display_name ?? '';
-                const borderColor = statusColor(booking.status);
 
-                return (
-                  <TouchableOpacity
-                    key={booking.id}
-                    style={[styles.bookingBlock, { top, height, borderLeftColor: borderColor }]}
-                    onPress={() => {
-                      console.log('[Calendar] Booking block tapped:', booking.id);
-                      setSelectedBooking(booking);
-                    }}
-                  >
-                    <Text style={styles.blockClient} numberOfLines={1}>{clientName}</Text>
-                    <Text style={styles.blockService} numberOfLines={1}>{serviceName}</Text>
-                    {barberName ? (
-                      <View style={styles.blockBarberRow}>
-                        <View style={[styles.blockBarberDot, { backgroundColor: borderColor }]} />
-                        <Text style={styles.blockBarber} numberOfLines={1}>{barberName}</Text>
+            {/* Horizontal scroll for barber columns */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row' }}>
+                {visibleBarbers.map((barber, colIdx) => {
+                  const colBookings = bookingsForBarber(barber.id);
+                  return (
+                    <View key={barber.id} style={[styles.barberCol, { width: COL_WIDTH }]}>
+                      {/* Barber header */}
+                      <View style={styles.barberColHeader}>
+                        {barber.avatar ? (
+                          <Image source={resolveImageSource(barber.avatar)} style={styles.barberColAvatar} />
+                        ) : (
+                          <View style={styles.barberColAvatarPlaceholder}>
+                            <Text style={styles.barberColAvatarText}>{barber.name.charAt(0)}</Text>
+                          </View>
+                        )}
+                        <Text style={styles.barberColName} numberOfLines={1}>{barber.name}</Text>
                       </View>
-                    ) : null}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+
+                      {/* Grid lines */}
+                      <View style={{ position: 'relative', height: totalGridHeight }}>
+                        {hours.map(h => (
+                          <TouchableOpacity
+                            key={h}
+                            style={[styles.hourLine, { borderLeftWidth: colIdx === 0 ? 0 : 0 }]}
+                            onPress={() => {
+                              const dateStr = selectedDate.toISOString().split('T')[0];
+                              const timeStr = `${String(h).padStart(2, '0')}:00`;
+                              console.log('[Calendar] Empty slot tapped, barber:', barber.id, 'date:', dateStr, 'time:', timeStr);
+                              router.push(`/(partner)/new-booking?date=${dateStr}&time=${timeStr}&barberId=${barber.id}` as never);
+                            }}
+                            activeOpacity={0.4}
+                          />
+                        ))}
+
+                        {/* Now line */}
+                        {nowTop >= 0 && nowTop <= totalGridHeight && (
+                          <View style={[styles.nowLine, { top: nowTop }]}>
+                            {colIdx === 0 && (
+                              <View style={styles.nowLabelPill}>
+                                <Text style={styles.nowLabelText}>{nowLabel}</Text>
+                              </View>
+                            )}
+                          </View>
+                        )}
+
+                        {/* Booking blocks */}
+                        {colBookings.map(booking => {
+                          const start = new Date(booking.start_at);
+                          const end = booking.end_at ? new Date(booking.end_at) : new Date(start.getTime() + 30 * 60000);
+                          const startMins = (start.getHours() - START_HOUR) * 60 + start.getMinutes();
+                          const endMins = (end.getHours() - START_HOUR) * 60 + end.getMinutes();
+                          const baseTop = (startMins / 60) * HOUR_HEIGHT;
+                          const height = Math.max(((endMins - startMins) / 60) * HOUR_HEIGHT, 32);
+                          const dragOffset = dragOffsets[booking.id] ?? 0;
+                          const top = baseTop + dragOffset;
+                          const isDragging = draggingId === booking.id;
+
+                          const clientName = booking.profiles?.full_name ?? booking.customer_name ?? 'Walk-in';
+                          const serviceName = booking.booking_services?.[0]?.service_name_en ?? booking.services?.name ?? 'Service';
+                          const startLabel = formatTime(start);
+                          const endLabel = formatTime(end);
+
+                          const panResponder = createDragResponder(booking);
+
+                          return (
+                            <Animated.View
+                              key={booking.id}
+                              {...panResponder.panHandlers}
+                              style={[
+                                styles.bookingBlock,
+                                {
+                                  top,
+                                  height,
+                                  backgroundColor: isDragging ? P.accentLight : 'rgba(100,160,255,0.18)',
+                                  borderLeftColor: isDragging ? P.accent : '#5BA4F5',
+                                  opacity: isDragging ? 0.85 : 1,
+                                  zIndex: isDragging ? 100 : 1,
+                                },
+                              ]}
+                            >
+                              <TouchableOpacity
+                                style={{ flex: 1 }}
+                                onPress={() => {
+                                  if (!isDragging) {
+                                    console.log('[Calendar] Booking block tapped:', booking.id);
+                                    setSelectedBooking(booking);
+                                    setDetailTab('details');
+                                  }
+                                }}
+                                activeOpacity={0.8}
+                              >
+                                <Text style={styles.blockTime} numberOfLines={1}>{startLabel} - {endLabel}</Text>
+                                <Text style={styles.blockClient} numberOfLines={1}>{clientName}</Text>
+                                <Text style={styles.blockService} numberOfLines={1}>{serviceName}</Text>
+                              </TouchableOpacity>
+                            </Animated.View>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </ScrollView>
           </View>
         </ScrollView>
       )}
@@ -452,121 +649,305 @@ export default function PartnerCalendar() {
         <Plus size={24} color="#fff" />
       </TouchableOpacity>
 
-      {/* View switcher modal */}
-      <Modal visible={showViewModal} transparent animationType="slide" onRequestClose={() => setShowViewModal(false)}>
+      {/* ── Booking Detail Sheet ── */}
+      <Modal visible={!!selectedBooking} transparent animationType="slide" onRequestClose={() => setSelectedBooking(null)}>
         <View style={styles.sheetOverlay}>
           <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
             <View style={styles.sheetHandle} />
-            <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Calendar Views</Text>
-              <TouchableOpacity onPress={() => setShowViewModal(false)}>
+
+            {/* Sale header */}
+            <View style={styles.saleHeader}>
+              <TouchableOpacity onPress={() => setSelectedBooking(null)} style={styles.saleBackBtn}>
+                <ChevronLeft size={20} color={P.text} />
+              </TouchableOpacity>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.saleTitle}>Sale</Text>
+                <Text style={styles.saleSubtitle}>
+                  {selectedBooking ? new Date(selectedBooking.start_at).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : ''} • H1
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setSelectedBooking(null)}>
                 <X size={20} color={P.textSecondary} />
               </TouchableOpacity>
             </View>
-            <View style={styles.viewGrid}>
-              {VIEW_OPTIONS.map(opt => {
-                const Icon = opt.Icon;
-                const isActive = calView === opt.id;
-                return (
-                  <TouchableOpacity
-                    key={opt.id}
-                    style={[styles.viewOption, isActive && styles.viewOptionActive]}
-                    onPress={() => {
-                      console.log('[Calendar] View changed to:', opt.id);
-                      setCalView(opt.id);
-                      setShowViewModal(false);
-                    }}
-                  >
-                    <Icon size={28} color={isActive ? P.accent : P.textSecondary} />
-                    <Text style={[styles.viewOptionText, isActive && styles.viewOptionTextActive]}>{opt.label}</Text>
+
+            {/* Status row */}
+            <View style={styles.statusRow}>
+              <View style={styles.confirmedBadge}>
+                <Check size={12} color="#fff" />
+                <Text style={styles.confirmedBadgeText}>
+                  {selectedBooking?.status === 'completed' ? 'Completed' : 'Confirmed'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.rebookBtn}
+                onPress={() => {
+                  console.log('[Calendar] Rebook pressed for booking:', selectedBooking?.id);
+                  setSelectedBooking(null);
+                  router.push('/(partner)/new-booking' as never);
+                }}
+              >
+                <Text style={styles.rebookBtnText}>Rebook</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.moreBtn} onPress={() => console.log('[Calendar] More options pressed')}>
+                <MoreVertical size={18} color={P.text} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Tabs */}
+            <View style={styles.tabRow}>
+              <TouchableOpacity
+                style={[styles.tab, detailTab === 'details' && styles.tabActive]}
+                onPress={() => { console.log('[Calendar] Detail tab: details'); setDetailTab('details'); }}
+              >
+                <Text style={[styles.tabText, detailTab === 'details' && styles.tabTextActive]}>Details</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tab, detailTab === 'activity' && styles.tabActive]}
+                onPress={() => { console.log('[Calendar] Detail tab: activity'); setDetailTab('activity'); }}
+              >
+                <Text style={[styles.tabText, detailTab === 'activity' && styles.tabTextActive]}>Activity</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
+              {detailTab === 'details' && selectedBooking && (
+                <View style={{ paddingHorizontal: 20, paddingTop: 12, gap: 12 }}>
+                  {/* Walk-in row */}
+                  <View style={styles.walkInRow}>
+                    <Text style={styles.walkInText}>
+                      {selectedBooking.profiles?.full_name ?? selectedBooking.customer_name ?? 'Walk-In'}
+                    </Text>
+                    <View style={styles.walkInIcon}>
+                      <User size={18} color={P.accent} />
+                    </View>
+                  </View>
+
+                  {/* Sale card */}
+                  <View style={styles.saleCard}>
+                    <Text style={styles.saleCardTitle}>Sale #1</Text>
+                    <Text style={styles.saleCardDate}>
+                      {new Date(selectedBooking.start_at).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })}
+                    </Text>
+
+                    {/* Service row */}
+                    <View style={styles.saleServiceRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.saleServiceName}>
+                          {selectedBooking.booking_services?.[0]?.service_name_en ?? selectedBooking.services?.name ?? 'Service'}
+                        </Text>
+                        <Text style={styles.saleServiceMeta}>
+                          {formatTime(new Date(selectedBooking.start_at))} · {selectedBooking.services?.duration_minutes ?? 45}min · {selectedBooking.barbers?.display_name ?? 'Barber'}
+                        </Text>
+                      </View>
+                      <Text style={styles.saleServicePrice}>BHD {selectedBookingPriceStr}</Text>
+                    </View>
+
+                    <View style={styles.saleDivider} />
+
+                    <View style={styles.saleTotalRow}>
+                      <Text style={styles.saleTotalLabel}>Subtotal</Text>
+                      <Text style={styles.saleTotalValue}>BHD {selectedBookingPriceStr}</Text>
+                    </View>
+                    <View style={styles.saleTotalRow}>
+                      <Text style={[styles.saleTotalLabel, { fontWeight: '700', color: P.text }]}>Total</Text>
+                      <Text style={[styles.saleTotalValue, { fontWeight: '700', color: P.text }]}>BHD {selectedBookingPriceStr}</Text>
+                    </View>
+
+                    {selectedBooking.payment_status === 'paid' && (
+                      <View style={[styles.saleTotalRow, { marginTop: 8 }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <DollarSign size={14} color={P.success} />
+                          <Text style={styles.saleTotalLabel}>
+                            {selectedBooking.payment_method === 'cash' ? 'Cash' : 'Payment'}
+                          </Text>
+                        </View>
+                        <Text style={[styles.saleTotalValue, { color: P.success }]}>BHD {selectedBookingPriceStr}</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              )}
+
+              {detailTab === 'activity' && selectedBooking && (
+                <View style={{ paddingHorizontal: 20, paddingTop: 12, gap: 0 }}>
+                  <Text style={styles.activityMonthLabel}>
+                    {new Date(selectedBooking.start_at).toLocaleDateString('en-US', { month: 'long' })}
+                  </Text>
+
+                  <View style={styles.activityItem}>
+                    <View style={styles.activityDot} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.activityTitle}>Sale 1 created</Text>
+                      <Text style={styles.activitySub}>
+                        Today at {formatTime(new Date(selectedBooking.start_at))}
+                      </Text>
+                      <Text style={styles.activitySub}>
+                        Completed by {selectedBooking.barbers?.display_name ?? 'Staff'}
+                      </Text>
+                    </View>
+                    <View style={styles.activityAvatar}>
+                      <Text style={styles.activityAvatarText}>
+                        {(selectedBooking.barbers?.display_name ?? 'S').charAt(0)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {selectedBooking.payment_status === 'paid' && (
+                    <View style={styles.activityItem}>
+                      <View style={[styles.activityDot, { backgroundColor: P.success }]} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.activityTitle}>BHD {selectedBookingPriceStr} paid by cash</Text>
+                        <Text style={styles.activitySub}>
+                          Today at {formatTime(new Date(selectedBooking.start_at))}
+                        </Text>
+                        <Text style={styles.activitySub}>
+                          Payment taken by {selectedBooking.barbers?.display_name ?? 'Staff'}
+                        </Text>
+                      </View>
+                      <View style={[styles.activityAvatar, { backgroundColor: P.success + '22' }]}>
+                        <DollarSign size={14} color={P.success} />
+                      </View>
+                    </View>
+                  )}
+
+                  <TouchableOpacity style={styles.actionsBtn} onPress={() => console.log('[Calendar] Activity actions pressed')}>
+                    <Text style={styles.actionsBtnText}>Actions</Text>
+                    <ChevronRight size={14} color={P.textSecondary} />
                   </TouchableOpacity>
-                );
-              })}
+
+                  <Text style={styles.activityFooter}>Activity for this sale in the last 90 days</Text>
+                </View>
+              )}
+            </ScrollView>
+
+            {/* Sheet footer */}
+            <View style={styles.sheetFooter}>
+              <TouchableOpacity
+                style={styles.checkoutBtn}
+                onPress={() => {
+                  console.log('[Calendar] Checkout pressed for booking:', selectedBooking?.id);
+                  setCashAmount(selectedBookingPriceStr);
+                  setShowPaymentSelect(true);
+                }}
+              >
+                <Text style={styles.checkoutBtnText}>Checkout</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* Booking detail bottom sheet */}
-      <Modal visible={!!selectedBooking} transparent animationType="slide" onRequestClose={() => setSelectedBooking(null)}>
+      {/* ── Payment Select Modal ── */}
+      <Modal visible={showPaymentSelect} transparent animationType="slide" onRequestClose={() => setShowPaymentSelect(false)}>
         <View style={styles.sheetOverlay}>
           <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
             <View style={styles.sheetHandle} />
-            <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Booking Details</Text>
-              <TouchableOpacity onPress={() => { setSelectedBooking(null); setShowCancelInput(false); }}>
+            <View style={styles.paymentHeader}>
+              <TouchableOpacity onPress={() => setShowPaymentSelect(false)} style={styles.saleBackBtn}>
+                <ChevronLeft size={20} color={P.text} />
+              </TouchableOpacity>
+              <Text style={styles.paymentTitle}>Select payment</Text>
+              <TouchableOpacity onPress={() => { setShowPaymentSelect(false); setSelectedBooking(null); }}>
                 <X size={20} color={P.textSecondary} />
               </TouchableOpacity>
             </View>
-            {selectedBooking && (
-              <>
-                <View style={styles.sheetRow}>
-                  <Text style={styles.sheetLabel}>Client</Text>
-                  <Text style={styles.sheetValue}>{selectedBooking.profiles?.full_name ?? selectedBooking.customer_name ?? 'Walk-in'}</Text>
-                </View>
-                <View style={styles.sheetRow}>
-                  <Text style={styles.sheetLabel}>Service</Text>
-                  <Text style={styles.sheetValue}>{selectedBooking.booking_services?.[0]?.service_name_en ?? selectedBooking.services?.name ?? '—'}</Text>
-                </View>
-                <View style={styles.sheetRow}>
-                  <Text style={styles.sheetLabel}>Time</Text>
-                  <Text style={styles.sheetValue}>{new Date(selectedBooking.start_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</Text>
-                </View>
-                <View style={styles.sheetRow}>
-                  <Text style={styles.sheetLabel}>Barber</Text>
-                  <Text style={styles.sheetValue}>{selectedBooking.barbers?.display_name ?? 'Any'}</Text>
-                </View>
-                <View style={styles.sheetRow}>
-                  <Text style={styles.sheetLabel}>Price</Text>
-                  <Text style={[styles.sheetValue, { color: P.gold }]}>BHD {Number(selectedBooking.price_bhd).toFixed(3)}</Text>
-                </View>
-                <View style={styles.sheetRow}>
-                  <Text style={styles.sheetLabel}>Status</Text>
-                  <View style={[styles.badge, { backgroundColor: statusColor(selectedBooking.status) + '22' }]}>
-                    <Text style={[styles.badgeText, { color: statusColor(selectedBooking.status) }]}>{selectedBooking.status}</Text>
-                  </View>
-                </View>
 
-                {showCancelInput && (
-                  <TextInput
-                    style={styles.cancelInput}
-                    placeholder="Reason for cancellation..."
-                    placeholderTextColor={P.textTertiary}
-                    value={cancelReason}
-                    onChangeText={setCancelReason}
-                  />
-                )}
+            <View style={styles.paymentGrid}>
+              {[
+                { icon: <DollarSign size={28} color={P.success} />, label: 'Cash', onPress: () => { console.log('[Calendar] Cash payment selected'); setShowCashModal(true); } },
+                { icon: <Gift size={28} color={P.accent} />, label: 'Gift card', onPress: () => console.log('[Calendar] Gift card selected') },
+                { icon: <Layers size={28} color={P.warning} />, label: 'Split payment', onPress: () => console.log('[Calendar] Split payment selected') },
+                { icon: <CreditCard size={28} color={P.textSecondary} />, label: 'Other', onPress: () => console.log('[Calendar] Other payment selected') },
+              ].map((opt, i) => (
+                <TouchableOpacity key={i} style={styles.paymentOption} onPress={opt.onPress}>
+                  {opt.icon}
+                  <Text style={styles.paymentOptionLabel}>{opt.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-                <View style={styles.sheetActions}>
-                  {selectedBooking.status === 'pending' && (
-                    <TouchableOpacity
-                      style={[styles.actionBtn, { backgroundColor: P.success }]}
-                      onPress={() => confirmBooking(selectedBooking.id)}
-                      disabled={actionLoading}
-                    >
-                      <Check size={16} color="#fff" />
-                      <Text style={styles.actionBtnText}>Confirm</Text>
-                    </TouchableOpacity>
-                  )}
-                  {selectedBooking.status !== 'cancelled' && (
-                    <TouchableOpacity
-                      style={[styles.actionBtn, { backgroundColor: P.danger }]}
-                      onPress={() => {
-                        if (!showCancelInput) {
-                          setShowCancelInput(true);
-                        } else {
-                          cancelBooking(selectedBooking.id);
-                        }
-                      }}
-                      disabled={actionLoading}
-                    >
-                      <X size={16} color="#fff" />
-                      <Text style={styles.actionBtnText}>{showCancelInput ? 'Confirm Cancel' : 'Cancel'}</Text>
-                    </TouchableOpacity>
-                  )}
+            <View style={styles.paymentFooterRow}>
+              <View>
+                <Text style={styles.paymentFooterLabel}>Total</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Text style={styles.paymentFooterSub}>To pay</Text>
+                  <ChevronRight size={12} color={P.textSecondary} />
                 </View>
-              </>
-            )}
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={styles.paymentFooterAmount}>BHD {selectedBookingPriceStr}</Text>
+                <Text style={styles.paymentFooterAmount}>BHD {selectedBookingPriceStr}</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity style={styles.saveUnpaidBtn} onPress={() => { console.log('[Calendar] Save unpaid pressed'); setShowPaymentSelect(false); setSelectedBooking(null); }}>
+              <Text style={styles.saveUnpaidText}>Save unpaid</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Cash Amount Modal ── */}
+      <Modal visible={showCashModal} transparent animationType="slide" onRequestClose={() => setShowCashModal(false)}>
+        <View style={styles.sheetOverlay}>
+          <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.cashHeader}>
+              <View style={{ width: 32 }} />
+              <Text style={styles.cashTitle}>Add cash amount</Text>
+              <TouchableOpacity onPress={() => setShowCashModal(false)}>
+                <X size={20} color={P.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Amount display */}
+            <View style={styles.cashAmountRow}>
+              <Text style={styles.cashCurrency}>BHD</Text>
+              <Text style={styles.cashAmount}>{cashAmount || '0'}</Text>
+              <View style={styles.cashCursor} />
+            </View>
+
+            {/* Quick chips */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cashChips}>
+              {['40', '45', '50', '55'].map(v => (
+                <TouchableOpacity
+                  key={v}
+                  style={[styles.cashChip, cashAmount === v && styles.cashChipActive]}
+                  onPress={() => { console.log('[Calendar] Quick amount chip pressed:', v); setCashAmount(v); }}
+                >
+                  <Text style={[styles.cashChipText, cashAmount === v && styles.cashChipTextActive]}>BHD {v}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {/* Keypad */}
+            <View style={styles.keypad}>
+              {['1','2','3','4','5','6','7','8','9','.','0','⌫'].map(k => (
+                <TouchableOpacity
+                  key={k}
+                  style={styles.keypadBtn}
+                  onPress={() => { console.log('[Calendar] Keypad pressed:', k); handleKeypad(k); }}
+                >
+                  <Text style={styles.keypadBtnText}>{k}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Footer */}
+            <View style={styles.cashFooterRow}>
+              <View>
+                <Text style={styles.cashFooterLabel}>
+                  Cash received by • <Text style={{ color: P.accent }}>{selectedBooking?.barbers?.display_name ?? 'Staff'}</Text>
+                </Text>
+                <Text style={styles.cashFooterSub}>
+                  Left to pay • BHD {Math.max(0, selectedBookingPrice - (parseFloat(cashAmount) || 0)).toFixed(3)}
+                </Text>
+              </View>
+              <TouchableOpacity style={styles.cashAddBtn} onPress={handlePayCash}>
+                <Text style={styles.cashAddBtnText}>Add</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -576,118 +957,195 @@ export default function PartnerCalendar() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: P.bg },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16 },
-  headerTitle: { color: P.text, fontSize: 20, fontWeight: '700' },
-  addBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center' },
-  viewSwitchBtn: {
+
+  // Toast
+  toast: {
+    position: 'absolute',
+    alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: P.surface,
-    borderWidth: 1,
-    borderColor: P.border,
+    gap: 8,
+    backgroundColor: 'rgba(20,20,40,0.95)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 24,
+    zIndex: 999,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 10,
   },
-  viewSwitchText: { color: P.text, fontSize: 13, fontWeight: '600' },
-  demoBadge: {
-    backgroundColor: P.surfaceElevated,
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: P.border,
-    justifyContent: 'center',
-  },
-  demoBadgeText: { color: P.textTertiary, fontSize: 11, fontWeight: '600' },
-  barberChipsScroll: { maxHeight: 52, marginBottom: 4 },
-  barberChipsContent: { paddingHorizontal: 16, gap: 8, alignItems: 'center' },
-  barberChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: P.surface,
-    borderWidth: 1,
-    borderColor: P.border,
-  },
+  toastText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+
+  // Header
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 10 },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  headerArrow: { padding: 6 },
+  headerDateBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 6 },
+  headerDateText: { color: P.text, fontSize: 16, fontWeight: '700' },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerIconBtn: { padding: 6 },
+  addBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center' },
+  avatarCircle: { width: 34, height: 34, borderRadius: 17, backgroundColor: P.accentLight, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: P.accent },
+  avatarText: { color: P.accent, fontSize: 13, fontWeight: '700' },
+  demoBadge: { backgroundColor: P.surfaceElevated, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: P.border },
+  demoBadgeText: { color: P.textTertiary, fontSize: 10, fontWeight: '600' },
+
+  // Barber chips
+  barberChipsScroll: { maxHeight: 50, marginBottom: 2 },
+  barberChipsContent: { paddingHorizontal: 12, gap: 8, alignItems: 'center' },
+  barberChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: P.surface, borderWidth: 1, borderColor: P.border },
   barberChipActive: { backgroundColor: P.accentLight, borderColor: P.accent },
-  barberChipText: { color: P.textSecondary, fontSize: 13, fontWeight: '500' },
+  barberChipText: { color: P.textSecondary, fontSize: 12, fontWeight: '500' },
   barberChipTextActive: { color: P.accent, fontWeight: '600' },
-  barberChipAvatar: { width: 22, height: 22, borderRadius: 11 },
-  barberChipAvatarPlaceholder: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: P.accentLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  barberChipAvatarText: { color: P.accent, fontSize: 10, fontWeight: '700' },
-  weekNav: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, marginBottom: 8 },
-  weekArrow: { padding: 8 },
-  weekStrip: { flex: 1, flexDirection: 'row', justifyContent: 'space-around' },
-  dayItem: { alignItems: 'center', gap: 4 },
-  dayLetter: { color: P.textSecondary, fontSize: 11, fontWeight: '600' },
+  barberChipAvatar: { width: 20, height: 20, borderRadius: 10 },
+  barberChipAvatarPlaceholder: { width: 20, height: 20, borderRadius: 10, backgroundColor: P.accentLight, alignItems: 'center', justifyContent: 'center' },
+  barberChipAvatarText: { color: P.accent, fontSize: 9, fontWeight: '700' },
+
+  // Week strip
+  weekNav: { paddingHorizontal: 12, marginBottom: 4 },
+  weekStrip: { flexDirection: 'row', justifyContent: 'space-around' },
+  dayItem: { alignItems: 'center', gap: 2 },
+  dayLetter: { color: P.textSecondary, fontSize: 10, fontWeight: '600' },
   dayLetterActive: { color: P.accent },
-  dayCircle: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  dayCircle: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
   dayCircleActive: { backgroundColor: P.accent },
   dayCircleToday: { borderWidth: 1, borderColor: P.accent },
-  dayNum: { color: P.text, fontSize: 14, fontWeight: '600' },
+  dayNum: { color: P.text, fontSize: 13, fontWeight: '600' },
   dayNumActive: { color: '#fff' },
+  dayDots: { flexDirection: 'row', gap: 2, height: 6, alignItems: 'center' },
+  dayDot: { width: 4, height: 4, borderRadius: 2 },
+
+  // Grid
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  grid: { flexDirection: 'row', minHeight: (END_HOUR - START_HOUR) * HOUR_HEIGHT },
-  hourLabels: { width: 56, paddingTop: 0 },
-  hourLabel: { height: HOUR_HEIGHT, justifyContent: 'flex-start', paddingTop: 4, paddingLeft: 8 },
+  timeCol: { width: TIME_COL_WIDTH, paddingTop: 44 },
+  hourLabelWrap: { height: HOUR_HEIGHT, justifyContent: 'flex-start', paddingTop: 4, paddingLeft: 8 },
   hourText: { color: P.textTertiary, fontSize: 10 },
-  gridContent: { flex: 1, position: 'relative' },
+
+  // Barber columns
+  barberCol: { borderLeftWidth: 1, borderLeftColor: P.divider },
+  barberColHeader: { height: 44, alignItems: 'center', justifyContent: 'center', gap: 4, borderBottomWidth: 1, borderBottomColor: P.divider, paddingHorizontal: 4 },
+  barberColAvatar: { width: 24, height: 24, borderRadius: 12 },
+  barberColAvatarPlaceholder: { width: 24, height: 24, borderRadius: 12, backgroundColor: P.accentLight, alignItems: 'center', justifyContent: 'center' },
+  barberColAvatarText: { color: P.accent, fontSize: 10, fontWeight: '700' },
+  barberColName: { color: P.textSecondary, fontSize: 10, fontWeight: '600', textAlign: 'center' },
+
   hourLine: { height: HOUR_HEIGHT, borderTopWidth: 1, borderTopColor: P.divider },
+
+  // Now line
+  nowLine: { position: 'absolute', left: 0, right: 0, height: 2, backgroundColor: P.danger, zIndex: 10 },
+  nowLabelPill: { position: 'absolute', left: -TIME_COL_WIDTH + 4, top: -10, backgroundColor: P.danger, borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2 },
+  nowLabelText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+
+  // Booking block
   bookingBlock: {
     position: 'absolute',
-    left: 4,
-    right: 4,
-    backgroundColor: P.surfaceElevated,
-    borderRadius: 8,
+    left: 3,
+    right: 3,
+    borderRadius: 6,
     borderLeftWidth: 3,
-    padding: 6,
+    padding: 5,
     overflow: 'hidden',
   },
-  blockClient: { color: P.text, fontSize: 12, fontWeight: '700' },
-  blockService: { color: P.textSecondary, fontSize: 10, marginTop: 1 },
-  blockBarberRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
-  blockBarberDot: { width: 6, height: 6, borderRadius: 3 },
-  blockBarber: { color: P.textTertiary, fontSize: 9 },
-  fab: { position: 'absolute', right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center', elevation: 8 },
-  sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  sheet: { backgroundColor: P.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 },
-  sheetHandle: { width: 40, height: 4, backgroundColor: P.border, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
-  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
-  sheetTitle: { color: P.text, fontSize: 18, fontWeight: '700' },
-  viewGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, paddingBottom: 8 },
-  viewOption: {
-    width: '46%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 20,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: P.border,
-    backgroundColor: P.surfaceElevated,
-  },
-  viewOptionActive: { borderColor: P.accent, backgroundColor: P.accentLight },
-  viewOptionText: { color: P.textSecondary, fontSize: 14, fontWeight: '600' },
-  viewOptionTextActive: { color: P.accent },
-  sheetRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: P.divider },
-  sheetLabel: { color: P.textSecondary, fontSize: 14 },
-  sheetValue: { color: P.text, fontSize: 14, fontWeight: '600' },
-  badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  badgeText: { fontSize: 12, fontWeight: '600' },
-  cancelInput: { backgroundColor: P.surfaceElevated, borderRadius: 10, padding: 12, color: P.text, marginTop: 12, borderWidth: 1, borderColor: P.border },
-  sheetActions: { flexDirection: 'row', gap: 10, marginTop: 16 },
-  actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 10 },
-  actionBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  blockTime: { color: 'rgba(255,255,255,0.6)', fontSize: 9, fontWeight: '600' },
+  blockClient: { color: P.text, fontSize: 11, fontWeight: '700', marginTop: 1 },
+  blockService: { color: 'rgba(255,255,255,0.55)', fontSize: 10, marginTop: 1 },
+
+  // FAB
+  fab: { position: 'absolute', right: 20, width: 52, height: 52, borderRadius: 26, backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center', elevation: 8, shadowColor: P.accent, shadowOpacity: 0.4, shadowRadius: 12 },
+
+  // Sheet
+  sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end' },
+  sheet: { backgroundColor: P.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24 },
+  sheetHandle: { width: 40, height: 4, backgroundColor: P.border, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 4 },
+
+  // Sale header
+  saleHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
+  saleBackBtn: { padding: 4, marginRight: 8 },
+  saleTitle: { color: P.text, fontSize: 22, fontWeight: '700' },
+  saleSubtitle: { color: P.textSecondary, fontSize: 13, marginTop: 2 },
+
+  // Status row
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 20, paddingBottom: 12 },
+  confirmedBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: P.success, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
+  confirmedBadgeText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  rebookBtn: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20, borderWidth: 1.5, borderColor: P.border },
+  rebookBtnText: { color: P.text, fontSize: 13, fontWeight: '600' },
+  moreBtn: { padding: 6 },
+
+  // Tabs
+  tabRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: P.divider, marginHorizontal: 20 },
+  tab: { paddingVertical: 10, paddingHorizontal: 4, marginRight: 24 },
+  tabActive: { borderBottomWidth: 2, borderBottomColor: P.text },
+  tabText: { color: P.textSecondary, fontSize: 15, fontWeight: '600' },
+  tabTextActive: { color: P.text },
+
+  // Walk-in row
+  walkInRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: P.surfaceElevated, borderRadius: 12, padding: 16 },
+  walkInText: { color: P.text, fontSize: 15, fontWeight: '600' },
+  walkInIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: P.accentLight, alignItems: 'center', justifyContent: 'center' },
+
+  // Sale card
+  saleCard: { backgroundColor: P.surfaceElevated, borderRadius: 12, padding: 16 },
+  saleCardTitle: { color: P.text, fontSize: 15, fontWeight: '700', marginBottom: 2 },
+  saleCardDate: { color: P.textSecondary, fontSize: 12, marginBottom: 12 },
+  saleServiceRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  saleServiceName: { color: P.text, fontSize: 14, fontWeight: '600' },
+  saleServiceMeta: { color: P.textSecondary, fontSize: 12, marginTop: 2 },
+  saleServicePrice: { color: P.text, fontSize: 14, fontWeight: '700' },
+  saleDivider: { height: 1, backgroundColor: P.divider, marginVertical: 12 },
+  saleTotalRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+  saleTotalLabel: { color: P.textSecondary, fontSize: 14 },
+  saleTotalValue: { color: P.textSecondary, fontSize: 14 },
+
+  // Activity
+  activityMonthLabel: { color: P.textSecondary, fontSize: 12, fontWeight: '600', marginBottom: 12 },
+  activityItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 16 },
+  activityDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: P.accent, marginTop: 4 },
+  activityTitle: { color: P.text, fontSize: 14, fontWeight: '600' },
+  activitySub: { color: P.textSecondary, fontSize: 12, marginTop: 2 },
+  activityAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: P.accentLight, alignItems: 'center', justifyContent: 'center' },
+  activityAvatarText: { color: P.accent, fontSize: 13, fontWeight: '700' },
+  actionsBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', backgroundColor: P.surfaceElevated, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, marginBottom: 16 },
+  actionsBtnText: { color: P.text, fontSize: 13, fontWeight: '600' },
+  activityFooter: { color: P.textTertiary, fontSize: 12, textAlign: 'center', paddingBottom: 8 },
+
+  // Sheet footer
+  sheetFooter: { paddingHorizontal: 20, paddingTop: 12, borderTopWidth: 1, borderTopColor: P.divider },
+  checkoutBtn: { backgroundColor: P.text, borderRadius: 14, paddingVertical: 15, alignItems: 'center' },
+  checkoutBtnText: { color: P.bg, fontSize: 16, fontWeight: '700' },
+
+  // Payment select
+  paymentHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
+  paymentTitle: { flex: 1, color: P.text, fontSize: 20, fontWeight: '700', textAlign: 'center' },
+  paymentGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, paddingHorizontal: 20, paddingVertical: 16 },
+  paymentOption: { width: (SCREEN_W - 52) / 2, alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 24, borderRadius: 14, borderWidth: 1, borderColor: P.border, backgroundColor: P.surfaceElevated },
+  paymentOptionLabel: { color: P.text, fontSize: 14, fontWeight: '600' },
+  paymentFooterRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12, borderTopWidth: 1, borderTopColor: P.divider },
+  paymentFooterLabel: { color: P.text, fontSize: 14, fontWeight: '600' },
+  paymentFooterSub: { color: P.textSecondary, fontSize: 13 },
+  paymentFooterAmount: { color: P.text, fontSize: 14, fontWeight: '700' },
+  saveUnpaidBtn: { marginHorizontal: 20, marginTop: 8, paddingVertical: 14, borderRadius: 14, borderWidth: 1.5, borderColor: P.border, alignItems: 'center' },
+  saveUnpaidText: { color: P.text, fontSize: 15, fontWeight: '600' },
+
+  // Cash modal
+  cashHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12 },
+  cashTitle: { color: P.text, fontSize: 20, fontWeight: '700' },
+  cashAmountRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 20 },
+  cashCurrency: { color: P.text, fontSize: 28, fontWeight: '700' },
+  cashAmount: { color: P.text, fontSize: 40, fontWeight: '700', minWidth: 60, textAlign: 'center' },
+  cashCursor: { width: 2, height: 40, backgroundColor: P.accent },
+  cashChips: { paddingHorizontal: 20, gap: 8, paddingBottom: 12 },
+  cashChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: P.border, backgroundColor: P.surfaceElevated },
+  cashChipActive: { borderColor: P.accent, backgroundColor: P.accentLight },
+  cashChipText: { color: P.textSecondary, fontSize: 13, fontWeight: '600' },
+  cashChipTextActive: { color: P.accent },
+  keypad: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 20, gap: 0 },
+  keypadBtn: { width: '33.33%', height: 56, alignItems: 'center', justifyContent: 'center' },
+  keypadBtnText: { color: P.text, fontSize: 22, fontWeight: '500' },
+  cashFooterRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 12, borderTopWidth: 1, borderTopColor: P.divider },
+  cashFooterLabel: { color: P.textSecondary, fontSize: 13 },
+  cashFooterSub: { color: P.textSecondary, fontSize: 13, marginTop: 2 },
+  cashAddBtn: { backgroundColor: P.text, borderRadius: 12, paddingHorizontal: 28, paddingVertical: 12 },
+  cashAddBtnText: { color: P.bg, fontSize: 15, fontWeight: '700' },
 });

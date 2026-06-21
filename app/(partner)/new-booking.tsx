@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,10 +9,26 @@ import {
   ActivityIndicator,
   Image,
   ImageSourcePropType,
+  Modal,
+  Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { X, ChevronRight, Check, User, Scissors, Users, CalendarDays, CheckCircle } from 'lucide-react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import {
+  X,
+  ChevronRight,
+  Check,
+  Users,
+  Calendar,
+  Clock,
+  RefreshCw,
+  Plus,
+  AlertTriangle,
+  MoreVertical,
+  UserPlus,
+  ChevronLeft,
+  ChevronDown,
+} from 'lucide-react-native';
 import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -33,6 +49,8 @@ const P = {
   divider: '#1E1E35',
 };
 
+const SCREEN_W = Dimensions.get('window').width;
+
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: '' };
   if (typeof source === 'string') return { uri: source };
@@ -40,35 +58,122 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
 }
 
 interface Client { id: string; full_name: string; avatar_url?: string; email?: string; phone?: string; }
-interface Service { id: string; name: string; price_bhd: number; duration_minutes: number; category: string; }
+interface Service { id: string; name: string; price_bhd: number; duration_minutes: number; category?: string; }
 interface Barber { id: string; display_name: string; avatar_url?: string; specialty?: string; }
 
-const STEPS = ['Client', 'Service', 'Team', 'Date & Time', 'Confirm'];
+const DEMO_SERVICES: Service[] = [
+  { id: 's1', name: 'Haircut', price_bhd: 40, duration_minutes: 45 },
+  { id: 's2', name: 'Beard Trim', price_bhd: 20, duration_minutes: 20 },
+  { id: 's3', name: 'Blow Dry', price_bhd: 25, duration_minutes: 30 },
+  { id: 's4', name: 'Color & Highlights', price_bhd: 80, duration_minutes: 90 },
+];
+
+const DEMO_BARBERS: Barber[] = [
+  { id: 'b1', display_name: 'S2 Khaled', specialty: 'Senior Barber' },
+  { id: 'b2', display_name: 'Wendy Smith (Demo)', specialty: 'Stylist' },
+];
+
+const DEMO_CLIENTS: Client[] = [
+  { id: 'c1', full_name: 'Jack Doe', email: 'jack@example.com' },
+  { id: 'c2', full_name: 'Jane Doe', email: 'jane@example.com' },
+  { id: 'c3', full_name: 'John Doe', email: 'john@example.com' },
+];
+
+function formatDateLabel(date: Date): string {
+  return date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+function formatTimeLabel(h: number, m: number): string {
+  const ampm = h >= 12 ? 'am' : 'am';
+  const hh = h % 12 === 0 ? 12 : h % 12;
+  return `${hh}:${String(m).padStart(2, '0')}${h >= 12 ? 'pm' : 'am'}`;
+}
+
+// Generate 15-min slots from 6am to 11pm
+const TIME_SLOTS: { label: string; h: number; m: number }[] = Array.from(
+  { length: (23 - 6) * 4 },
+  (_, i) => {
+    const totalMins = 6 * 60 + i * 15;
+    const h = Math.floor(totalMins / 60);
+    const m = totalMins % 60;
+    return { label: formatTimeLabel(h, m), h, m };
+  }
+);
 
 export default function NewBooking() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const params = useLocalSearchParams<{ date?: string; time?: string; barberId?: string }>();
   const { profile } = useAuth();
   const shopId = profile?.shop_id;
 
-  const [step, setStep] = useState(0);
-  const [isWalkIn, setIsWalkIn] = useState(false);
-  const [clientSearch, setClientSearch] = useState('');
-  const [clients, setClients] = useState<Client[]>([]);
+  // Parse initial date/time from params
+  const initDate = params.date ? new Date(params.date) : new Date();
+  const initTime = params.time
+    ? (() => {
+        const [h, m] = params.time.split(':').map(Number);
+        return { h, m };
+      })()
+    : { h: 9, m: 0 };
+
+  const [selectedDate, setSelectedDate] = useState(initDate);
+  const [selectedTime, setSelectedTime] = useState(initTime);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-  const [walkInName, setWalkInName] = useState('');
-  const [walkInPhone, setWalkInPhone] = useState('');
-  const [services, setServices] = useState<Service[]>([]);
+  const [isWalkIn, setIsWalkIn] = useState(false);
   const [selectedServices, setSelectedServices] = useState<Service[]>([]);
+  const [selectedBarber, setSelectedBarber] = useState<Barber | null>(
+    params.barberId ? DEMO_BARBERS.find(b => b.id === params.barberId) ?? null : null
+  );
+
+  const [services, setServices] = useState<Service[]>([]);
   const [barbers, setBarbers] = useState<Barber[]>([]);
-  const [selectedBarber, setSelectedBarber] = useState<Barber | null>(null);
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [clientSearch, setClientSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // Sheet visibility
+  const [showClientSheet, setShowClientSheet] = useState(false);
+  const [showServiceSheet, setShowServiceSheet] = useState(false);
+  const [showBarberSheet, setShowBarberSheet] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+
+  const fetchData = useCallback(async () => {
+    if (!shopId) {
+      setServices(DEMO_SERVICES);
+      setBarbers(DEMO_BARBERS);
+      return;
+    }
+    setLoading(true);
+    console.log('[NewBooking] Loading services and barbers');
+    try {
+      const [svcRes, barberRes] = await Promise.all([
+        supabase.from('services').select('*').eq('shop_id', shopId).eq('is_active', true),
+        supabase.from('barbers').select('id, display_name, avatar_url, specialty').eq('shop_id', shopId),
+      ]);
+      const svcData = (svcRes.data as Service[]) ?? [];
+      const barberData = (barberRes.data as Barber[]) ?? [];
+      setServices(svcData.length > 0 ? svcData : DEMO_SERVICES);
+      setBarbers(barberData.length > 0 ? barberData : DEMO_BARBERS);
+    } catch (err) {
+      console.log('[NewBooking] loadData error:', err);
+      setServices(DEMO_SERVICES);
+      setBarbers(DEMO_BARBERS);
+    } finally {
+      setLoading(false);
+    }
+  }, [shopId]);
+
   const fetchClients = useCallback(async (search: string) => {
-    if (!shopId || search.length < 2) return;
+    if (!shopId) {
+      const filtered = DEMO_CLIENTS.filter(c =>
+        c.full_name.toLowerCase().includes(search.toLowerCase())
+      );
+      setClients(filtered);
+      return;
+    }
+    if (search.length < 1) { setClients([]); return; }
     console.log('[NewBooking] Searching clients:', search);
     try {
       const { data } = await supabase
@@ -76,7 +181,7 @@ export default function NewBooking() {
         .select('profiles!customer_profile_id(id, full_name, avatar_url, email, phone)')
         .eq('shop_id', shopId)
         .not('customer_profile_id', 'is', null)
-        .limit(20);
+        .limit(30);
       const seen = new Set<string>();
       const unique: Client[] = [];
       for (const b of (data ?? []) as { profiles: Client | null }[]) {
@@ -93,54 +198,41 @@ export default function NewBooking() {
     }
   }, [shopId]);
 
-  useEffect(() => {
-    if (clientSearch.length >= 2) fetchClients(clientSearch);
-    else setClients([]);
-  }, [clientSearch, fetchClients]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   useEffect(() => {
-    if (!shopId) return;
-    const loadData = async () => {
-      setLoading(true);
-      console.log('[NewBooking] Loading services and barbers');
-      try {
-        const [svcRes, barberRes] = await Promise.all([
-          supabase.from('services').select('*').eq('shop_id', shopId).eq('is_active', true),
-          supabase.from('barbers').select('id, display_name, avatar_url, specialty').eq('shop_id', shopId),
-        ]);
-        setServices((svcRes.data as Service[]) ?? []);
-        setBarbers((barberRes.data as Barber[]) ?? []);
-      } catch (err) {
-        console.log('[NewBooking] loadData error:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadData();
-  }, [shopId]);
+    if (showClientSheet) {
+      if (clientSearch.length >= 1) fetchClients(clientSearch);
+      else if (!shopId) setClients(DEMO_CLIENTS);
+      else setClients([]);
+    }
+  }, [clientSearch, showClientSheet, fetchClients, shopId]);
 
   const totalPrice = selectedServices.reduce((sum, s) => sum + Number(s.price_bhd), 0);
   const totalDuration = selectedServices.reduce((sum, s) => sum + s.duration_minutes, 0);
+  const totalPriceStr = totalPrice.toFixed(3);
 
   const buildScheduledAt = () => {
-    if (!selectedTime) return new Date();
-    const [h, m] = selectedTime.split(':').map(Number);
     const d = new Date(selectedDate);
-    d.setHours(h, m, 0, 0);
+    d.setHours(selectedTime.h, selectedTime.m, 0, 0);
     return d;
   };
 
-  const confirmBooking = async () => {
-    if (!shopId) return;
-    console.log('[NewBooking] Confirm booking pressed');
+  const handleSave = async () => {
+    if (!shopId) {
+      console.log('[NewBooking] Save pressed (demo mode)');
+      router.back();
+      return;
+    }
+    console.log('[NewBooking] Save booking pressed');
     setSaving(true);
     try {
       const scheduledAt = buildScheduledAt();
-      const endAt = new Date(scheduledAt.getTime() + totalDuration * 60000);
+      const endAt = new Date(scheduledAt.getTime() + (totalDuration || 45) * 60000);
       const { error } = await supabase.from('bookings').insert({
         customer_profile_id: selectedClient?.id ?? null,
-        customer_name: isWalkIn ? walkInName : (selectedClient?.full_name ?? null),
-        customer_phone: isWalkIn ? walkInPhone : (selectedClient?.phone ?? null),
+        customer_name: isWalkIn ? 'Walk-In' : (selectedClient?.full_name ?? 'Walk-In'),
+        customer_phone: selectedClient?.phone ?? null,
         shop_id: shopId,
         barber_id: selectedBarber?.id ?? null,
         service_id: selectedServices[0]?.id ?? null,
@@ -157,321 +249,643 @@ export default function NewBooking() {
       if (error) {
         console.log('[NewBooking] insert error:', error.message);
       } else {
-        console.log('[NewBooking] Booking created successfully');
+        console.log('[NewBooking] Booking saved successfully');
         router.back();
       }
     } catch (err) {
-      console.log('[NewBooking] confirmBooking exception:', err);
+      console.log('[NewBooking] save exception:', err);
     } finally {
       setSaving(false);
     }
   };
 
-  const canProceed = () => {
-    if (step === 0) return isWalkIn ? walkInName.length > 0 : !!selectedClient;
-    if (step === 1) return selectedServices.length > 0;
-    if (step === 2) return true;
-    if (step === 3) return !!selectedTime;
-    return true;
+  const handleCheckout = async () => {
+    console.log('[NewBooking] Checkout pressed');
+    await handleSave();
   };
 
-  const timeSlots = Array.from({ length: (22 - 8) * 2 }, (_, i) => {
-    const totalMins = 8 * 60 + i * 30;
-    const h = Math.floor(totalMins / 60);
-    const m = totalMins % 60;
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-  });
+  const canCheckout = selectedServices.length > 0;
+  const dateLabel = formatDateLabel(selectedDate);
+  const timeLabel = formatTimeLabel(selectedTime.h, selectedTime.m);
 
-  const calendarDays = Array.from({ length: 30 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() + i);
-    return d;
-  });
+  // Calendar grid for date picker
+  const calendarDays = (() => {
+    const days: Date[] = [];
+    for (let i = 0; i < 42; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() + i - 7);
+      days.push(d);
+    }
+    return days;
+  })();
+
+  const clientDisplayName = isWalkIn ? 'Walk-In' : (selectedClient?.full_name ?? null);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => { console.log('[NewBooking] Close pressed'); router.back(); }}>
+        <TouchableOpacity style={styles.headerDateBtn} onPress={() => { console.log('[NewBooking] Header date pressed'); setShowDatePicker(true); }}>
+          <Text style={styles.headerDateText}>{dateLabel}</Text>
+          <ChevronDown size={16} color={P.textSecondary} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.statusBtn} onPress={() => console.log('[NewBooking] Status dropdown pressed')}>
+          <Text style={styles.statusBtnText}>Booked</Text>
+          <ChevronDown size={14} color={P.textSecondary} />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => { console.log('[NewBooking] Close pressed'); router.back(); }} style={styles.closeBtn}>
           <X size={22} color={P.textSecondary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>New Booking</Text>
-        <View style={{ width: 22 }} />
       </View>
 
-      {/* Step indicator */}
-      <View style={styles.stepRow}>
-        {STEPS.map((s, i) => (
-          <View key={i} style={styles.stepItem}>
-            <View style={[styles.stepDot, i === step && styles.stepDotActive, i < step && styles.stepDotDone]}>
-              {i < step ? <Check size={10} color="#fff" /> : <Text style={[styles.stepNum, i === step && styles.stepNumActive]}>{i + 1}</Text>}
-            </View>
-            {i < STEPS.length - 1 && <View style={[styles.stepLine, i < step && styles.stepLineDone]} />}
-          </View>
-        ))}
-      </View>
-      <Text style={styles.stepLabel}>{STEPS[step]}</Text>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 100 }}>
-        {/* Step 0: Client */}
-        {step === 0 && (
-          <View style={{ gap: 12 }}>
-            <View style={styles.toggleRow}>
-              <TouchableOpacity style={[styles.toggleBtn, !isWalkIn && styles.toggleBtnActive]} onPress={() => { console.log('[NewBooking] Existing client selected'); setIsWalkIn(false); }}>
-                <Text style={[styles.toggleText, !isWalkIn && styles.toggleTextActive]}>Existing Client</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.toggleBtn, isWalkIn && styles.toggleBtnActive]} onPress={() => { console.log('[NewBooking] Walk-in selected'); setIsWalkIn(true); }}>
-                <Text style={[styles.toggleText, isWalkIn && styles.toggleTextActive]}>Walk-in</Text>
-              </TouchableOpacity>
-            </View>
-            {!isWalkIn ? (
-              <>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Search client by name..."
-                  placeholderTextColor={P.textTertiary}
-                  value={clientSearch}
-                  onChangeText={setClientSearch}
-                />
-                {clients.map(c => (
-                  <TouchableOpacity key={c.id} style={[styles.clientRow, selectedClient?.id === c.id && styles.clientRowSelected]} onPress={() => { console.log('[NewBooking] Client selected:', c.id); setSelectedClient(c); }}>
-                    <View style={styles.clientAvatar}>
-                      <Text style={styles.clientAvatarText}>{c.full_name.charAt(0)}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.clientName}>{c.full_name}</Text>
-                      <Text style={styles.clientSub}>{c.phone ?? c.email ?? ''}</Text>
-                    </View>
-                    {selectedClient?.id === c.id && <Check size={16} color={P.accent} />}
-                  </TouchableOpacity>
-                ))}
-                {selectedClient && (
-                  <View style={styles.selectedCard}>
-                    <User size={16} color={P.accent} />
-                    <Text style={styles.selectedCardText}>{selectedClient.full_name}</Text>
-                  </View>
-                )}
-              </>
-            ) : (
-              <>
-                <TextInput style={styles.input} placeholder="Client name *" placeholderTextColor={P.textTertiary} value={walkInName} onChangeText={setWalkInName} />
-                <TextInput style={styles.input} placeholder="Phone number" placeholderTextColor={P.textTertiary} value={walkInPhone} onChangeText={setWalkInPhone} keyboardType="phone-pad" />
-              </>
-            )}
-          </View>
-        )}
-
-        {/* Step 1: Services */}
-        {step === 1 && (
-          <View style={{ gap: 8 }}>
-            {loading ? <ActivityIndicator color={P.accent} /> : services.map(s => {
-              const isSelected = selectedServices.some(ss => ss.id === s.id);
-              const priceText = `BHD ${Number(s.price_bhd).toFixed(3)}`;
-              const durationText = `${s.duration_minutes} min`;
-              return (
-                <TouchableOpacity key={s.id} style={[styles.serviceRow, isSelected && styles.serviceRowSelected]} onPress={() => {
-                  console.log('[NewBooking] Service toggled:', s.id, s.name);
-                  setSelectedServices(prev => isSelected ? prev.filter(ss => ss.id !== s.id) : [...prev, s]);
-                }}>
-                  <Scissors size={16} color={isSelected ? P.accent : P.textSecondary} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.serviceName, isSelected && { color: P.accent }]}>{s.name}</Text>
-                    <Text style={styles.serviceSub}>{durationText}</Text>
-                  </View>
-                  <Text style={styles.servicePrice}>{priceText}</Text>
-                  {isSelected && <Check size={16} color={P.accent} />}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )}
-
-        {/* Step 2: Team */}
-        {step === 2 && (
-          <View style={{ gap: 8 }}>
-            <TouchableOpacity style={[styles.barberRow, !selectedBarber && styles.barberRowSelected]} onPress={() => { console.log('[NewBooking] Any barber selected'); setSelectedBarber(null); }}>
-              <View style={styles.barberAvatar}><Users size={16} color={P.textSecondary} /></View>
-              <Text style={styles.barberName}>Any Available</Text>
-              {!selectedBarber && <Check size={16} color={P.accent} />}
-            </TouchableOpacity>
-            {barbers.map(b => (
-              <TouchableOpacity key={b.id} style={[styles.barberRow, selectedBarber?.id === b.id && styles.barberRowSelected]} onPress={() => { console.log('[NewBooking] Barber selected:', b.id); setSelectedBarber(b); }}>
-                {b.avatar_url ? (
-                  <Image source={resolveImageSource(b.avatar_url)} style={styles.barberAvatarImg} />
+        {/* Client section */}
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={styles.addClientRow}
+            onPress={() => {
+              console.log('[NewBooking] Add client row pressed');
+              setShowClientSheet(true);
+            }}
+          >
+            <View style={styles.addClientLeft}>
+              <UserPlus size={18} color={P.textSecondary} />
+              <View>
+                {clientDisplayName ? (
+                  <Text style={styles.addClientName}>{clientDisplayName}</Text>
                 ) : (
-                  <View style={styles.barberAvatar}><Text style={styles.barberAvatarText}>{b.display_name.charAt(0)}</Text></View>
+                  <>
+                    <Text style={styles.addClientTitle}>Add client</Text>
+                    <Text style={styles.addClientSub}>Leave empty for walk-ins</Text>
+                  </>
                 )}
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.barberName}>{b.display_name}</Text>
-                  {b.specialty && <Text style={styles.barberSub}>{b.specialty}</Text>}
-                </View>
-                {selectedBarber?.id === b.id && <Check size={16} color={P.accent} />}
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        {/* Step 3: Date & Time */}
-        {step === 3 && (
-          <View style={{ gap: 16 }}>
-            <Text style={styles.subLabel}>Select Date</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                {calendarDays.map((d, i) => {
-                  const isSelected = d.toDateString() === selectedDate.toDateString();
-                  const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short' });
-                  const dateNum = d.getDate();
-                  return (
-                    <TouchableOpacity key={i} style={[styles.calDay, isSelected && styles.calDayActive]} onPress={() => { console.log('[NewBooking] Date selected:', d.toDateString()); setSelectedDate(d); setSelectedTime(null); }}>
-                      <Text style={[styles.calDayLabel, isSelected && styles.calDayLabelActive]}>{dayLabel}</Text>
-                      <Text style={[styles.calDayNum, isSelected && styles.calDayNumActive]}>{dateNum}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
               </View>
-            </ScrollView>
-            <Text style={styles.subLabel}>Select Time</Text>
-            <View style={styles.timeGrid}>
-              {timeSlots.map(slot => {
-                const isSelected = selectedTime === slot;
-                const [h, m] = slot.split(':').map(Number);
-                const label = `${h > 12 ? h - 12 : h}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
-                return (
-                  <TouchableOpacity key={slot} style={[styles.timeSlot, isSelected && styles.timeSlotActive]} onPress={() => { console.log('[NewBooking] Time selected:', slot); setSelectedTime(slot); }}>
-                    <Text style={[styles.timeSlotText, isSelected && styles.timeSlotTextActive]}>{label}</Text>
-                  </TouchableOpacity>
-                );
-              })}
             </View>
-          </View>
-        )}
+            <View style={styles.addClientRight}>
+              {clientDisplayName && (
+                <TouchableOpacity
+                  onPress={() => {
+                    console.log('[NewBooking] Remove client pressed');
+                    setSelectedClient(null);
+                    setIsWalkIn(false);
+                  }}
+                  style={{ padding: 4 }}
+                >
+                  <X size={16} color={P.textSecondary} />
+                </TouchableOpacity>
+              )}
+              <ChevronRight size={18} color={P.textTertiary} />
+            </View>
+          </TouchableOpacity>
+        </View>
 
-        {/* Step 4: Confirm */}
-        {step === 4 && (
-          <View style={{ gap: 12 }}>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryTitle}>Booking Summary</Text>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Client</Text>
-                <Text style={styles.summaryValue}>{isWalkIn ? walkInName : (selectedClient?.full_name ?? '—')}</Text>
+        {/* Date & Time section */}
+        <View style={styles.section}>
+          <View style={styles.dateTimeCard}>
+            <TouchableOpacity
+              style={styles.dateTimeRow}
+              onPress={() => { console.log('[NewBooking] Date row pressed'); setShowDatePicker(true); }}
+            >
+              <Calendar size={16} color={P.textSecondary} />
+              <Text style={styles.dateTimeText}>{dateLabel}</Text>
+            </TouchableOpacity>
+            <View style={styles.dateTimeDivider} />
+            <TouchableOpacity
+              style={styles.dateTimeRow}
+              onPress={() => { console.log('[NewBooking] Time row pressed'); setShowTimePicker(true); }}
+            >
+              <Clock size={16} color={P.textSecondary} />
+              <Text style={styles.dateTimeText}>{timeLabel}</Text>
+            </TouchableOpacity>
+            <View style={styles.dateTimeDivider} />
+            <TouchableOpacity style={styles.dateTimeRow} onPress={() => console.log('[NewBooking] Repeat row pressed')}>
+              <RefreshCw size={16} color={P.textSecondary} />
+              <Text style={styles.dateTimeText}>Doesn't repeat</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Services section */}
+        <View style={styles.servicesSection}>
+          <Text style={styles.sectionHeader}>Services</Text>
+
+          {selectedServices.length === 0 ? (
+            <View style={styles.emptyServicesCard}>
+              <View style={styles.emptyServicesIcon}>
+                <Text style={{ fontSize: 32 }}>✂️</Text>
               </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Services</Text>
-                <Text style={styles.summaryValue}>{selectedServices.map(s => s.name).join(', ') || '—'}</Text>
+              <Text style={styles.emptyServicesText}>Add a service to save the appointment</Text>
+            </View>
+          ) : (
+            selectedServices.map(svc => {
+              const priceStr = Number(svc.price_bhd).toFixed(0);
+              const barberName = selectedBarber?.display_name ?? 'Any';
+              const svcTimeLabel = formatTimeLabel(selectedTime.h, selectedTime.m);
+              return (
+                <View key={svc.id} style={styles.serviceCard}>
+                  <View style={styles.serviceCardBar} />
+                  <View style={styles.serviceCardContent}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.serviceCardName}>{svc.name}</Text>
+                      <Text style={styles.serviceCardMeta}>
+                        {svcTimeLabel} · {svc.duration_minutes}min · {barberName}
+                      </Text>
+                      <TouchableOpacity
+                        style={styles.teamWarning}
+                        onPress={() => { console.log('[NewBooking] Team member warning pressed'); setShowBarberSheet(true); }}
+                      >
+                        <AlertTriangle size={12} color={P.warning} />
+                        <Text style={styles.teamWarningText}>Team member not available</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={styles.serviceCardPrice}>BHD {priceStr}</Text>
+                  </View>
+                </View>
+              );
+            })
+          )}
+
+          <TouchableOpacity
+            style={styles.addServiceBtn}
+            onPress={() => { console.log('[NewBooking] Add service pressed'); setShowServiceSheet(true); }}
+          >
+            <Plus size={16} color={P.textSecondary} />
+            <Text style={styles.addServiceBtnText}>Add service</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Total row */}
+        {selectedServices.length > 0 && (
+          <View style={styles.totalSection}>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Total</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <ChevronRight size={14} color={P.textSecondary} />
+                <Text style={styles.totalValue}>BHD {totalPriceStr}</Text>
               </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Team member</Text>
-                <Text style={styles.summaryValue}>{selectedBarber?.display_name ?? 'Any available'}</Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Date & Time</Text>
-                <Text style={styles.summaryValue}>{selectedDate.toLocaleDateString()} {selectedTime ?? '—'}</Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Duration</Text>
-                <Text style={styles.summaryValue}>{totalDuration} min</Text>
-              </View>
-              <View style={[styles.summaryRow, { borderBottomWidth: 0 }]}>
-                <Text style={[styles.summaryLabel, { fontWeight: '700', color: P.text }]}>Total</Text>
-                <Text style={[styles.summaryValue, { color: P.gold, fontWeight: '700' }]}>BHD {totalPrice.toFixed(3)}</Text>
+            </View>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>To pay</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <ChevronRight size={14} color={P.textSecondary} />
+                <Text style={[styles.totalValue, { fontWeight: '700', color: P.text }]}>BHD {totalPriceStr}</Text>
               </View>
             </View>
           </View>
         )}
       </ScrollView>
 
-      {/* Bottom actions */}
-      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 16 }]}>
-        {step > 0 && (
-          <TouchableOpacity style={styles.backBtn} onPress={() => { console.log('[NewBooking] Back pressed'); setStep(s => s - 1); }}>
-            <Text style={styles.backBtnText}>Back</Text>
-          </TouchableOpacity>
-        )}
-        {step < 4 ? (
-          <TouchableOpacity
-            style={[styles.nextBtn, !canProceed() && styles.nextBtnDisabled]}
-            disabled={!canProceed()}
-            onPress={() => { console.log('[NewBooking] Next pressed, step:', step); setStep(s => s + 1); }}
-          >
-            <Text style={styles.nextBtnText}>Next</Text>
-            <ChevronRight size={16} color="#fff" />
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.nextBtn} onPress={confirmBooking} disabled={saving}>
-            {saving ? <ActivityIndicator color="#fff" size="small" /> : (
-              <>
-                <CheckCircle size={16} color="#fff" />
-                <Text style={styles.nextBtnText}>Confirm Booking</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        )}
+      {/* Sticky footer */}
+      <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
+        <TouchableOpacity style={styles.footerMoreBtn} onPress={() => console.log('[NewBooking] Footer more pressed')}>
+          <MoreVertical size={20} color={P.text} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.checkoutBtn, !canCheckout && styles.checkoutBtnDisabled]}
+          disabled={!canCheckout}
+          onPress={handleCheckout}
+        >
+          <Text style={[styles.checkoutBtnText, !canCheckout && styles.checkoutBtnTextDisabled]}>Checkout</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.saveBtn}
+          onPress={handleSave}
+          disabled={saving}
+        >
+          {saving ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Text style={styles.saveBtnText}>Save</Text>
+          )}
+        </TouchableOpacity>
       </View>
+
+      {/* ── Client Selector Sheet ── */}
+      <Modal visible={showClientSheet} transparent animationType="slide" onRequestClose={() => setShowClientSheet(false)}>
+        <View style={styles.sheetOverlay}>
+          <View style={[styles.sheet, { paddingBottom: insets.bottom + 16, maxHeight: '85%' }]}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Select client</Text>
+              <TouchableOpacity onPress={() => setShowClientSheet(false)}>
+                <X size={20} color={P.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Search */}
+            <View style={styles.searchRow}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search client or leave empty for walk-in"
+                placeholderTextColor={P.textTertiary}
+                value={clientSearch}
+                onChangeText={setClientSearch}
+                autoFocus
+              />
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Add new client */}
+              <TouchableOpacity
+                style={styles.clientOptionRow}
+                onPress={() => {
+                  console.log('[NewBooking] Add new client pressed');
+                  setShowClientSheet(false);
+                }}
+              >
+                <View style={styles.clientOptionIcon}>
+                  <Plus size={18} color={P.text} />
+                </View>
+                <Text style={styles.clientOptionText}>Add new client</Text>
+              </TouchableOpacity>
+
+              {/* Walk-In */}
+              <TouchableOpacity
+                style={styles.clientOptionRow}
+                onPress={() => {
+                  console.log('[NewBooking] Walk-In selected');
+                  setIsWalkIn(true);
+                  setSelectedClient(null);
+                  setShowClientSheet(false);
+                }}
+              >
+                <View style={styles.clientOptionIcon}>
+                  <Users size={18} color={P.text} />
+                </View>
+                <Text style={styles.clientOptionText}>Walk-In</Text>
+              </TouchableOpacity>
+
+              {/* Client list */}
+              {(clientSearch.length > 0 ? clients : DEMO_CLIENTS).map(c => (
+                <TouchableOpacity
+                  key={c.id}
+                  style={styles.clientRow}
+                  onPress={() => {
+                    console.log('[NewBooking] Client selected:', c.id, c.full_name);
+                    setSelectedClient(c);
+                    setIsWalkIn(false);
+                    setShowClientSheet(false);
+                  }}
+                >
+                  <View style={styles.clientAvatar}>
+                    <Text style={styles.clientAvatarText}>{c.full_name.charAt(0)}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.clientName}>{c.full_name}</Text>
+                    <Text style={styles.clientSub}>{c.email ?? c.phone ?? ''}</Text>
+                  </View>
+                  {selectedClient?.id === c.id && <Check size={16} color={P.accent} />}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Service Selector Sheet ── */}
+      <Modal visible={showServiceSheet} transparent animationType="slide" onRequestClose={() => setShowServiceSheet(false)}>
+        <View style={styles.sheetOverlay}>
+          <View style={[styles.sheet, { paddingBottom: insets.bottom + 16, maxHeight: '85%' }]}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Select service</Text>
+              <TouchableOpacity onPress={() => setShowServiceSheet(false)}>
+                <X size={20} color={P.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.searchRow}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search services"
+                placeholderTextColor={P.textTertiary}
+                autoFocus
+              />
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {loading ? (
+                <ActivityIndicator color={P.accent} style={{ marginTop: 20 }} />
+              ) : (
+                services.map(s => {
+                  const isSelected = selectedServices.some(ss => ss.id === s.id);
+                  const priceStr = Number(s.price_bhd).toFixed(0);
+                  return (
+                    <TouchableOpacity
+                      key={s.id}
+                      style={[styles.serviceSheetRow, isSelected && styles.serviceSheetRowSelected]}
+                      onPress={() => {
+                        console.log('[NewBooking] Service toggled:', s.id, s.name);
+                        setSelectedServices(prev =>
+                          isSelected ? prev.filter(ss => ss.id !== s.id) : [...prev, s]
+                        );
+                      }}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.serviceSheetName, isSelected && { color: P.accent }]}>{s.name}</Text>
+                        <Text style={styles.serviceSheetMeta}>{s.duration_minutes} min</Text>
+                      </View>
+                      <Text style={styles.serviceSheetPrice}>BHD {priceStr}</Text>
+                      {isSelected && <Check size={16} color={P.accent} style={{ marginLeft: 8 }} />}
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </ScrollView>
+
+            <View style={styles.sheetFooterBtn}>
+              <TouchableOpacity
+                style={styles.sheetDoneBtn}
+                onPress={() => {
+                  console.log('[NewBooking] Service selection done, count:', selectedServices.length);
+                  setShowServiceSheet(false);
+                }}
+              >
+                <Text style={styles.sheetDoneBtnText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Barber Selector Sheet ── */}
+      <Modal visible={showBarberSheet} transparent animationType="slide" onRequestClose={() => setShowBarberSheet(false)}>
+        <View style={styles.sheetOverlay}>
+          <View style={[styles.sheet, { paddingBottom: insets.bottom + 16, maxHeight: '75%' }]}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Select team member</Text>
+              <TouchableOpacity onPress={() => setShowBarberSheet(false)}>
+                <X size={20} color={P.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Any available */}
+              <TouchableOpacity
+                style={[styles.barberSheetRow, !selectedBarber && styles.barberSheetRowSelected]}
+                onPress={() => {
+                  console.log('[NewBooking] Any barber selected');
+                  setSelectedBarber(null);
+                  setShowBarberSheet(false);
+                }}
+              >
+                <View style={styles.barberSheetAvatar}>
+                  <Users size={18} color={P.textSecondary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.barberSheetName}>Any available</Text>
+                </View>
+                {!selectedBarber && <Check size={16} color={P.accent} />}
+              </TouchableOpacity>
+
+              {barbers.map(b => (
+                <TouchableOpacity
+                  key={b.id}
+                  style={[styles.barberSheetRow, selectedBarber?.id === b.id && styles.barberSheetRowSelected]}
+                  onPress={() => {
+                    console.log('[NewBooking] Barber selected:', b.id, b.display_name);
+                    setSelectedBarber(b);
+                    setShowBarberSheet(false);
+                  }}
+                >
+                  {b.avatar_url ? (
+                    <Image source={resolveImageSource(b.avatar_url)} style={styles.barberSheetAvatarImg} />
+                  ) : (
+                    <View style={styles.barberSheetAvatar}>
+                      <Text style={styles.barberSheetAvatarText}>{b.display_name.charAt(0)}</Text>
+                    </View>
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.barberSheetName}>{b.display_name}</Text>
+                    {b.specialty && <Text style={styles.barberSheetSub}>{b.specialty}</Text>}
+                  </View>
+                  {selectedBarber?.id === b.id && <Check size={16} color={P.accent} />}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Date Picker Sheet ── */}
+      <Modal visible={showDatePicker} transparent animationType="slide" onRequestClose={() => setShowDatePicker(false)}>
+        <View style={styles.sheetOverlay}>
+          <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Select date</Text>
+              <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                <X size={20} color={P.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Month label */}
+            <Text style={styles.calMonthLabel}>
+              {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            </Text>
+
+            {/* Day headers */}
+            <View style={styles.calDayHeaders}>
+              {['S','M','T','W','T','F','S'].map((d, i) => (
+                <Text key={i} style={styles.calDayHeader}>{d}</Text>
+              ))}
+            </View>
+
+            {/* Calendar grid */}
+            <View style={styles.calGrid}>
+              {calendarDays.map((d, i) => {
+                const isSelected = d.toDateString() === selectedDate.toDateString();
+                const isToday = d.toDateString() === new Date().toDateString();
+                const isPast = d < new Date(new Date().setHours(0,0,0,0));
+                return (
+                  <TouchableOpacity
+                    key={i}
+                    style={[styles.calCell, isSelected && styles.calCellSelected]}
+                    onPress={() => {
+                      if (!isPast) {
+                        console.log('[NewBooking] Date picker date selected:', d.toDateString());
+                        setSelectedDate(d);
+                        setShowDatePicker(false);
+                      }
+                    }}
+                    disabled={isPast}
+                  >
+                    <Text style={[
+                      styles.calCellText,
+                      isSelected && styles.calCellTextSelected,
+                      isToday && !isSelected && styles.calCellTextToday,
+                      isPast && styles.calCellTextPast,
+                    ]}>
+                      {d.getDate()}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Time Picker Sheet ── */}
+      <Modal visible={showTimePicker} transparent animationType="slide" onRequestClose={() => setShowTimePicker(false)}>
+        <View style={styles.sheetOverlay}>
+          <View style={[styles.sheet, { paddingBottom: insets.bottom + 16, maxHeight: '70%' }]}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Select time</Text>
+              <TouchableOpacity onPress={() => setShowTimePicker(false)}>
+                <X size={20} color={P.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.timeGrid}>
+                {TIME_SLOTS.map((slot, i) => {
+                  const isSelected = selectedTime.h === slot.h && selectedTime.m === slot.m;
+                  return (
+                    <TouchableOpacity
+                      key={i}
+                      style={[styles.timeSlot, isSelected && styles.timeSlotActive]}
+                      onPress={() => {
+                        console.log('[NewBooking] Time selected:', slot.label);
+                        setSelectedTime({ h: slot.h, m: slot.m });
+                        setShowTimePicker(false);
+                      }}
+                    >
+                      <Text style={[styles.timeSlotText, isSelected && styles.timeSlotTextActive]}>{slot.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: P.bg },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16 },
-  headerTitle: { color: P.text, fontSize: 18, fontWeight: '700' },
-  stepRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginBottom: 4 },
-  stepItem: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  stepDot: { width: 24, height: 24, borderRadius: 12, backgroundColor: P.surface, borderWidth: 1, borderColor: P.border, alignItems: 'center', justifyContent: 'center' },
-  stepDotActive: { backgroundColor: P.accent, borderColor: P.accent },
-  stepDotDone: { backgroundColor: P.success, borderColor: P.success },
-  stepNum: { color: P.textSecondary, fontSize: 10, fontWeight: '700' },
-  stepNumActive: { color: '#fff' },
-  stepLine: { flex: 1, height: 1, backgroundColor: P.border, marginHorizontal: 2 },
-  stepLineDone: { backgroundColor: P.success },
-  stepLabel: { color: P.textSecondary, fontSize: 13, paddingHorizontal: 20, marginBottom: 16 },
-  toggleRow: { flexDirection: 'row', backgroundColor: P.surface, borderRadius: 10, padding: 3, gap: 3 },
-  toggleBtn: { flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center' },
-  toggleBtnActive: { backgroundColor: P.accent },
-  toggleText: { color: P.textSecondary, fontSize: 14, fontWeight: '600' },
-  toggleTextActive: { color: '#fff' },
-  input: { backgroundColor: P.surface, borderRadius: 10, padding: 14, color: P.text, borderWidth: 1, borderColor: P.border, fontSize: 15 },
-  clientRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: P.surface, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: P.border },
-  clientRowSelected: { borderColor: P.accent, backgroundColor: P.accentLight },
-  clientAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: P.accentLight, alignItems: 'center', justifyContent: 'center' },
-  clientAvatarText: { color: P.accent, fontSize: 14, fontWeight: '700' },
+
+  // Header
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, gap: 10 },
+  headerDateBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  headerDateText: { color: P.text, fontSize: 17, fontWeight: '700' },
+  statusBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: P.border, backgroundColor: P.surface },
+  statusBtnText: { color: P.text, fontSize: 13, fontWeight: '600' },
+  closeBtn: { marginLeft: 'auto' as any, padding: 4 },
+
+  // Sections
+  section: { paddingHorizontal: 16, marginBottom: 10 },
+  servicesSection: { paddingHorizontal: 16, marginBottom: 10 },
+  sectionHeader: { color: P.text, fontSize: 16, fontWeight: '700', marginBottom: 12 },
+
+  // Add client row
+  addClientRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: P.surface, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: P.border },
+  addClientLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  addClientTitle: { color: P.text, fontSize: 15, fontWeight: '600' },
+  addClientSub: { color: P.textSecondary, fontSize: 12, marginTop: 2 },
+  addClientName: { color: P.text, fontSize: 15, fontWeight: '600' },
+  addClientRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+
+  // Date & time card
+  dateTimeCard: { backgroundColor: P.surface, borderRadius: 14, borderWidth: 1, borderColor: P.border, overflow: 'hidden' },
+  dateTimeRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14 },
+  dateTimeText: { color: P.text, fontSize: 14, fontWeight: '500' },
+  dateTimeDivider: { height: 1, backgroundColor: P.divider, marginHorizontal: 16 },
+
+  // Service card
+  serviceCard: { flexDirection: 'row', backgroundColor: P.surface, borderRadius: 12, marginBottom: 10, overflow: 'hidden', borderWidth: 1, borderColor: P.border },
+  serviceCardBar: { width: 4, backgroundColor: P.accent },
+  serviceCardContent: { flex: 1, flexDirection: 'row', alignItems: 'flex-start', padding: 14, gap: 8 },
+  serviceCardName: { color: P.text, fontSize: 14, fontWeight: '700' },
+  serviceCardMeta: { color: P.textSecondary, fontSize: 12, marginTop: 3 },
+  serviceCardPrice: { color: P.text, fontSize: 14, fontWeight: '700' },
+  teamWarning: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
+  teamWarningText: { color: P.warning, fontSize: 11 },
+
+  // Empty services
+  emptyServicesCard: { alignItems: 'center', paddingVertical: 32, gap: 12 },
+  emptyServicesIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: P.accentLight, alignItems: 'center', justifyContent: 'center' },
+  emptyServicesText: { color: P.textSecondary, fontSize: 14, textAlign: 'center' },
+
+  // Add service button
+  addServiceBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 4 },
+  addServiceBtnText: { color: P.textSecondary, fontSize: 14, fontWeight: '600' },
+
+  // Total
+  totalSection: { paddingHorizontal: 16, marginBottom: 8 },
+  totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
+  totalLabel: { color: P.textSecondary, fontSize: 14 },
+  totalValue: { color: P.textSecondary, fontSize: 14, fontWeight: '600' },
+
+  // Footer
+  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 12, backgroundColor: P.surface, borderTopWidth: 1, borderTopColor: P.border },
+  footerMoreBtn: { width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, borderColor: P.border, alignItems: 'center', justifyContent: 'center' },
+  checkoutBtn: { flex: 1, paddingVertical: 13, borderRadius: 12, borderWidth: 1.5, borderColor: P.text, alignItems: 'center' },
+  checkoutBtnDisabled: { borderColor: P.border },
+  checkoutBtnText: { color: P.text, fontSize: 15, fontWeight: '700' },
+  checkoutBtnTextDisabled: { color: P.textTertiary },
+  saveBtn: { flex: 1, paddingVertical: 13, borderRadius: 12, backgroundColor: P.text, alignItems: 'center' },
+  saveBtnText: { color: P.bg, fontSize: 15, fontWeight: '700' },
+
+  // Sheet
+  sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end' },
+  sheet: { backgroundColor: P.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24 },
+  sheetHandle: { width: 40, height: 4, backgroundColor: P.border, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 4 },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14 },
+  sheetTitle: { color: P.text, fontSize: 20, fontWeight: '700' },
+  sheetFooterBtn: { paddingHorizontal: 20, paddingTop: 12, borderTopWidth: 1, borderTopColor: P.divider },
+  sheetDoneBtn: { backgroundColor: P.text, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  sheetDoneBtnText: { color: P.bg, fontSize: 15, fontWeight: '700' },
+
+  // Search
+  searchRow: { paddingHorizontal: 16, paddingBottom: 12 },
+  searchInput: { backgroundColor: P.surfaceElevated, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, color: P.text, fontSize: 14, borderWidth: 1, borderColor: P.border },
+
+  // Client sheet
+  clientOptionRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: P.divider },
+  clientOptionIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: P.surfaceElevated, alignItems: 'center', justifyContent: 'center' },
+  clientOptionText: { color: P.text, fontSize: 15, fontWeight: '600' },
+  clientRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: P.divider },
+  clientAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: P.accentLight, alignItems: 'center', justifyContent: 'center' },
+  clientAvatarText: { color: P.accent, fontSize: 15, fontWeight: '700' },
   clientName: { color: P.text, fontSize: 14, fontWeight: '600' },
-  clientSub: { color: P.textSecondary, fontSize: 12 },
-  selectedCard: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: P.accentLight, borderRadius: 10, padding: 12 },
-  selectedCardText: { color: P.accent, fontSize: 14, fontWeight: '600' },
-  serviceRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: P.surface, borderRadius: 10, padding: 14, borderWidth: 1, borderColor: P.border },
-  serviceRowSelected: { borderColor: P.accent, backgroundColor: P.accentLight },
-  serviceName: { color: P.text, fontSize: 14, fontWeight: '600' },
-  serviceSub: { color: P.textSecondary, fontSize: 12, marginTop: 2 },
-  servicePrice: { color: P.gold, fontSize: 13, fontWeight: '600' },
-  barberRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: P.surface, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: P.border },
-  barberRowSelected: { borderColor: P.accent, backgroundColor: P.accentLight },
-  barberAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: P.accentLight, alignItems: 'center', justifyContent: 'center' },
-  barberAvatarImg: { width: 40, height: 40, borderRadius: 20 },
-  barberAvatarText: { color: P.accent, fontSize: 16, fontWeight: '700' },
-  barberName: { color: P.text, fontSize: 14, fontWeight: '600', flex: 1 },
-  barberSub: { color: P.textSecondary, fontSize: 12 },
-  subLabel: { color: P.textSecondary, fontSize: 13, fontWeight: '600' },
-  calDay: { width: 56, height: 64, borderRadius: 12, backgroundColor: P.surface, alignItems: 'center', justifyContent: 'center', gap: 4, borderWidth: 1, borderColor: P.border },
-  calDayActive: { backgroundColor: P.accent, borderColor: P.accent },
-  calDayLabel: { color: P.textSecondary, fontSize: 11 },
-  calDayLabelActive: { color: '#fff' },
-  calDayNum: { color: P.text, fontSize: 18, fontWeight: '700' },
-  calDayNumActive: { color: '#fff' },
-  timeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  timeSlot: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: P.surface, borderWidth: 1, borderColor: P.border },
+  clientSub: { color: P.textSecondary, fontSize: 12, marginTop: 2 },
+
+  // Service sheet
+  serviceSheetRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: P.divider },
+  serviceSheetRowSelected: { backgroundColor: P.accentLight },
+  serviceSheetName: { color: P.text, fontSize: 14, fontWeight: '600' },
+  serviceSheetMeta: { color: P.textSecondary, fontSize: 12, marginTop: 2 },
+  serviceSheetPrice: { color: P.gold, fontSize: 14, fontWeight: '600' },
+
+  // Barber sheet
+  barberSheetRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: P.divider },
+  barberSheetRowSelected: { backgroundColor: P.accentLight },
+  barberSheetAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: P.accentLight, alignItems: 'center', justifyContent: 'center' },
+  barberSheetAvatarImg: { width: 44, height: 44, borderRadius: 22 },
+  barberSheetAvatarText: { color: P.accent, fontSize: 16, fontWeight: '700' },
+  barberSheetName: { color: P.text, fontSize: 14, fontWeight: '600' },
+  barberSheetSub: { color: P.textSecondary, fontSize: 12, marginTop: 2 },
+
+  // Date picker
+  calMonthLabel: { color: P.text, fontSize: 16, fontWeight: '700', textAlign: 'center', marginBottom: 12 },
+  calDayHeaders: { flexDirection: 'row', paddingHorizontal: 16, marginBottom: 4 },
+  calDayHeader: { flex: 1, textAlign: 'center', color: P.textSecondary, fontSize: 12, fontWeight: '600' },
+  calGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 16, paddingBottom: 16 },
+  calCell: { width: `${100 / 7}%` as any, aspectRatio: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 100 },
+  calCellSelected: { backgroundColor: P.accent },
+  calCellText: { color: P.text, fontSize: 14, fontWeight: '500' },
+  calCellTextSelected: { color: '#fff', fontWeight: '700' },
+  calCellTextToday: { color: P.accent, fontWeight: '700' },
+  calCellTextPast: { color: P.textTertiary },
+
+  // Time picker
+  timeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 16 },
+  timeSlot: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, backgroundColor: P.surfaceElevated, borderWidth: 1, borderColor: P.border },
   timeSlotActive: { backgroundColor: P.accent, borderColor: P.accent },
   timeSlotText: { color: P.textSecondary, fontSize: 13 },
   timeSlotTextActive: { color: '#fff', fontWeight: '600' },
-  summaryCard: { backgroundColor: P.surface, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: P.border },
-  summaryTitle: { color: P.text, fontSize: 16, fontWeight: '700', marginBottom: 12 },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: P.divider },
-  summaryLabel: { color: P.textSecondary, fontSize: 14 },
-  summaryValue: { color: P.text, fontSize: 14, fontWeight: '600', flex: 1, textAlign: 'right' },
-  bottomBar: { flexDirection: 'row', gap: 10, paddingHorizontal: 20, paddingTop: 12, backgroundColor: P.surface, borderTopWidth: 1, borderTopColor: P.border },
-  backBtn: { paddingHorizontal: 20, paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: P.border },
-  backBtnText: { color: P.textSecondary, fontSize: 15, fontWeight: '600' },
-  nextBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: P.accent, paddingVertical: 14, borderRadius: 12 },
-  nextBtnDisabled: { opacity: 0.4 },
-  nextBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });
