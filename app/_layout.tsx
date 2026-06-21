@@ -36,6 +36,7 @@ function RoleRouter() {
 
   useEffect(() => {
     if (loading) return;
+    if (!segments || segments.length === 0) return; // guard null/empty
     const isPartner = profile?.role === 'shop_owner' || profile?.role === 'barber';
     const inPartner = segments[0] === '(partner)';
     const inAuth = segments[0] === 'auth';
@@ -49,7 +50,7 @@ function RoleRouter() {
       console.log('[RoleRouter] Redirecting to customer tabs');
       router.replace('/(tabs)');
     }
-  }, [profile, loading]);
+  }, [profile, loading, segments]);
 
   return null;
 }

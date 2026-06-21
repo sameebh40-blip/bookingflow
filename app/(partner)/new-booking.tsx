@@ -84,9 +84,9 @@ function formatDateLabel(date: Date): string {
 }
 
 function formatTimeLabel(h: number, m: number): string {
-  const ampm = h >= 12 ? 'am' : 'am';
+  const ampm = h >= 12 ? 'pm' : 'am';
   const hh = h % 12 === 0 ? 12 : h % 12;
-  return `${hh}:${String(m).padStart(2, '0')}${h >= 12 ? 'pm' : 'am'}`;
+  return `${hh}:${String(m).padStart(2, '0')}${ampm}`;
 }
 
 // Generate 15-min slots from 6am to 11pm
@@ -138,6 +138,7 @@ export default function NewBooking() {
   const [showBarberSheet, setShowBarberSheet] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [showAddSheet, setShowAddSheet] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!shopId) {
@@ -199,6 +200,14 @@ export default function NewBooking() {
   }, [shopId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // When barbers load and a barberId param was passed, select the matching barber
+  useEffect(() => {
+    if (params.barberId && barbers.length > 0) {
+      const match = barbers.find(b => b.id === params.barberId);
+      if (match) setSelectedBarber(match);
+    }
+  }, [barbers, params.barberId]);
 
   useEffect(() => {
     if (showClientSheet) {
@@ -434,7 +443,67 @@ export default function NewBooking() {
             </View>
           </View>
         )}
+
+        {/* Add to cart section */}
+        {selectedServices.length > 0 && (
+          <View style={styles.cartSection}>
+            <Text style={styles.sectionHeader}>Add to cart</Text>
+            <View style={styles.cartCard}>
+              <TouchableOpacity style={styles.cartAddClientRow} onPress={() => {
+                console.log('[NewBooking] Cart add client pressed');
+                setShowClientSheet(true);
+              }}>
+                <View style={styles.cartAddClientIcon}>
+                  <UserPlus size={18} color={P.textSecondary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.cartAddClientTitle}>Add client</Text>
+                  <Text style={styles.cartAddClientSub}>Leave empty for walk-ins</Text>
+                </View>
+              </TouchableOpacity>
+              {selectedServices.map(svc => {
+                const svcPriceStr = Number(svc.price_bhd).toFixed(0);
+                const barberName = selectedBarber?.display_name ?? 'Any';
+                return (
+                  <View key={svc.id} style={styles.cartServiceRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.cartServiceName}>{svc.name}</Text>
+                      <Text style={styles.cartServiceMeta}>{svc.duration_minutes}min · {barberName}</Text>
+                    </View>
+                    <Text style={styles.cartServicePrice}>BHD {svcPriceStr}</Text>
+                  </View>
+                );
+              })}
+              <TouchableOpacity style={styles.cartAddBtn} onPress={() => {
+                console.log('[NewBooking] Cart add to cart pressed');
+                setShowServiceSheet(true);
+              }}>
+                <Plus size={14} color={P.textSecondary} />
+                <Text style={styles.cartAddBtnText}>Add to cart</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.cartTotalRow}>
+              <Text style={styles.cartTotalLabel}>Total</Text>
+              <Text style={styles.cartTotalValue}>BHD {totalPriceStr}</Text>
+            </View>
+            <View style={styles.cartTotalRow}>
+              <Text style={styles.cartTotalLabel}>To pay</Text>
+              <Text style={[styles.cartTotalValue, { color: P.text, fontWeight: '700' }]}>BHD {totalPriceStr}</Text>
+            </View>
+          </View>
+        )}
       </ScrollView>
+
+      {/* FAB for Add sheet */}
+      <TouchableOpacity
+        style={[styles.fab, { bottom: insets.bottom + 80 }]}
+        onPress={() => {
+          console.log('[NewBooking] FAB pressed — opening Add sheet');
+          setShowAddSheet(true);
+        }}
+      >
+        <Plus size={24} color="#fff" />
+      </TouchableOpacity>
 
       {/* Sticky footer */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
@@ -761,6 +830,41 @@ export default function NewBooking() {
           </View>
         </View>
       </Modal>
+
+      {/* ── Add Sheet ── */}
+      <Modal visible={showAddSheet} transparent animationType="slide" onRequestClose={() => setShowAddSheet(false)}>
+        <View style={styles.sheetOverlay}>
+          <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Add</Text>
+              <TouchableOpacity onPress={() => {
+                console.log('[NewBooking] Add sheet closed');
+                setShowAddSheet(false);
+              }}>
+                <X size={20} color={P.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            {[
+              { label: 'Appointment', icon: '📅' },
+              { label: 'Group appointment', icon: '👥' },
+              { label: 'Blocked time', icon: '🚫' },
+              { label: 'Sale', icon: '🏷️' },
+              { label: 'Quick payment', icon: '💳' },
+            ].map((item, i) => (
+              <TouchableOpacity key={i} style={styles.addSheetRow} onPress={() => {
+                console.log('[NewBooking] Add sheet item pressed:', item.label);
+                setShowAddSheet(false);
+              }}>
+                <View style={styles.addSheetIcon}>
+                  <Text style={{ fontSize: 20 }}>{item.icon}</Text>
+                </View>
+                <Text style={styles.addSheetLabel}>{item.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -888,4 +992,29 @@ const styles = StyleSheet.create({
   timeSlotActive: { backgroundColor: P.accent, borderColor: P.accent },
   timeSlotText: { color: P.textSecondary, fontSize: 13 },
   timeSlotTextActive: { color: '#fff', fontWeight: '600' },
+
+  // FAB
+  fab: { position: 'absolute', right: 20, width: 52, height: 52, borderRadius: 26, backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center', elevation: 6, shadowColor: P.accent, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.4, shadowRadius: 8 },
+
+  // Add sheet
+  addSheetRow: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: P.divider },
+  addSheetIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: P.surfaceElevated, alignItems: 'center', justifyContent: 'center' },
+  addSheetLabel: { color: P.text, fontSize: 16, fontWeight: '500' },
+
+  // Cart section
+  cartSection: { paddingHorizontal: 16, marginBottom: 10 },
+  cartCard: { backgroundColor: P.surface, borderRadius: 14, borderWidth: 1, borderColor: P.border, overflow: 'hidden', marginBottom: 10 },
+  cartAddClientRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderBottomWidth: 1, borderBottomColor: P.divider },
+  cartAddClientIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: P.surfaceElevated, alignItems: 'center', justifyContent: 'center' },
+  cartAddClientTitle: { color: P.text, fontSize: 14, fontWeight: '600' },
+  cartAddClientSub: { color: P.textSecondary, fontSize: 12, marginTop: 1 },
+  cartServiceRow: { flexDirection: 'row', alignItems: 'center', padding: 14, borderBottomWidth: 1, borderBottomColor: P.divider },
+  cartServiceName: { color: P.text, fontSize: 14, fontWeight: '600' },
+  cartServiceMeta: { color: P.textSecondary, fontSize: 12, marginTop: 2 },
+  cartServicePrice: { color: P.gold, fontSize: 14, fontWeight: '700' },
+  cartAddBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 14 },
+  cartAddBtnText: { color: P.textSecondary, fontSize: 13 },
+  cartTotalRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
+  cartTotalLabel: { color: P.textSecondary, fontSize: 14 },
+  cartTotalValue: { color: P.textSecondary, fontSize: 14 },
 });

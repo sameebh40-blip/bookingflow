@@ -608,11 +608,17 @@ export default function PartnerCalendar() {
   const renderTimeGrid = (columns: ColDef[], colW: number, isDayView: boolean) => {
     const innerWidth = TIME_COL_WIDTH + columns.length * colW;
 
-    const gridContent = (
+    return (
       <View style={{ flex: 1 }}>
-        {/* Sticky column headers */}
-        <View style={{ flexDirection: 'row', marginLeft: TIME_COL_WIDTH }}>
-          {columns.map((col, i) => {
+        {/* Column headers — horizontally scrollable to match grid */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          scrollEnabled={isDayView && columns.length > 2}
+          style={{ flexGrow: 0 }}
+          contentContainerStyle={{ paddingLeft: TIME_COL_WIDTH }}
+        >
+          {columns.map((col) => {
             const isToday = isSameDay(col.date, new Date());
             const isSelected = isSameDay(col.date, selectedDate);
             if (isDayView) {
@@ -632,112 +638,93 @@ export default function PartnerCalendar() {
               />
             );
           })}
-        </View>
+        </ScrollView>
 
-        {/* Single vertical ScrollView */}
+        {/* Single ScrollView — vertical scroll only, horizontal pan for drag */}
         <ScrollView
           ref={timeScrollRef}
-          style={{ height: GRID_HEIGHT }}
+          style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
           scrollEventThrottle={16}
         >
-          {/* Fixed-width inner view */}
-          <View style={{ flexDirection: 'row', width: innerWidth }}>
-
-            {/* Time labels column */}
-            <View style={{ width: TIME_COL_WIDTH, height: totalGridHeight }}>
-              {/* Red time label */}
-              {nowTop >= 0 && nowTop <= totalGridHeight && (
-                <View
-                  style={{ position: 'absolute', top: nowTop - 10, left: 0, right: 0, zIndex: 21 }}
-                  pointerEvents="none"
-                >
-                  <View style={{ backgroundColor: '#E85454', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4, alignSelf: 'flex-start', marginLeft: 2 }}>
-                    <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>{nowLabel}</Text>
-                  </View>
-                </View>
-              )}
-              {hours.map(h => (
-                <View key={h} style={{ height: HOUR_HEIGHT, justifyContent: 'flex-start', paddingTop: 4, paddingRight: 6, paddingLeft: 4 }}>
-                  <Text style={{ color: P.textTertiary, fontSize: 10, textAlign: 'right' }}>{formatHour(h)}</Text>
-                </View>
-              ))}
-            </View>
-
-            {/* Each column */}
-            {columns.map((col) => {
-              const colBookings = bookingsForDateAndBarber(col.date, col.barberId);
-              const isColToday = isSameDay(col.date, new Date());
-              return (
-                <View
-                  key={col.key}
-                  style={{ width: colW, height: totalGridHeight, position: 'relative', borderLeftWidth: 1, borderLeftColor: P.border + '88' }}
-                >
-                  {/* Hour lines */}
-                  {hours.map(h => (
-                    <View key={h} style={{ position: 'absolute', top: (h - START_HOUR) * HOUR_HEIGHT, left: 0, right: 0, height: 1, backgroundColor: P.border + '66' }} />
-                  ))}
-                  {/* Half-hour dashed lines */}
-                  {hours.map(h => (
-                    <View key={`h${h}`} style={{ position: 'absolute', top: (h - START_HOUR) * HOUR_HEIGHT + HOUR_HEIGHT / 2, left: 0, right: 0, height: 1, backgroundColor: P.border + '33' }} />
-                  ))}
-
-                  {/* Tappable hour slots */}
-                  {hours.map(h => (
-                    <TouchableOpacity
-                      key={`slot${h}`}
-                      style={{ position: 'absolute', top: (h - START_HOUR) * HOUR_HEIGHT, left: 0, right: 0, height: HOUR_HEIGHT, zIndex: 1 }}
-                      onPress={() => {
-                        const dateStr = col.date.toISOString().split('T')[0];
-                        const timeStr = `${String(h).padStart(2, '0')}:00`;
-                        console.log('[Calendar] Empty slot tapped, date:', dateStr, 'time:', timeStr, 'barber:', col.barberId ?? 'any');
-                        router.push(`/(partner)/new-booking?date=${dateStr}&time=${timeStr}${col.barberId ? `&barberId=${col.barberId}` : ''}` as never);
-                      }}
-                      activeOpacity={0.2}
-                    />
-                  ))}
-
-                  {/* Red now line */}
-                  {isColToday && nowTop >= 0 && nowTop <= totalGridHeight && (
-                    <View
-                      style={{ position: 'absolute', top: nowTop, left: 0, right: 0, zIndex: 20, flexDirection: 'row', alignItems: 'center' }}
-                      pointerEvents="none"
-                    >
-                      <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#E85454', marginLeft: -5 }} />
-                      <View style={{ flex: 1, height: 2, backgroundColor: '#E85454' }} />
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            scrollEnabled={isDayView && columns.length > 2}
+            scrollEventThrottle={16}
+          >
+            <View style={{ flexDirection: 'row', width: innerWidth }}>
+              {/* Time labels column */}
+              <View style={{ width: TIME_COL_WIDTH, height: totalGridHeight }}>
+                {nowTop >= 0 && nowTop <= totalGridHeight && (
+                  <View
+                    style={[{ position: 'absolute', top: nowTop - 10, left: 0, right: 0, zIndex: 21 }, { pointerEvents: 'none' as any }]}
+                  >
+                    <View style={{ backgroundColor: '#E85454', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4, alignSelf: 'flex-start', marginLeft: 2 }}>
+                      <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>{nowLabel}</Text>
                     </View>
-                  )}
+                  </View>
+                )}
+                {hours.map(h => (
+                  <View key={h} style={{ height: HOUR_HEIGHT, justifyContent: 'flex-start', paddingTop: 4, paddingRight: 6, paddingLeft: 4 }}>
+                    <Text style={{ color: P.textTertiary, fontSize: 10, textAlign: 'right' }}>{formatHour(h)}</Text>
+                  </View>
+                ))}
+              </View>
 
-                  {/* Booking blocks */}
-                  {colBookings.map(b => (
-                    <BookingBlock
-                      key={b.id}
-                      booking={b}
-                      colWidth={colW}
-                      onPress={handleBookingPress}
-                      onDragEnd={handleDragEnd}
-                    />
-                  ))}
-                </View>
-              );
-            })}
-          </View>
+              {/* Each column */}
+              {columns.map((col) => {
+                const colBookings = bookingsForDateAndBarber(col.date, col.barberId);
+                const isColToday = isSameDay(col.date, new Date());
+                return (
+                  <View
+                    key={col.key}
+                    style={{ width: colW, height: totalGridHeight, position: 'relative', borderLeftWidth: 1, borderLeftColor: P.border + '88' }}
+                  >
+                    {hours.map(h => (
+                      <View key={h} style={{ position: 'absolute', top: (h - START_HOUR) * HOUR_HEIGHT, left: 0, right: 0, height: 1, backgroundColor: P.border + '66' }} />
+                    ))}
+                    {hours.map(h => (
+                      <View key={`h${h}`} style={{ position: 'absolute', top: (h - START_HOUR) * HOUR_HEIGHT + HOUR_HEIGHT / 2, left: 0, right: 0, height: 1, backgroundColor: P.border + '33' }} />
+                    ))}
+                    {hours.map(h => (
+                      <TouchableOpacity
+                        key={`slot${h}`}
+                        style={{ position: 'absolute', top: (h - START_HOUR) * HOUR_HEIGHT, left: 0, right: 0, height: HOUR_HEIGHT, zIndex: 1 }}
+                        onPress={() => {
+                          const dateStr = col.date.toISOString().split('T')[0];
+                          const timeStr = `${String(h).padStart(2, '0')}:00`;
+                          console.log('[Calendar] Empty slot tapped, date:', dateStr, 'time:', timeStr, 'barber:', col.barberId ?? 'any');
+                          router.push(`/(partner)/new-booking?date=${dateStr}&time=${timeStr}${col.barberId ? `&barberId=${col.barberId}` : ''}` as never);
+                        }}
+                        activeOpacity={0.2}
+                      />
+                    ))}
+                    {isColToday && nowTop >= 0 && nowTop <= totalGridHeight && (
+                      <View
+                        style={[{ position: 'absolute', top: nowTop, left: 0, right: 0, zIndex: 20, flexDirection: 'row', alignItems: 'center' }, { pointerEvents: 'none' as any }]}
+                      >
+                        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#E85454', marginLeft: -5 }} />
+                        <View style={{ flex: 1, height: 2, backgroundColor: '#E85454' }} />
+                      </View>
+                    )}
+                    {colBookings.map(b => (
+                      <BookingBlock
+                        key={b.id}
+                        booking={b}
+                        colWidth={colW}
+                        onPress={handleBookingPress}
+                        onDragEnd={handleDragEnd}
+                      />
+                    ))}
+                  </View>
+                );
+              })}
+            </View>
+          </ScrollView>
         </ScrollView>
       </View>
     );
-
-    // For day view with multiple barbers, wrap in horizontal scroll
-    if (isDayView && columns.length > 2) {
-      return (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
-          <View style={{ width: innerWidth }}>
-            {gridContent}
-          </View>
-        </ScrollView>
-      );
-    }
-
-    return gridContent;
   };
 
   // ── Month view ──
