@@ -165,7 +165,23 @@ export default function PartnerLayout() {
 
         {/* Main content */}
         <View style={{ flex: 1, backgroundColor: P.bg }}>
-          <Stack screenOptions={{ headerShown: false }} />
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="calendar" />
+            <Stack.Screen name="new-booking" />
+            <Stack.Screen name="clients" />
+            <Stack.Screen name="chat/index" />
+            <Stack.Screen name="chat/[clientId]" />
+            <Stack.Screen name="sales" />
+            <Stack.Screen name="catalog" />
+            <Stack.Screen name="team" />
+            <Stack.Screen name="team/[barberId]" />
+            <Stack.Screen name="settings" />
+            <Stack.Screen name="notifications" />
+            <Stack.Screen name="more" />
+            <Stack.Screen name="setup" />
+            <Stack.Screen name="client/[id]" />
+          </Stack>
         </View>
       </View>
     );
@@ -175,7 +191,23 @@ export default function PartnerLayout() {
   return (
     <View style={{ flex: 1, backgroundColor: P.bg }}>
       <View style={{ flex: 1 }}>
-        <Stack screenOptions={{ headerShown: false }} />
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="calendar" />
+          <Stack.Screen name="new-booking" />
+          <Stack.Screen name="clients" />
+          <Stack.Screen name="chat/index" />
+          <Stack.Screen name="chat/[clientId]" />
+          <Stack.Screen name="sales" />
+          <Stack.Screen name="catalog" />
+          <Stack.Screen name="team" />
+          <Stack.Screen name="team/[barberId]" />
+          <Stack.Screen name="settings" />
+          <Stack.Screen name="notifications" />
+          <Stack.Screen name="more" />
+          <Stack.Screen name="setup" />
+          <Stack.Screen name="client/[id]" />
+        </Stack>
       </View>
       {/* Bottom tab bar */}
       <View style={[styles.tabBar, { height: 56 + insets.bottom, paddingBottom: insets.bottom }]}>

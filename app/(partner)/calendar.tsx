@@ -317,6 +317,9 @@ export default function PartnerCalendar() {
   const { profile } = useAuth();
   const shopId = profile?.shop_id;
 
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => { setMounted(true); }, []);
+
   const [calView, setCalView] = useState<'day' | '3day' | 'week' | 'month'>('day');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -817,6 +820,14 @@ export default function PartnerCalendar() {
       ))}
     </ScrollView>
   );
+
+  if (!mounted) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#0F0F1A', alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color="#7C3AED" size="large" />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>

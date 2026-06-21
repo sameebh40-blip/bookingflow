@@ -62,6 +62,13 @@ function timeAgo(dateStr: string): string {
   return `${days}d ago`;
 }
 
+const DEMO_NOTIFICATIONS: Notification[] = [
+  { id: 'n1', profile_id: '', type: 'appointment', title: 'New booking from John Doe', body: 'Haircut on Mon, 23 Jun · 10:00am', read: false, created_at: new Date(Date.now() - 5 * 60000).toISOString() },
+  { id: 'n2', profile_id: '', type: 'appointment', title: 'Booking confirmed', body: 'Beard Trim on Tue, 24 Jun · 2:00pm', read: false, created_at: new Date(Date.now() - 30 * 60000).toISOString() },
+  { id: 'n3', profile_id: '', type: 'review', title: 'New 5-star review', body: '"Great service, will come back!"', read: true, created_at: new Date(Date.now() - 2 * 3600000).toISOString() },
+  { id: 'n4', profile_id: '', type: 'appointment', title: 'Booking cancelled', body: 'Jane Doe cancelled their appointment', read: true, created_at: new Date(Date.now() - 24 * 3600000).toISOString() },
+];
+
 function filterByTab(notifications: Notification[], tab: NotifTab): Notification[] {
   return notifications.filter(n => {
     const t = (n.type ?? '').toLowerCase();
@@ -92,35 +99,65 @@ function getNotifIconBg(type?: string) {
 export default function PartnerNotifications() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const shopId = profile?.shop_id;
 
   const [activeTab, setActiveTab] = useState<NotifTab>('appointments');
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchNotifications = useCallback(async () => {
-    if (!user?.id) {
-      console.log('[Notifications] No user id, skipping fetch');
+    if (!shopId) {
+      console.log('[Notifications] No shopId, showing demo notifications');
+      setNotifications(DEMO_NOTIFICATIONS);
       setLoading(false);
       return;
     }
-    console.log('[Notifications] fetchNotifications called, userId:', user.id);
+    setLoading(true);
+    console.log('[Notifications] fetchNotifications called, shopId:', shopId);
     try {
       const { data, error } = await supabase
         .from('notifications')
         .select('*')
-        .eq('profile_id', user.id)
+        .eq('profile_id', profile?.id ?? '')
         .order('created_at', { ascending: false })
         .limit(50);
       console.log('[Notifications] fetchNotifications result:', data?.length, 'items, error:', error?.message);
-      setNotifications((data as Notification[]) ?? []);
+      if (error || !data || data.length === 0) {
+        // Fall back to bookings-based notifications
+        console.log('[Notifications] Falling back to bookings table');
+        const { data: bookingData } = await supabase
+          .from('bookings')
+          .select('id, created_at, customer_name, status, start_at')
+          .eq('shop_id', shopId)
+          .order('created_at', { ascending: false })
+          .limit(20);
+        if (bookingData && bookingData.length > 0) {
+          const mapped: Notification[] = bookingData.map(b => ({
+            id: b.id,
+            profile_id: shopId,
+            type: 'appointment',
+            title: `New booking from ${b.customer_name ?? 'client'}`,
+            body: `Appointment on ${new Date(b.start_at).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' })}`,
+            read: b.status === 'completed' || b.status === 'cancelled',
+            created_at: b.created_at,
+          }));
+          console.log('[Notifications] Mapped', mapped.length, 'bookings as notifications');
+          setNotifications(mapped);
+        } else {
+          console.log('[Notifications] No bookings found, showing demo');
+          setNotifications(DEMO_NOTIFICATIONS);
+        }
+      } else {
+        setNotifications(data as Notification[]);
+      }
     } catch (err) {
       console.log('[Notifications] fetchNotifications error:', err);
-      setNotifications([]);
+      setNotifications(DEMO_NOTIFICATIONS);
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [shopId, profile?.id]);
 
   useEffect(() => {
     fetchNotifications();

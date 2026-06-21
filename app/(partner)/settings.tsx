@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Camera, MapPin, Clock, Image as ImageIcon, Plus, Trash2 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
+import * as FileSystem from 'expo-file-system/legacy';
 import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -69,13 +70,20 @@ interface Post {
 
 async function uploadImage(bucket: string, localUri: string): Promise<string | null> {
   try {
-    console.log('[Settings] Uploading image to bucket:', bucket);
-    const response = await fetch(localUri);
-    const blob = await response.blob();
-    const fileName = `${Date.now()}.jpg`;
-    const { data, error } = await supabase.storage.from(bucket).upload(fileName, blob, { contentType: 'image/jpeg', upsert: true });
-    if (error) { console.log('[Settings] Upload error:', error.message); return null; }
+    console.log('[Settings] Uploading image to bucket:', bucket, 'uri:', localUri.slice(0, 60));
+    // Use base64 for React Native compatibility
+    const base64 = await FileSystem.readAsStringAsync(localUri, { encoding: FileSystem.EncodingType.Base64 });
+    const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
+    const byteArray = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .upload(fileName, byteArray, { contentType: 'image/jpeg', upsert: true });
+    if (error) {
+      console.log('[Settings] Upload error:', error.message, 'bucket:', bucket);
+      return null;
+    }
     const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(data.path);
+    console.log('[Settings] Upload success, url:', urlData.publicUrl);
     return urlData.publicUrl;
   } catch (err) {
     console.log('[Settings] uploadImage exception:', err);
