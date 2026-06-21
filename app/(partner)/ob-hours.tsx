@@ -6,6 +6,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Modal,
+  TextInput,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
@@ -16,37 +17,39 @@ import { ChevronLeft, X, Plus } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/utils/supabase';
 
-const F = {
-  bg: '#0D0D0D',
-  surface: '#1A1A1A',
-  border: '#2A2A2A',
+const P = {
+  bg: '#0F0F1A',
+  surface: '#1A1A2E',
+  surfaceElevated: '#242438',
+  border: '#2A2A45',
   accent: '#7C3AED',
-  text: '#F5F0E8',
-  textSec: '#8A8A8A',
-  textTer: '#555555',
-  green: '#22C55E',
-  greenBg: '#052e16',
-  divider: '#1E1E1E',
+  accentLight: 'rgba(124,58,237,0.15)',
+  text: '#F0F0FF',
+  textSecondary: '#9090B0',
+  textTertiary: '#5A5A7A',
+  success: '#4CAF7D',
+  danger: '#E85454',
+  divider: '#1E1E35',
 };
 
-const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const DAYS_ORDERED = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 interface DayHours {
-  open: boolean;
-  from: string;
-  to: string;
+  open: string;
+  close: string;
+  enabled: boolean;
 }
 
 type OpeningHours = Record<string, DayHours>;
 
 const DEFAULT_HOURS: OpeningHours = {
-  Monday: { open: true, from: '10:00 AM', to: '7:00 PM' },
-  Tuesday: { open: true, from: '10:00 AM', to: '7:00 PM' },
-  Wednesday: { open: true, from: '10:00 AM', to: '7:00 PM' },
-  Thursday: { open: true, from: '10:00 AM', to: '7:00 PM' },
-  Friday: { open: true, from: '10:00 AM', to: '7:00 PM' },
-  Saturday: { open: true, from: '10:00 AM', to: '5:00 PM' },
-  Sunday: { open: false, from: '10:00 AM', to: '7:00 PM' },
+  '0': { open: '09:00', close: '21:00', enabled: false },
+  '1': { open: '09:00', close: '21:00', enabled: true },
+  '2': { open: '09:00', close: '21:00', enabled: true },
+  '3': { open: '09:00', close: '21:00', enabled: true },
+  '4': { open: '09:00', close: '21:00', enabled: true },
+  '5': { open: '09:00', close: '21:00', enabled: true },
+  '6': { open: '09:00', close: '21:00', enabled: true },
 };
 
 export default function ObHours() {
@@ -85,11 +88,20 @@ export default function ObHours() {
     setModalVisible(true);
   };
 
-  const toggleDay = (day: string) => {
-    console.log('[ObHours] Toggle day:', day);
+  const toggleDay = (i: number) => {
+    const key = String(i);
+    console.log('[ObHours] Toggle day index:', i, DAYS_ORDERED[i]);
     setEditHours((prev) => ({
       ...prev,
-      [day]: { ...prev[day], open: !prev[day].open },
+      [key]: { ...prev[key], enabled: !prev[key].enabled },
+    }));
+  };
+
+  const updateTime = (i: number, field: 'open' | 'close', value: string) => {
+    const key = String(i);
+    setEditHours((prev) => ({
+      ...prev,
+      [key]: { ...prev[key], [field]: value },
     }));
   };
 
@@ -123,7 +135,7 @@ export default function ObHours() {
           }}
           activeOpacity={0.7}
         >
-          <ChevronLeft size={22} color={F.text} />
+          <ChevronLeft size={22} color={P.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }} />
         <TouchableOpacity style={styles.editPill} onPress={openModal} activeOpacity={0.8}>
@@ -142,17 +154,18 @@ export default function ObHours() {
         </Text>
 
         <View style={styles.hoursCard}>
-          {DAYS.map((day, i) => {
-            const dayData = hours[day] ?? DEFAULT_HOURS[day];
-            const isOpen = dayData.open;
-            const timeRange = isOpen ? `${dayData.from} to ${dayData.to}` : 'Closed';
+          {[0, 1, 2, 3, 4, 5, 6].map((i) => {
+            const key = String(i);
+            const h = hours[key] ?? DEFAULT_HOURS[key];
+            const isEnabled = h.enabled;
+            const timeRange = isEnabled ? `${h.open} – ${h.close}` : 'Closed';
             return (
-              <View key={day}>
+              <View key={i}>
                 {i > 0 && <View style={styles.rowDivider} />}
                 <View style={styles.hoursRow}>
-                  <View style={[styles.dot, { backgroundColor: isOpen ? F.green : F.textTer }]} />
-                  <Text style={styles.dayName}>{day}</Text>
-                  <Text style={[styles.timeRange, !isOpen && { color: F.textTer }]}>{timeRange}</Text>
+                  <View style={[styles.dot, { backgroundColor: isEnabled ? P.success : P.textTertiary }]} />
+                  <Text style={styles.dayName}>{DAYS_ORDERED[i]}</Text>
+                  <Text style={[styles.timeRange, !isEnabled && { color: P.textTertiary }]}>{timeRange}</Text>
                 </View>
               </View>
             );
@@ -173,6 +186,7 @@ export default function ObHours() {
         >
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
+              <Text style={styles.modalHeaderTitle}>Opening hours</Text>
               <View style={{ flex: 1 }} />
               <TouchableOpacity
                 style={styles.modalCloseBtn}
@@ -182,7 +196,7 @@ export default function ObHours() {
                 }}
                 activeOpacity={0.7}
               >
-                <X size={20} color="#0D0D0D" />
+                <X size={20} color={P.text} />
               </TouchableOpacity>
             </View>
 
@@ -197,36 +211,63 @@ export default function ObHours() {
               </Text>
 
               <View style={styles.modalHoursList}>
-                {DAYS.map((day, i) => {
-                  const dayData = editHours[day] ?? DEFAULT_HOURS[day];
-                  const isOpen = dayData.open;
-                  const timeRange = `${dayData.from} – ${dayData.to}`;
+                {[0, 1, 2, 3, 4, 5, 6].map((i) => {
+                  const key = String(i);
+                  const h = editHours[key] ?? DEFAULT_HOURS[key];
+                  const isEnabled = h.enabled;
+                  const timeRange = `${h.open} – ${h.close}`;
                   return (
-                    <View key={day}>
+                    <View key={i}>
                       {i > 0 && <View style={styles.modalRowDivider} />}
                       <View style={styles.modalHoursRow}>
                         <TouchableOpacity
-                          style={[styles.checkbox, isOpen && styles.checkboxChecked]}
-                          onPress={() => toggleDay(day)}
+                          style={[styles.checkbox, isEnabled && styles.checkboxChecked]}
+                          onPress={() => toggleDay(i)}
                           activeOpacity={0.8}
                         >
-                          {isOpen && <Text style={styles.checkmark}>✓</Text>}
+                          {isEnabled && <Text style={styles.checkmark}>✓</Text>}
                         </TouchableOpacity>
                         <View style={styles.dayInfo}>
-                          <Text style={styles.modalDayName}>{day}</Text>
-                          <Text style={[styles.modalDayStatus, isOpen && { color: '#22C55E' }]}>
-                            {isOpen ? 'Open' : 'Closed'}
+                          <Text style={styles.modalDayName}>{DAYS_ORDERED[i]}</Text>
+                          <Text style={[styles.modalDayStatus, isEnabled && { color: P.success }]}>
+                            {isEnabled ? 'Open' : 'Closed'}
                           </Text>
                         </View>
-                        {isOpen && (
-                          <Text style={styles.modalTimeRange}>{timeRange}</Text>
+                        {isEnabled ? (
+                          <View style={styles.timeInputRow}>
+                            <TextInput
+                              style={styles.timeInput}
+                              value={h.open}
+                              onChangeText={(v) => {
+                                console.log('[ObHours] Open time changed for day', i, ':', v);
+                                updateTime(i, 'open', v);
+                              }}
+                              placeholder="09:00"
+                              placeholderTextColor={P.textTertiary}
+                              maxLength={5}
+                            />
+                            <Text style={styles.timeSep}>–</Text>
+                            <TextInput
+                              style={styles.timeInput}
+                              value={h.close}
+                              onChangeText={(v) => {
+                                console.log('[ObHours] Close time changed for day', i, ':', v);
+                                updateTime(i, 'close', v);
+                              }}
+                              placeholder="21:00"
+                              placeholderTextColor={P.textTertiary}
+                              maxLength={5}
+                            />
+                          </View>
+                        ) : (
+                          <Text style={styles.closedLabel}>Closed</Text>
                         )}
                         <TouchableOpacity
                           style={styles.addShiftBtn}
-                          onPress={() => console.log('[ObHours] Add split shift pressed for:', day)}
+                          onPress={() => console.log('[ObHours] Add split shift pressed for day:', i)}
                           activeOpacity={0.7}
                         >
-                          <Plus size={16} color="#888" />
+                          <Plus size={16} color={P.textTertiary} />
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -259,7 +300,7 @@ export default function ObHours() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: F.bg,
+    backgroundColor: P.bg,
   },
   header: {
     flexDirection: 'row',
@@ -277,12 +318,12 @@ const styles = StyleSheet.create({
   editPill: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: F.border,
+    borderColor: P.border,
     paddingHorizontal: 14,
     paddingVertical: 7,
   },
   editPillText: {
-    color: F.text,
+    color: P.text,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -292,21 +333,21 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   pageTitle: {
-    color: F.text,
+    color: P.text,
     fontSize: 26,
     fontWeight: '800',
   },
   pageSubtitle: {
-    color: F.textSec,
+    color: P.textSecondary,
     fontSize: 13,
     lineHeight: 18,
     marginTop: -8,
   },
   hoursCard: {
-    backgroundColor: F.surface,
+    backgroundColor: P.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: F.border,
+    borderColor: P.border,
     overflow: 'hidden',
   },
   hoursRow: {
@@ -323,24 +364,24 @@ const styles = StyleSheet.create({
   },
   dayName: {
     flex: 1,
-    color: F.text,
+    color: P.text,
     fontSize: 14,
     fontWeight: '600',
   },
   timeRange: {
-    color: F.textSec,
+    color: P.textSecondary,
     fontSize: 13,
   },
   rowDivider: {
     height: 1,
-    backgroundColor: F.border,
+    backgroundColor: P.divider,
     marginHorizontal: 16,
   },
 
   // Modal
   modalContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: P.bg,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -349,11 +390,16 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 8,
   },
+  modalHeaderTitle: {
+    color: P.text,
+    fontSize: 16,
+    fontWeight: '700',
+  },
   modalCloseBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: P.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -363,22 +409,22 @@ const styles = StyleSheet.create({
     gap: 20,
   },
   modalTitle: {
-    color: '#0D0D0D',
+    color: P.text,
     fontSize: 24,
     fontWeight: '800',
     lineHeight: 30,
   },
   modalSubtitle: {
-    color: '#555555',
+    color: P.textSecondary,
     fontSize: 13,
     lineHeight: 18,
   },
   modalHoursList: {
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: P.border,
     overflow: 'hidden',
-    backgroundColor: '#FAFAFA',
+    backgroundColor: P.surface,
   },
   modalHoursRow: {
     flexDirection: 'row',
@@ -392,14 +438,14 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 4,
     borderWidth: 2,
-    borderColor: '#CCCCCC',
+    borderColor: P.border,
     backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkboxChecked: {
-    backgroundColor: '#7C3AED',
-    borderColor: '#7C3AED',
+    backgroundColor: P.accent,
+    borderColor: P.accent,
   },
   checkmark: {
     color: '#FFFFFF',
@@ -412,18 +458,39 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   modalDayName: {
-    color: '#0D0D0D',
+    color: P.text,
     fontSize: 14,
     fontWeight: '700',
   },
   modalDayStatus: {
-    color: '#888888',
+    color: P.textTertiary,
     fontSize: 12,
   },
-  modalTimeRange: {
-    color: '#7C3AED',
+  timeInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  timeInput: {
+    backgroundColor: P.surfaceElevated,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: P.border,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    color: P.accent,
     fontSize: 13,
     fontWeight: '600',
+    width: 52,
+    textAlign: 'center',
+  },
+  timeSep: {
+    color: P.textTertiary,
+    fontSize: 13,
+  },
+  closedLabel: {
+    color: P.textTertiary,
+    fontSize: 13,
   },
   addShiftBtn: {
     width: 28,
@@ -433,20 +500,20 @@ const styles = StyleSheet.create({
   },
   modalRowDivider: {
     height: 1,
-    backgroundColor: '#EEEEEE',
+    backgroundColor: P.divider,
     marginHorizontal: 16,
   },
   modalFooter: {
     paddingHorizontal: 20,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-    backgroundColor: '#FFFFFF',
+    borderTopColor: P.divider,
+    backgroundColor: P.bg,
   },
   saveBtn: {
-    backgroundColor: '#0D0D0D',
-    borderRadius: 999,
-    paddingVertical: 16,
+    backgroundColor: P.accent,
+    borderRadius: 12,
+    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },

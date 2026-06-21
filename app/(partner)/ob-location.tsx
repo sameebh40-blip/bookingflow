@@ -17,22 +17,24 @@ import { ChevronLeft, X, MapPin, Plus, Minus } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/utils/supabase';
 
-const F = {
-  bg: '#0D0D0D',
-  surface: '#1A1A1A',
-  border: '#2A2A2A',
+const P = {
+  bg: '#0F0F1A',
+  surface: '#1A1A2E',
+  surfaceElevated: '#242438',
+  border: '#2A2A45',
   accent: '#7C3AED',
-  text: '#F5F0E8',
-  textSec: '#8A8A8A',
-  textTer: '#555555',
-  green: '#22C55E',
-  divider: '#1E1E1E',
+  accentLight: 'rgba(124,58,237,0.15)',
+  text: '#F0F0FF',
+  textSecondary: '#9090B0',
+  textTertiary: '#5A5A7A',
+  success: '#4CAF7D',
+  danger: '#E85454',
+  divider: '#1E1E35',
 };
 
 function MapPlaceholder({ height }: { height: number }) {
   return (
     <View style={[styles.mapPlaceholder, { height }]}>
-      {/* Map grid lines */}
       <View style={styles.mapGrid}>
         {[0, 1, 2, 3].map((i) => (
           <View key={`h${i}`} style={[styles.mapGridLineH, { top: `${25 * (i + 1)}%` as unknown as number }]} />
@@ -41,15 +43,12 @@ function MapPlaceholder({ height }: { height: number }) {
           <View key={`v${i}`} style={[styles.mapGridLineV, { left: `${25 * (i + 1)}%` as unknown as number }]} />
         ))}
       </View>
-      {/* Pin */}
       <View style={styles.mapPinContainer}>
-        <MapPin size={32} color={F.accent} fill={F.accent} />
+        <MapPin size={32} color={P.accent} fill={P.accent} />
       </View>
-      {/* Google label */}
       <View style={styles.mapGoogleLabel}>
         <Text style={styles.mapGoogleText}>Google</Text>
       </View>
-      {/* Zoom buttons */}
       <View style={styles.mapZoomBtns}>
         <TouchableOpacity style={styles.mapZoomBtn} activeOpacity={0.7}>
           <Plus size={14} color="#333" />
@@ -134,7 +133,7 @@ export default function ObLocation() {
           }}
           activeOpacity={0.7}
         >
-          <ChevronLeft size={22} color={F.text} />
+          <ChevronLeft size={22} color={P.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }} />
         <TouchableOpacity style={styles.editPill} onPress={openModal} activeOpacity={0.8}>
@@ -157,7 +156,7 @@ export default function ObLocation() {
         {address ? (
           <View style={styles.addressCard}>
             <View style={styles.addressCardContent}>
-              <MapPin size={16} color={F.textSec} />
+              <MapPin size={16} color={P.textSecondary} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.addressLine1}>{line1}</Text>
                 {line2 ? <Text style={styles.addressLine2}>{line2}</Text> : null}
@@ -189,7 +188,7 @@ export default function ObLocation() {
                 }}
                 activeOpacity={0.7}
               >
-                <X size={20} color="#0D0D0D" />
+                <X size={20} color={P.text} />
               </TouchableOpacity>
             </View>
 
@@ -207,7 +206,7 @@ export default function ObLocation() {
               <View style={styles.modalFieldBlock}>
                 <Text style={styles.modalLabel}>Location address</Text>
                 <View style={styles.searchInputRow}>
-                  <MapPin size={16} color="#888" />
+                  <MapPin size={16} color={P.textSecondary} />
                   <TextInput
                     ref={searchInputRef}
                     style={styles.searchInput}
@@ -217,7 +216,7 @@ export default function ObLocation() {
                       setEditAddress(v);
                     }}
                     placeholder="Search address"
-                    placeholderTextColor="#AAAAAA"
+                    placeholderTextColor={P.textTertiary}
                   />
                 </View>
               </View>
@@ -268,7 +267,7 @@ export default function ObLocation() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: F.bg,
+    backgroundColor: P.bg,
   },
   header: {
     flexDirection: 'row',
@@ -286,12 +285,12 @@ const styles = StyleSheet.create({
   editPill: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: F.border,
+    borderColor: P.border,
     paddingHorizontal: 14,
     paddingVertical: 7,
   },
   editPillText: {
-    color: F.text,
+    color: P.text,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -301,18 +300,18 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   pageTitle: {
-    color: F.text,
+    color: P.text,
     fontSize: 26,
     fontWeight: '800',
   },
   addressSubtitle: {
-    color: F.textSec,
+    color: P.textSecondary,
     fontSize: 14,
     lineHeight: 20,
     marginTop: -8,
   },
   mapPlaceholder: {
-    backgroundColor: '#2A3A2A',
+    backgroundColor: '#1A2E1A',
     borderRadius: 12,
     overflow: 'hidden',
     position: 'relative',
@@ -374,10 +373,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#E0E0E0',
   },
   addressCard: {
-    backgroundColor: F.surface,
+    backgroundColor: P.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: F.border,
+    borderColor: P.border,
     padding: 14,
   },
   addressCardContent: {
@@ -386,12 +385,12 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   addressLine1: {
-    color: F.text,
+    color: P.text,
     fontSize: 14,
     fontWeight: '600',
   },
   addressLine2: {
-    color: F.textSec,
+    color: P.textSecondary,
     fontSize: 13,
     marginTop: 2,
   },
@@ -399,7 +398,7 @@ const styles = StyleSheet.create({
   // Modal
   modalContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: P.bg,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -412,7 +411,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: P.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -422,13 +421,13 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   modalTitle: {
-    color: '#0D0D0D',
+    color: P.text,
     fontSize: 24,
     fontWeight: '800',
     lineHeight: 30,
   },
   modalSubtitle: {
-    color: '#555555',
+    color: P.textSecondary,
     fontSize: 13,
     lineHeight: 18,
   },
@@ -436,24 +435,24 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   modalLabel: {
-    color: '#555555',
+    color: P.textSecondary,
     fontSize: 13,
     fontWeight: '600',
   },
   searchInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    borderRadius: 10,
+    backgroundColor: P.surface,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: P.border,
     paddingHorizontal: 12,
     gap: 8,
   },
   searchInput: {
     flex: 1,
-    paddingVertical: 12,
-    color: '#0D0D0D',
+    paddingVertical: 14,
+    color: P.text,
     fontSize: 15,
   },
   addressEditRow: {
@@ -462,17 +461,17 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   modalAddressLine: {
-    color: '#0D0D0D',
+    color: P.text,
     fontSize: 14,
     lineHeight: 20,
   },
   editLink: {
-    color: '#7C3AED',
+    color: P.accent,
     fontSize: 14,
     fontWeight: '600',
   },
   dragHelper: {
-    color: '#888888',
+    color: P.textTertiary,
     fontSize: 12,
     textAlign: 'center',
   },
@@ -480,13 +479,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-    backgroundColor: '#FFFFFF',
+    borderTopColor: P.divider,
+    backgroundColor: P.bg,
   },
   saveBtn: {
-    backgroundColor: '#0D0D0D',
-    borderRadius: 999,
-    paddingVertical: 16,
+    backgroundColor: P.accent,
+    borderRadius: 12,
+    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },

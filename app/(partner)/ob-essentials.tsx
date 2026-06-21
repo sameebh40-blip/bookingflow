@@ -17,18 +17,19 @@ import { ChevronLeft, X, Sparkles } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/utils/supabase';
 
-const F = {
-  bg: '#0D0D0D',
-  surface: '#1A1A1A',
-  border: '#2A2A2A',
+const P = {
+  bg: '#0F0F1A',
+  surface: '#1A1A2E',
+  surfaceElevated: '#242438',
+  border: '#2A2A45',
   accent: '#7C3AED',
-  text: '#F5F0E8',
-  textSec: '#8A8A8A',
-  textTer: '#555555',
-  green: '#22C55E',
-  greenBg: '#052e16',
-  danger: '#EF4444',
-  divider: '#1E1E1E',
+  accentLight: 'rgba(124,58,237,0.15)',
+  text: '#F0F0FF',
+  textSecondary: '#9090B0',
+  textTertiary: '#5A5A7A',
+  success: '#4CAF7D',
+  danger: '#E85454',
+  divider: '#1E1E35',
 };
 
 const COUNTRY_CODES = [
@@ -57,7 +58,6 @@ export default function ObEssentials() {
   const [essentialsModalVisible, setEssentialsModalVisible] = useState(false);
   const [aboutModalVisible, setAboutModalVisible] = useState(false);
 
-  // Edit state
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editEmail, setEditEmail] = useState('');
@@ -186,7 +186,7 @@ export default function ObEssentials() {
           }}
           activeOpacity={0.7}
         >
-          <ChevronLeft size={22} color={F.text} />
+          <ChevronLeft size={22} color={P.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }} />
         <TouchableOpacity style={styles.editPill} onPress={openEssentialsModal} activeOpacity={0.8}>
@@ -262,7 +262,7 @@ export default function ObEssentials() {
                 }}
                 activeOpacity={0.7}
               >
-                <X size={20} color="#0D0D0D" />
+                <X size={20} color={P.text} />
               </TouchableOpacity>
             </View>
 
@@ -288,7 +288,7 @@ export default function ObEssentials() {
                     setEditName(v);
                   }}
                   placeholder="e.g. Trendy Salon London"
-                  placeholderTextColor="#AAAAAA"
+                  placeholderTextColor={P.textTertiary}
                 />
                 <Text style={styles.modalHelper}>
                   Public name visible to your clients in notifications and when booking online. E.g. Trendy Salon London
@@ -308,7 +308,7 @@ export default function ObEssentials() {
                     activeOpacity={0.8}
                   >
                     <Text style={styles.countryCodeText}>{editCountryCode}</Text>
-                    <Text style={{ color: '#555', fontSize: 10, marginLeft: 2 }}>▼</Text>
+                    <Text style={{ color: P.textTertiary, fontSize: 10, marginLeft: 2 }}>▼</Text>
                   </TouchableOpacity>
                   <TextInput
                     style={[styles.modalInput, { flex: 1 }]}
@@ -318,7 +318,7 @@ export default function ObEssentials() {
                       setEditPhone(v);
                     }}
                     placeholder="3421 0100"
-                    placeholderTextColor="#AAAAAA"
+                    placeholderTextColor={P.textTertiary}
                     keyboardType="phone-pad"
                   />
                 </View>
@@ -353,7 +353,7 @@ export default function ObEssentials() {
                     setEditEmail(v);
                   }}
                   placeholder="email@example.com"
-                  placeholderTextColor="#AAAAAA"
+                  placeholderTextColor={P.textTertiary}
                   keyboardType="email-address"
                   autoCapitalize="none"
                 />
@@ -403,7 +403,7 @@ export default function ObEssentials() {
                 }}
                 activeOpacity={0.7}
               >
-                <X size={20} color="#0D0D0D" />
+                <X size={20} color={P.text} />
               </TouchableOpacity>
             </View>
 
@@ -431,7 +431,7 @@ export default function ObEssentials() {
                     setEditDescription(v);
                   }}
                   placeholder="Describe your venue..."
-                  placeholderTextColor="#AAAAAA"
+                  placeholderTextColor={P.textTertiary}
                   multiline
                   maxLength={1200}
                   textAlignVertical="top"
@@ -444,10 +444,10 @@ export default function ObEssentials() {
                   activeOpacity={0.8}
                 >
                   {enhancing ? (
-                    <ActivityIndicator size="small" color="#7C3AED" />
+                    <ActivityIndicator size="small" color={P.accent} />
                   ) : (
                     <>
-                      <Sparkles size={14} color="#7C3AED" />
+                      <Sparkles size={14} color={P.accent} />
                       <Text style={styles.enhanceBtnText}>Enhance</Text>
                     </>
                   )}
@@ -483,7 +483,7 @@ export default function ObEssentials() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: F.bg,
+    backgroundColor: P.bg,
   },
   header: {
     flexDirection: 'row',
@@ -501,12 +501,12 @@ const styles = StyleSheet.create({
   editPill: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: F.border,
+    borderColor: P.border,
     paddingHorizontal: 14,
     paddingVertical: 7,
   },
   editPillText: {
-    color: F.text,
+    color: P.text,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -516,15 +516,15 @@ const styles = StyleSheet.create({
     gap: 20,
   },
   pageTitle: {
-    color: F.text,
+    color: P.text,
     fontSize: 26,
     fontWeight: '800',
   },
   section: {
-    backgroundColor: F.surface,
+    backgroundColor: P.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: F.border,
+    borderColor: P.border,
     padding: 16,
     gap: 12,
   },
@@ -534,7 +534,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   sectionTitle: {
-    color: F.text,
+    color: P.text,
     fontSize: 15,
     fontWeight: '700',
   },
@@ -542,24 +542,24 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   fieldLabel: {
-    color: F.textSec,
+    color: P.textSecondary,
     fontSize: 12,
     fontWeight: '500',
   },
   fieldValue: {
-    color: F.text,
+    color: P.text,
     fontSize: 14,
     lineHeight: 20,
   },
   fieldDivider: {
     height: 1,
-    backgroundColor: F.border,
+    backgroundColor: P.divider,
   },
 
   // Modal
   modalContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: P.bg,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -572,7 +572,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: P.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -582,13 +582,13 @@ const styles = StyleSheet.create({
     gap: 20,
   },
   modalTitle: {
-    color: '#0D0D0D',
+    color: P.text,
     fontSize: 24,
     fontWeight: '800',
     lineHeight: 30,
   },
   modalSubtitle: {
-    color: '#555555',
+    color: P.textSecondary,
     fontSize: 13,
     lineHeight: 18,
   },
@@ -596,22 +596,22 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   modalLabel: {
-    color: '#555555',
+    color: P.textSecondary,
     fontSize: 13,
     fontWeight: '600',
   },
   modalInput: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 10,
+    backgroundColor: P.surface,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: P.border,
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: '#0D0D0D',
+    paddingVertical: 14,
+    color: P.text,
     fontSize: 15,
   },
   modalHelper: {
-    color: '#888888',
+    color: P.textTertiary,
     fontSize: 12,
     lineHeight: 16,
     marginTop: 2,
@@ -624,39 +624,39 @@ const styles = StyleSheet.create({
   countryCodePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    borderRadius: 10,
+    backgroundColor: P.surface,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: P.border,
     paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingVertical: 14,
     gap: 4,
   },
   countryCodeText: {
-    color: '#0D0D0D',
+    color: P.text,
     fontSize: 15,
     fontWeight: '600',
   },
   codePickerDropdown: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
+    backgroundColor: P.surfaceElevated,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: P.border,
     overflow: 'hidden',
     elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.3,
     shadowRadius: 6,
   },
   codePickerItem: {
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: P.divider,
   },
   codePickerText: {
-    color: '#0D0D0D',
+    color: P.text,
     fontSize: 14,
     fontWeight: '500',
   },
@@ -675,19 +675,19 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#7C3AED',
+    borderColor: P.accent,
     paddingHorizontal: 14,
     paddingVertical: 8,
     gap: 6,
     marginTop: 4,
   },
   enhanceBtnText: {
-    color: '#7C3AED',
+    color: P.accent,
     fontSize: 13,
     fontWeight: '600',
   },
   descError: {
-    color: '#EF4444',
+    color: P.danger,
     fontSize: 12,
     marginTop: 4,
   },
@@ -695,13 +695,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-    backgroundColor: '#FFFFFF',
+    borderTopColor: P.divider,
+    backgroundColor: P.bg,
   },
   saveBtn: {
-    backgroundColor: '#0D0D0D',
-    borderRadius: 999,
-    paddingVertical: 16,
+    backgroundColor: P.accent,
+    borderRadius: 12,
+    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },

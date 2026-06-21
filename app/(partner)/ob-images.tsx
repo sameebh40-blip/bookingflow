@@ -19,17 +19,19 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/utils/supabase';
 
-const F = {
-  bg: '#0D0D0D',
-  surface: '#1A1A1A',
-  border: '#2A2A2A',
+const P = {
+  bg: '#0F0F1A',
+  surface: '#1A1A2E',
+  surfaceElevated: '#242438',
+  border: '#2A2A45',
   accent: '#7C3AED',
-  text: '#F5F0E8',
-  textSec: '#8A8A8A',
-  textTer: '#555555',
-  green: '#22C55E',
-  danger: '#EF4444',
-  divider: '#1E1E1E',
+  accentLight: 'rgba(124,58,237,0.15)',
+  text: '#F0F0FF',
+  textSecondary: '#9090B0',
+  textTertiary: '#5A5A7A',
+  success: '#4CAF7D',
+  danger: '#E85454',
+  divider: '#1E1E35',
 };
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
@@ -43,24 +45,22 @@ const PREVIEW_TABS = ['Profile', 'Portfolio', 'Reviews', 'Workspaces'];
 function VenuePreviewCard({ images }: { images: string[] }) {
   return (
     <View style={styles.previewCard}>
-      {/* Mini nav tabs */}
       <View style={styles.previewTabBar}>
         {PREVIEW_TABS.map((tab, i) => (
           <View key={tab} style={styles.previewTabItem}>
-            <ImageIcon size={12} color="#888" />
+            <ImageIcon size={12} color={P.textSecondary} />
             <Text style={styles.previewTabText}>{tab}</Text>
-            {i < PREVIEW_TABS.length - 1 && <ChevronRight size={12} color="#888" />}
+            {i < PREVIEW_TABS.length - 1 && <ChevronRight size={12} color={P.textTertiary} />}
           </View>
         ))}
       </View>
 
-      {/* Cover image slot */}
       <View style={styles.coverSlot}>
         {images[0] ? (
           <Image source={resolveImageSource(images[0])} style={styles.coverImage} />
         ) : (
           <View style={styles.coverPlaceholder}>
-            <ImageIcon size={24} color="#555" />
+            <ImageIcon size={24} color={P.textTertiary} />
           </View>
         )}
         <View style={styles.coverBadge}>
@@ -68,7 +68,6 @@ function VenuePreviewCard({ images }: { images: string[] }) {
         </View>
       </View>
 
-      {/* Thumbnail grid */}
       <View style={styles.thumbGrid}>
         {[0, 1].map((col) => (
           <View key={col} style={styles.thumbCol}>
@@ -209,7 +208,7 @@ export default function ObImages() {
           }}
           activeOpacity={0.7}
         >
-          <ChevronLeft size={22} color={F.text} />
+          <ChevronLeft size={22} color={P.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }} />
         <TouchableOpacity style={styles.editPill} onPress={openModal} activeOpacity={0.8}>
@@ -253,7 +252,7 @@ export default function ObImages() {
                 }}
                 activeOpacity={0.7}
               >
-                <X size={20} color="#0D0D0D" />
+                <X size={20} color={P.text} />
               </TouchableOpacity>
             </View>
 
@@ -276,7 +275,7 @@ export default function ObImages() {
                   activeOpacity={0.8}
                 >
                   {uploading ? (
-                    <ActivityIndicator size="small" color="#0D0D0D" />
+                    <ActivityIndicator size="small" color={P.text} />
                   ) : (
                     <Text style={styles.uploadPillText}>Add your images</Text>
                   )}
@@ -295,10 +294,8 @@ export default function ObImages() {
                 File type .jpg, .png • minimum dimensions 916 x 500 pixels • max size 10 MB
               </Text>
 
-              {/* Preview card */}
               <VenuePreviewCard images={editImages} />
 
-              {/* Thumbnail grid with delete */}
               <View style={styles.editThumbGrid}>
                 {editImages.map((img, idx) => (
                   <View key={idx} style={styles.editThumbSlot}>
@@ -319,7 +316,7 @@ export default function ObImages() {
                     disabled={uploading}
                     activeOpacity={0.8}
                   >
-                    <Plus size={20} color="#888" />
+                    <Plus size={20} color={P.textSecondary} />
                     <Text style={styles.addThumbText}>Add</Text>
                   </TouchableOpacity>
                 )}
@@ -354,7 +351,7 @@ export default function ObImages() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: F.bg,
+    backgroundColor: P.bg,
   },
   header: {
     flexDirection: 'row',
@@ -372,12 +369,12 @@ const styles = StyleSheet.create({
   editPill: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: F.border,
+    borderColor: P.border,
     paddingHorizontal: 14,
     paddingVertical: 7,
   },
   editPillText: {
-    color: F.text,
+    color: P.text,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -387,27 +384,27 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   pageTitle: {
-    color: F.text,
+    color: P.text,
     fontSize: 26,
     fontWeight: '800',
   },
   pageSubtitle: {
-    color: F.textSec,
+    color: P.textSecondary,
     fontSize: 13,
     lineHeight: 18,
     marginTop: -8,
   },
   learnMore: {
-    color: F.accent,
+    color: P.accent,
     fontWeight: '600',
   },
 
   // Preview card
   previewCard: {
-    backgroundColor: F.surface,
+    backgroundColor: P.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: F.border,
+    borderColor: P.border,
     overflow: 'hidden',
   },
   previewTabBar: {
@@ -416,7 +413,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: F.border,
+    borderBottomColor: P.border,
     gap: 4,
     flexWrap: 'wrap',
   },
@@ -427,13 +424,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   previewTabText: {
-    color: F.textSec,
+    color: P.textSecondary,
     fontSize: 11,
     fontWeight: '500',
   },
   coverSlot: {
     height: 120,
-    backgroundColor: F.bg,
+    backgroundColor: P.bg,
     position: 'relative',
   },
   coverImage: {
@@ -445,7 +442,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: F.bg,
+    backgroundColor: P.bg,
   },
   coverBadge: {
     position: 'absolute',
@@ -474,7 +471,7 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 8,
     overflow: 'hidden',
-    backgroundColor: F.bg,
+    backgroundColor: P.bg,
   },
   thumbImage: {
     width: '100%',
@@ -486,19 +483,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: F.border,
+    borderColor: P.border,
     borderRadius: 8,
     borderStyle: 'dashed',
   },
   thumbPlaceholderText: {
-    color: F.textTer,
+    color: P.textTertiary,
     fontSize: 11,
   },
 
   // Modal
   modalContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: P.bg,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -511,7 +508,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: P.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -521,13 +518,13 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   modalTitle: {
-    color: '#0D0D0D',
+    color: P.text,
     fontSize: 24,
     fontWeight: '800',
     lineHeight: 30,
   },
   modalSubtitle: {
-    color: '#555555',
+    color: P.textSecondary,
     fontSize: 13,
     lineHeight: 18,
   },
@@ -538,20 +535,21 @@ const styles = StyleSheet.create({
   uploadPill: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#CCCCCC',
+    borderColor: P.border,
     paddingHorizontal: 16,
     paddingVertical: 10,
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: 120,
+    backgroundColor: P.surface,
   },
   uploadPillText: {
-    color: '#0D0D0D',
+    color: P.text,
     fontSize: 13,
     fontWeight: '600',
   },
   fileHelper: {
-    color: '#888888',
+    color: P.textTertiary,
     fontSize: 11,
     lineHeight: 16,
   },
@@ -588,32 +586,32 @@ const styles = StyleSheet.create({
     height: 80,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#CCCCCC',
+    borderColor: P.border,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
   },
   addThumbText: {
-    color: '#888888',
+    color: P.textSecondary,
     fontSize: 11,
     fontWeight: '500',
   },
   minError: {
-    color: '#EF4444',
+    color: P.danger,
     fontSize: 12,
   },
   modalFooter: {
     paddingHorizontal: 20,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-    backgroundColor: '#FFFFFF',
+    borderTopColor: P.divider,
+    backgroundColor: P.bg,
   },
   saveBtn: {
-    backgroundColor: '#0D0D0D',
-    borderRadius: 999,
-    paddingVertical: 16,
+    backgroundColor: P.accent,
+    borderRadius: 12,
+    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
