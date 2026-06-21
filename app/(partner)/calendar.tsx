@@ -350,8 +350,7 @@ function PartnerCalendarInner() {
   // Reschedule confirmation
   const [pendingReschedule, setPendingReschedule] = useState<{ booking: Booking; deltaMinutes: number } | null>(null);
   const [notifyClient, setNotifyClient] = useState(true);
-
-  // Toast
+  const [clientReady, setClientReady] = React.useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const toastAnim = useRef(new Animated.Value(-60)).current;
 
@@ -371,6 +370,8 @@ function PartnerCalendarInner() {
     }, 60000);
     return () => clearInterval(t);
   }, []);
+
+  useEffect(() => { setClientReady(true); }, []);
 
   const nowTop = ((nowMinutes - START_HOUR * 60) / 60) * HOUR_HEIGHT;
   const nowHour = Math.floor(nowMinutes / 60);
@@ -481,6 +482,14 @@ function PartnerCalendarInner() {
     setSelectedBooking(b);
     setDetailTab('details');
   }, []);
+
+  if (!clientReady) {
+    return (
+      <View style={{ flex: 1, backgroundColor: P.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={P.accent} size="large" />
+      </View>
+    );
+  }
 
   // ── Payment ──
   const handlePayCash = async () => {
