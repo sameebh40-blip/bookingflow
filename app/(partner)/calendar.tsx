@@ -1928,7 +1928,41 @@ const styles = StyleSheet.create({
   pickerDayNumSelected: { color: '#fff', fontWeight: '700' },
 });
 
+class CalendarErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: string }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: '' };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error: error?.message ?? 'Unknown error' };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={{ flex: 1, backgroundColor: '#0F0F1A', alignItems: 'center', justifyContent: 'center', padding: 32, gap: 16 }}>
+          <Text style={{ color: '#E85454', fontSize: 18, fontWeight: '700', textAlign: 'center' }}>Calendar Error</Text>
+          <Text style={{ color: '#9090B0', fontSize: 13, textAlign: 'center', lineHeight: 20 }}>{this.state.error}</Text>
+          <TouchableOpacity
+            onPress={() => this.setState({ hasError: false, error: '' })}
+            style={{ backgroundColor: '#7C3AED', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 24 }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function PartnerCalendar() {
   const router = useRouter();
-  return <PartnerCalendarInner router={router} />;
+  return (
+    <CalendarErrorBoundary>
+      <PartnerCalendarInner router={router} />
+    </CalendarErrorBoundary>
+  );
 }
