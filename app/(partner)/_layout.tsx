@@ -8,7 +8,7 @@ import {
   Image,
   ScrollView,
 } from 'react-native';
-import { Slot, useRouter, usePathname } from 'expo-router';
+import { Slot, Stack, useRouter, usePathname } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Home,
@@ -165,7 +165,7 @@ export default function PartnerLayout() {
 
         {/* Main content */}
         <View style={{ flex: 1, backgroundColor: P.bg }}>
-          <Slot />
+          <Stack screenOptions={{ headerShown: false }} />
         </View>
       </View>
     );
@@ -175,7 +175,7 @@ export default function PartnerLayout() {
   return (
     <View style={{ flex: 1, backgroundColor: P.bg }}>
       <View style={{ flex: 1 }}>
-        <Slot />
+        <Stack screenOptions={{ headerShown: false }} />
       </View>
       {/* Bottom tab bar */}
       <View style={[styles.tabBar, { height: 56 + insets.bottom, paddingBottom: insets.bottom }]}>
