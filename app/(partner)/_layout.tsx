@@ -199,6 +199,7 @@ export default function PartnerLayout() {
             <Stack.Screen name="pos/index" />
             <Stack.Screen name="pos/new" />
             <Stack.Screen name="pos/[id]" />
+            <Stack.Screen name="online-booking" />
           </Stack>
         </View>
       </View>
@@ -231,6 +232,7 @@ export default function PartnerLayout() {
           <Stack.Screen name="pos/index" />
           <Stack.Screen name="pos/new" />
           <Stack.Screen name="pos/[id]" />
+          <Stack.Screen name="online-booking" />
         </Stack>
       </View>
       {/* Bottom tab bar */}

@@ -24,10 +24,10 @@ import {
   Check,
   MapPin,
   Camera,
-  Sparkles,
   Clock,
   Image as ImageIcon,
   Scissors,
+  X,
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
@@ -36,22 +36,20 @@ import { useAuth } from '@/contexts/AuthContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-const P = {
-  bg: '#0F0F1A',
-  surface: '#1A1A2E',
-  surfaceElevated: '#242438',
-  border: '#2A2A45',
+// Fresha warm near-black palette
+const F = {
+  bg: '#0D0D0D',
+  surface: '#1A1A1A',
+  surfaceElevated: '#222222',
+  border: '#2A2A2A',
   accent: '#7C3AED',
   accentLight: 'rgba(124,58,237,0.15)',
-  accentMid: '#9B59B6',
-  gold: '#C9A84C',
-  text: '#F0F0FF',
-  textSecondary: '#9090B0',
-  textTertiary: '#5A5A7A',
-  success: '#4CAF7D',
+  text: '#F5F0E8',
+  textSec: '#8A8A8A',
+  textTer: '#555555',
+  success: '#22C55E',
   danger: '#E85454',
-  warning: '#F59E0B',
-  divider: '#1E1E35',
+  divider: '#1E1E1E',
 };
 
 function resolveImageSource(
@@ -80,20 +78,10 @@ function AnimatedPressable({
 }) {
   const scale = useRef(new Animated.Value(1)).current;
   const animateIn = useCallback(() => {
-    Animated.spring(scale, {
-      toValue: scaleValue,
-      useNativeDriver: true,
-      speed: 50,
-      bounciness: 4,
-    }).start();
+    Animated.spring(scale, { toValue: scaleValue, useNativeDriver: true, speed: 50, bounciness: 4 }).start();
   }, [scale, scaleValue]);
   const animateOut = useCallback(() => {
-    Animated.spring(scale, {
-      toValue: 1,
-      useNativeDriver: true,
-      speed: 50,
-      bounciness: 4,
-    }).start();
+    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 50, bounciness: 4 }).start();
   }, [scale]);
   return (
     <Animated.View style={[{ transform: [{ scale }] }, disabled && { opacity: 0.5 }]}>
@@ -112,29 +100,13 @@ function AnimatedPressable({
 }
 
 // ─── Staggered field wrapper ──────────────────────────────────────────────────
-function FadeField({
-  index,
-  children,
-}: {
-  index: number;
-  children: React.ReactNode;
-}) {
+function FadeField({ index, children }: { index: number; children: React.ReactNode }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(16)).current;
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: 320,
-        delay: index * 70,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: 0,
-        duration: 320,
-        delay: index * 70,
-        useNativeDriver: true,
-      }),
+      Animated.timing(opacity, { toValue: 1, duration: 320, delay: index * 70, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: 0, duration: 320, delay: index * 70, useNativeDriver: true }),
     ]).start();
   }, []);
   return (
@@ -156,8 +128,22 @@ const defaultHours = Array.from({ length: 7 }, (_, i) => ({
   enabled: i >= 1 && i <= 6,
 }));
 
-// Steps: 0=Welcome, 1=BasicInfo, 2=Location, 3=Photos, 4=Hours, 5=Service
-const TOTAL_CONTENT_STEPS = 5; // steps 1–5
+const TOTAL_CONTENT_STEPS = 5;
+
+// Segment labels for 3-segment progress bar
+// Segment 0: steps 1-2 "Business info"
+// Segment 1: steps 3-4 "Profile content"
+// Segment 2: step 5 "Go live"
+const SEGMENTS = ['Business info', 'Profile content', 'Go live'];
+
+function getSegmentState(segIndex: number, step: number): 'active' | 'done' | 'inactive' {
+  // seg 0 covers steps 1-2, seg 1 covers steps 3-4, seg 2 covers step 5
+  const segStepRanges = [[1, 2], [3, 4], [5, 5]];
+  const [lo, hi] = segStepRanges[segIndex];
+  if (step > hi) return 'done';
+  if (step >= lo) return 'active';
+  return 'inactive';
+}
 
 // ─── Upload helper ────────────────────────────────────────────────────────────
 async function uploadImage(bucket: string, localUri: string): Promise<string | null> {
@@ -221,60 +207,23 @@ export default function ShopSetup() {
 
   // ─── Animations ──────────────────────────────────────────────────────────
   const slideAnim = useRef(new Animated.Value(0)).current;
-  const progressAnim = useRef(new Animated.Value(0)).current;
-
-  // Orb pulse (welcome screen)
   const orbScale = useRef(new Animated.Value(1)).current;
+
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(orbScale, {
-          toValue: 1.08,
-          duration: 1500,
-          useNativeDriver: true,
-        }),
-        Animated.timing(orbScale, {
-          toValue: 1,
-          duration: 1500,
-          useNativeDriver: true,
-        }),
+        Animated.timing(orbScale, { toValue: 1.08, duration: 1500, useNativeDriver: true }),
+        Animated.timing(orbScale, { toValue: 1, duration: 1500, useNativeDriver: true }),
       ])
     ).start();
   }, []);
-
-  // Progress bar
-  useEffect(() => {
-    if (step === 0) {
-      Animated.timing(progressAnim, {
-        toValue: 0,
-        duration: 280,
-        useNativeDriver: false,
-      }).start();
-      return;
-    }
-    const pct = step / TOTAL_CONTENT_STEPS;
-    Animated.timing(progressAnim, {
-      toValue: pct,
-      duration: 280,
-      useNativeDriver: false,
-    }).start();
-  }, [step]);
-
-  const progressWidth = progressAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0%', '100%'],
-  });
 
   // Slide transition
   const goToStep = useCallback(
     (next: number) => {
       const direction = next > step ? 1 : -1;
       slideAnim.setValue(direction * SCREEN_WIDTH);
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 280,
-        useNativeDriver: true,
-      }).start();
+      Animated.timing(slideAnim, { toValue: 0, duration: 260, useNativeDriver: true }).start();
       setStep(next);
     },
     [step, slideAnim]
@@ -365,9 +314,7 @@ export default function ShopSetup() {
       }
 
       const openingHoursObj: Record<string, { open: string; close: string; enabled: boolean }> = {};
-      hours.forEach((h, i) => {
-        openingHoursObj[i] = h;
-      });
+      hours.forEach((h, i) => { openingHoursObj[i] = h; });
 
       const fullAddress = [address, city, country].filter(Boolean).join(', ');
 
@@ -431,41 +378,29 @@ export default function ShopSetup() {
   // ─── Step content ─────────────────────────────────────────────────────────
   const renderStep = () => {
     switch (step) {
-      case 0:
-        return <WelcomeStep orbScale={orbScale} onStart={() => goToStep(1)} insets={insets} />;
       case 1:
         return (
           <BasicInfoStep
-            shopName={shopName}
-            setShopName={setShopName}
-            category={category}
-            setCategory={setCategory}
-            phone={phone}
-            setPhone={setPhone}
-            description={description}
-            setDescription={setDescription}
+            shopName={shopName} setShopName={setShopName}
+            category={category} setCategory={setCategory}
+            phone={phone} setPhone={setPhone}
+            description={description} setDescription={setDescription}
           />
         );
       case 2:
         return (
           <LocationStep
-            address={address}
-            setAddress={setAddress}
-            city={city}
-            setCity={setCity}
-            country={country}
-            setCountry={setCountry}
-            lat={lat}
-            lng={lng}
-            locating={locating}
-            onDetect={detectLocation}
+            address={address} setAddress={setAddress}
+            city={city} setCity={setCity}
+            country={country} setCountry={setCountry}
+            lat={lat} lng={lng}
+            locating={locating} onDetect={detectLocation}
           />
         );
       case 3:
         return (
           <PhotosStep
-            coverUri={coverUri}
-            logoUri={logoUri}
+            coverUri={coverUri} logoUri={logoUri}
             onPickCover={() => pickImage('cover')}
             onPickLogo={() => pickImage('logo')}
           />
@@ -475,14 +410,10 @@ export default function ShopSetup() {
       case 5:
         return (
           <ServiceStep
-            serviceName={serviceName}
-            setServiceName={setServiceName}
-            servicePrice={servicePrice}
-            setServicePrice={setServicePrice}
-            serviceDuration={serviceDuration}
-            setServiceDuration={setServiceDuration}
-            serviceCategory={serviceCategory}
-            setServiceCategory={setServiceCategory}
+            serviceName={serviceName} setServiceName={setServiceName}
+            servicePrice={servicePrice} setServicePrice={setServicePrice}
+            serviceDuration={serviceDuration} setServiceDuration={setServiceDuration}
+            serviceCategory={serviceCategory} setServiceCategory={setServiceCategory}
           />
         );
       default:
@@ -490,73 +421,58 @@ export default function ShopSetup() {
     }
   };
 
-  // ─── Render ───────────────────────────────────────────────────────────────
+  // ─── Welcome screen ───────────────────────────────────────────────────────
   if (step === 0) {
     return (
-      <WelcomeStep
-        orbScale={orbScale}
-        onStart={() => goToStep(1)}
-        insets={insets}
-      />
+      <WelcomeStep orbScale={orbScale} onStart={() => { console.log('[Setup] Get started pressed'); goToStep(1); }} insets={insets} />
     );
   }
 
-  const contentStep = step; // 1–5
-  const dotCount = TOTAL_CONTENT_STEPS;
-
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
+      {/* Header: back arrow + close button */}
       <View style={styles.header}>
         <AnimatedPressable
-          onPress={() => {
-            console.log('[Setup] Back pressed from step:', step);
-            goToStep(step - 1);
-          }}
-          style={styles.headerBackBtn}
+          onPress={() => { console.log('[Setup] Back pressed from step:', step); goToStep(step - 1); }}
+          style={styles.headerIconBtn}
           accessibilityLabel="Go back"
         >
-          <ChevronLeft size={22} color={P.text} />
+          <ChevronLeft size={20} color={F.text} />
         </AnimatedPressable>
-        <Text style={styles.headerStepLabel}>
-          Step {contentStep} of {TOTAL_CONTENT_STEPS}
-        </Text>
+        <View style={{ flex: 1 }} />
+        <AnimatedPressable
+          onPress={() => { console.log('[Setup] Close pressed'); router.replace('/(partner)'); }}
+          style={styles.headerIconBtn}
+          accessibilityLabel="Close setup"
+        >
+          <X size={18} color={F.textSec} />
+        </AnimatedPressable>
       </View>
 
-      {/* Progress bar */}
-      <View style={styles.progressTrack}>
-        <Animated.View style={[styles.progressFill, { width: progressWidth }]} />
-      </View>
-
-      {/* Step dots */}
-      <View style={styles.dotsRow}>
-        {Array.from({ length: dotCount }, (_, i) => {
-          const dotStep = i + 1;
-          const isCompleted = dotStep < contentStep;
-          const isCurrent = dotStep === contentStep;
+      {/* 3-segment progress bar */}
+      <View style={styles.segmentRow}>
+        {SEGMENTS.map((label, i) => {
+          const state = getSegmentState(i, step);
           return (
-            <View
-              key={i}
-              style={[
-                styles.dot,
-                isCompleted && styles.dotCompleted,
-                isCurrent && styles.dotCurrent,
-              ]}
-            >
-              {isCompleted && <Check size={8} color="#fff" />}
+            <View key={i} style={styles.segmentItem}>
+              <View
+                style={[
+                  styles.segmentBar,
+                  state === 'active' && styles.segmentBarActive,
+                  state === 'done' && styles.segmentBarDone,
+                ]}
+              />
+              <Text style={[styles.segmentLabel, state !== 'inactive' && styles.segmentLabelActive]}>
+                {label}
+              </Text>
             </View>
           );
         })}
       </View>
 
       {/* Scrollable content */}
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <Animated.View
-          style={[styles.slideContainer, { transform: [{ translateX: slideAnim }] }]}
-        >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <Animated.View style={[styles.slideContainer, { transform: [{ translateX: slideAnim }] }]}>
           <ScrollView
             style={{ flex: 1 }}
             contentContainerStyle={styles.scrollContent}
@@ -571,28 +487,13 @@ export default function ShopSetup() {
       {/* Bottom action bar */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
         {step < TOTAL_CONTENT_STEPS ? (
-          <>
-            <AnimatedPressable
-              onPress={() => {
-                console.log('[Setup] Back pressed from step:', step);
-                goToStep(step - 1);
-              }}
-              style={styles.ghostBtn}
-            >
-              <Text style={styles.ghostBtnText}>Back</Text>
-            </AnimatedPressable>
-            <AnimatedPressable
-              onPress={() => {
-                console.log('[Setup] Next pressed from step:', step);
-                goToStep(step + 1);
-              }}
-              disabled={!canProceed()}
-              style={[styles.accentBtn, !canProceed() && styles.accentBtnDisabled]}
-            >
-              <Text style={styles.accentBtnText}>Continue</Text>
-              <ChevronRight size={16} color="#fff" />
-            </AnimatedPressable>
-          </>
+          <AnimatedPressable
+            onPress={() => { console.log('[Setup] Continue pressed from step:', step); goToStep(step + 1); }}
+            disabled={!canProceed()}
+            style={[styles.primaryBtn, !canProceed() && styles.primaryBtnDisabled]}
+          >
+            <Text style={styles.primaryBtnText}>Continue</Text>
+          </AnimatedPressable>
         ) : (
           <View style={styles.finishColumn}>
             {saveError ? (
@@ -601,44 +502,23 @@ export default function ShopSetup() {
               </View>
             ) : null}
             <AnimatedPressable
-              onPress={() => {
-                console.log('[Setup] Skip service pressed');
-                finish(true);
-              }}
+              onPress={() => { console.log('[Setup] Skip service pressed'); finish(true); }}
               style={styles.skipLink}
               disabled={saving}
             >
               <Text style={styles.skipLinkText}>Skip for now</Text>
             </AnimatedPressable>
-            <View style={styles.finishRow}>
-              <AnimatedPressable
-                onPress={() => {
-                  console.log('[Setup] Back pressed from step:', step);
-                  goToStep(step - 1);
-                }}
-                style={styles.ghostBtn}
-                disabled={saving}
-              >
-                <Text style={styles.ghostBtnText}>Back</Text>
-              </AnimatedPressable>
-              <AnimatedPressable
-                onPress={() => {
-                  console.log('[Setup] Finish setup pressed');
-                  finish(false);
-                }}
-                disabled={saving}
-                style={[styles.accentBtn, saving && { opacity: 0.7 }]}
-              >
-                {saving ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <>
-                    <Check size={16} color="#fff" />
-                    <Text style={styles.accentBtnText}>Finish setup</Text>
-                  </>
-                )}
-              </AnimatedPressable>
-            </View>
+            <AnimatedPressable
+              onPress={() => { console.log('[Setup] Finish setup pressed'); finish(false); }}
+              disabled={saving}
+              style={[styles.primaryBtn, saving && { opacity: 0.7 }]}
+            >
+              {saving ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.primaryBtnText}>Finish setup</Text>
+              )}
+            </AnimatedPressable>
           </View>
         )}
       </View>
@@ -666,38 +546,26 @@ function WelcomeStep({
   }, []);
 
   return (
-    <View
-      style={[
-        styles.welcomeContainer,
-        { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 32 },
-      ]}
-    >
-      {/* Orb */}
-      <View style={styles.orbWrapper}>
-        <Animated.View style={[styles.orbOuter, { transform: [{ scale: orbScale }] }]} />
-        <Animated.View style={[styles.orbInner, { transform: [{ scale: orbScale }] }]} />
+    <View style={[styles.welcomeContainer, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 32 }]}>
+      {/* Icon orb */}
+      <Animated.View style={[styles.orbWrapper, { transform: [{ scale: orbScale }] }]}>
+        <View style={styles.orbOuter} />
+        <View style={styles.orbInner} />
         <View style={styles.orbIconContainer}>
-          <Scissors size={36} color={P.accent} strokeWidth={1.5} />
+          <Scissors size={36} color={F.accent} strokeWidth={1.5} />
         </View>
-      </View>
+      </Animated.View>
 
       {/* Text */}
-      <Animated.View
-        style={[
-          styles.welcomeTextBlock,
-          { opacity: fadeIn, transform: [{ translateY: slideUp }] },
-        ]}
-      >
-        <Text style={styles.welcomeHeadline}>Let's set up{'\n'}your venue</Text>
-        <Text style={styles.welcomeSub}>
-          It only takes a few minutes to get your shop live and start accepting bookings.
-        </Text>
+      <Animated.View style={[styles.welcomeTextBlock, { opacity: fadeIn, transform: [{ translateY: slideUp }] }]}>
+        <Text style={styles.welcomeHeadline}>{"Let's set up\nyour venue"}</Text>
+        <Text style={styles.welcomeSub}>It only takes a few minutes to get your shop live and start accepting bookings.</Text>
 
         <View style={styles.welcomeFeatures}>
           {[
-            { icon: <MapPin size={16} color={P.accent} />, label: 'Set your location' },
-            { icon: <Clock size={16} color={P.accent} />, label: 'Configure opening hours' },
-            { icon: <Scissors size={16} color={P.accent} />, label: 'Add your first service' },
+            { icon: <MapPin size={16} color={F.accent} />, label: 'Set your location' },
+            { icon: <Clock size={16} color={F.accent} />, label: 'Configure opening hours' },
+            { icon: <Scissors size={16} color={F.accent} />, label: 'Add your first service' },
           ].map((f, i) => (
             <View key={i} style={styles.welcomeFeatureRow}>
               <View style={styles.welcomeFeatureIcon}>{f.icon}</View>
@@ -710,8 +578,7 @@ function WelcomeStep({
       {/* CTA */}
       <Animated.View style={{ opacity: fadeIn, width: '100%' }}>
         <AnimatedPressable onPress={onStart} style={styles.welcomeBtn}>
-          <Sparkles size={18} color="#fff" />
-          <Text style={styles.welcomeBtnText}>Get started</Text>
+          <Text style={styles.welcomeBtnText}>Continue</Text>
           <ChevronRight size={18} color="#fff" />
         </AnimatedPressable>
       </Animated.View>
@@ -721,41 +588,28 @@ function WelcomeStep({
 
 // ─── Basic Info Step ──────────────────────────────────────────────────────────
 function BasicInfoStep({
-  shopName,
-  setShopName,
-  category,
-  setCategory,
-  phone,
-  setPhone,
-  description,
-  setDescription,
+  shopName, setShopName, category, setCategory, phone, setPhone, description, setDescription,
 }: {
-  shopName: string;
-  setShopName: (v: string) => void;
-  category: string;
-  setCategory: (v: string) => void;
-  phone: string;
-  setPhone: (v: string) => void;
-  description: string;
-  setDescription: (v: string) => void;
+  shopName: string; setShopName: (v: string) => void;
+  category: string; setCategory: (v: string) => void;
+  phone: string; setPhone: (v: string) => void;
+  description: string; setDescription: (v: string) => void;
 }) {
   return (
     <View style={styles.stepContent}>
       <FadeField index={0}>
-        <Text style={styles.stepHeading}>Basic info</Text>
-        <Text style={styles.stepSubheading}>Tell us about your venue</Text>
+        <Text style={styles.stepHeading}>Venue essentials</Text>
+        <Text style={styles.stepSubheading}>Tell us about your business</Text>
       </FadeField>
 
       <FadeField index={1}>
-        <Text style={styles.fieldLabel}>
-          Shop name <Text style={styles.required}>*</Text>
-        </Text>
+        <Text style={styles.fieldLabel}>Shop name <Text style={styles.required}>*</Text></Text>
         <TextInput
           style={styles.input}
           value={shopName}
           onChangeText={setShopName}
           placeholder="e.g. The Barber Shop"
-          placeholderTextColor={P.textTertiary}
+          placeholderTextColor={F.textTer}
           autoFocus
           returnKeyType="next"
         />
@@ -763,20 +617,13 @@ function BasicInfoStep({
 
       <FadeField index={2}>
         <Text style={styles.fieldLabel}>Category</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipRow}
-        >
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
           {SHOP_CATEGORIES.map((c) => {
             const active = category === c;
             return (
               <AnimatedPressable
                 key={c}
-                onPress={() => {
-                  console.log('[Setup] Shop category selected:', c);
-                  setCategory(c);
-                }}
+                onPress={() => { console.log('[Setup] Shop category selected:', c); setCategory(c); }}
                 style={[styles.chip, active && styles.chipActive]}
               >
                 <Text style={[styles.chipText, active && styles.chipTextActive]}>{c}</Text>
@@ -793,7 +640,7 @@ function BasicInfoStep({
           value={phone}
           onChangeText={setPhone}
           placeholder="+973 XXXX XXXX"
-          placeholderTextColor={P.textTertiary}
+          placeholderTextColor={F.textTer}
           keyboardType="phone-pad"
           returnKeyType="next"
         />
@@ -806,7 +653,7 @@ function BasicInfoStep({
           value={description}
           onChangeText={setDescription}
           placeholder="Tell clients what makes your shop special..."
-          placeholderTextColor={P.textTertiary}
+          placeholderTextColor={F.textTer}
           multiline
           textAlignVertical="top"
           returnKeyType="done"
@@ -818,27 +665,13 @@ function BasicInfoStep({
 
 // ─── Location Step ────────────────────────────────────────────────────────────
 function LocationStep({
-  address,
-  setAddress,
-  city,
-  setCity,
-  country,
-  setCountry,
-  lat,
-  lng,
-  locating,
-  onDetect,
+  address, setAddress, city, setCity, country, setCountry, lat, lng, locating, onDetect,
 }: {
-  address: string;
-  setAddress: (v: string) => void;
-  city: string;
-  setCity: (v: string) => void;
-  country: string;
-  setCountry: (v: string) => void;
-  lat: number | null;
-  lng: number | null;
-  locating: boolean;
-  onDetect: () => void;
+  address: string; setAddress: (v: string) => void;
+  city: string; setCity: (v: string) => void;
+  country: string; setCountry: (v: string) => void;
+  lat: number | null; lng: number | null;
+  locating: boolean; onDetect: () => void;
 }) {
   const hasCoords = lat !== null && lng !== null;
   const latDisplay = lat !== null ? lat.toFixed(5) : '';
@@ -847,16 +680,16 @@ function LocationStep({
   return (
     <View style={styles.stepContent}>
       <FadeField index={0}>
-        <Text style={styles.stepHeading}>Location</Text>
-        <Text style={styles.stepSubheading}>Where is your venue located?</Text>
+        <Text style={styles.stepHeading}>Where is your business located?</Text>
+        <Text style={styles.stepSubheading}>Help clients find you</Text>
       </FadeField>
 
       <FadeField index={1}>
         <AnimatedPressable onPress={onDetect} style={styles.locationBtn} disabled={locating}>
           {locating ? (
-            <ActivityIndicator size="small" color={P.accent} />
+            <ActivityIndicator size="small" color={F.accent} />
           ) : (
-            <MapPin size={18} color={P.accent} />
+            <MapPin size={18} color={F.accent} />
           )}
           <Text style={styles.locationBtnText}>
             {locating ? 'Detecting location…' : 'Use my current location'}
@@ -867,24 +700,20 @@ function LocationStep({
       {hasCoords && (
         <FadeField index={2}>
           <View style={styles.coordsBadge}>
-            <MapPin size={12} color={P.success} />
-            <Text style={styles.coordsText}>
-              {latDisplay}, {lngDisplay}
-            </Text>
+            <MapPin size={12} color={F.success} />
+            <Text style={styles.coordsText}>{latDisplay}, {lngDisplay}</Text>
           </View>
         </FadeField>
       )}
 
       <FadeField index={3}>
-        <Text style={styles.fieldLabel}>
-          Street address <Text style={styles.required}>*</Text>
-        </Text>
+        <Text style={styles.fieldLabel}>Street address <Text style={styles.required}>*</Text></Text>
         <TextInput
           style={styles.input}
           value={address}
           onChangeText={setAddress}
           placeholder="e.g. 12 Al Fateh Highway"
-          placeholderTextColor={P.textTertiary}
+          placeholderTextColor={F.textTer}
           returnKeyType="next"
         />
       </FadeField>
@@ -896,7 +725,7 @@ function LocationStep({
           value={city}
           onChangeText={setCity}
           placeholder="e.g. Manama"
-          placeholderTextColor={P.textTertiary}
+          placeholderTextColor={F.textTer}
           returnKeyType="next"
         />
       </FadeField>
@@ -908,7 +737,7 @@ function LocationStep({
           value={country}
           onChangeText={setCountry}
           placeholder="e.g. Bahrain"
-          placeholderTextColor={P.textTertiary}
+          placeholderTextColor={F.textTer}
           returnKeyType="done"
         />
       </FadeField>
@@ -918,36 +747,27 @@ function LocationStep({
 
 // ─── Photos Step ──────────────────────────────────────────────────────────────
 function PhotosStep({
-  coverUri,
-  logoUri,
-  onPickCover,
-  onPickLogo,
+  coverUri, logoUri, onPickCover, onPickLogo,
 }: {
-  coverUri: string | null;
-  logoUri: string | null;
-  onPickCover: () => void;
-  onPickLogo: () => void;
+  coverUri: string | null; logoUri: string | null;
+  onPickCover: () => void; onPickLogo: () => void;
 }) {
   return (
     <View style={styles.stepContent}>
       <FadeField index={0}>
-        <Text style={styles.stepHeading}>Photos</Text>
-        <Text style={styles.stepSubheading}>Add a cover photo and logo</Text>
+        <Text style={styles.stepHeading}>Add your venue photos</Text>
+        <Text style={styles.stepSubheading}>A great cover photo attracts more clients</Text>
       </FadeField>
 
       <FadeField index={1}>
         <Text style={styles.fieldLabel}>Cover photo</Text>
         <AnimatedPressable onPress={onPickCover} style={styles.coverPicker}>
           {coverUri ? (
-            <Image
-              source={resolveImageSource(coverUri)}
-              style={styles.coverPreview}
-              resizeMode="cover"
-            />
+            <Image source={resolveImageSource(coverUri)} style={styles.coverPreview} resizeMode="cover" />
           ) : (
             <View style={styles.coverPlaceholder}>
               <View style={styles.photoIconCircle}>
-                <ImageIcon size={24} color={P.textTertiary} />
+                <ImageIcon size={24} color={F.textTer} />
               </View>
               <Text style={styles.photoPlaceholderTitle}>Add cover photo</Text>
               <Text style={styles.photoPlaceholderSub}>Recommended: 1600 × 900px</Text>
@@ -964,14 +784,10 @@ function PhotosStep({
         <View style={styles.logoRow}>
           <AnimatedPressable onPress={onPickLogo} style={styles.logoPicker}>
             {logoUri ? (
-              <Image
-                source={resolveImageSource(logoUri)}
-                style={styles.logoPreview}
-                resizeMode="cover"
-              />
+              <Image source={resolveImageSource(logoUri)} style={styles.logoPreview} resizeMode="cover" />
             ) : (
               <View style={styles.logoPlaceholder}>
-                <Camera size={20} color={P.textTertiary} />
+                <Camera size={20} color={F.textTer} />
               </View>
             )}
             <View style={styles.logoEditBadge}>
@@ -990,13 +806,10 @@ function PhotosStep({
 
 // ─── Hours Step ───────────────────────────────────────────────────────────────
 function HoursStep({
-  hours,
-  setHours,
+  hours, setHours,
 }: {
   hours: { open: string; close: string; enabled: boolean }[];
-  setHours: React.Dispatch<
-    React.SetStateAction<{ open: string; close: string; enabled: boolean }[]>
-  >;
+  setHours: React.Dispatch<React.SetStateAction<{ open: string; close: string; enabled: boolean }[]>>;
 }) {
   const toggleDay = (i: number, v: boolean) => {
     console.log('[Setup] Toggle day:', WEEKDAYS[i], 'enabled:', v);
@@ -1012,80 +825,77 @@ function HoursStep({
   return (
     <View style={styles.stepContent}>
       <FadeField index={0}>
-        <Text style={styles.stepHeading}>Opening hours</Text>
+        <Text style={styles.stepHeading}>Add your opening hours</Text>
         <Text style={styles.stepSubheading}>Set your weekly schedule</Text>
       </FadeField>
 
-      {hours.map((h, i) => (
-        <FadeField key={i} index={i + 1}>
-          <View style={styles.hourRow}>
-            <View style={styles.hourLeft}>
-              <Switch
-                value={h.enabled}
-                onValueChange={(v) => toggleDay(i, v)}
-                trackColor={{ false: P.border, true: P.accent }}
-                thumbColor="#fff"
-                ios_backgroundColor={P.border}
-              />
-              <Text style={[styles.dayLabel, !h.enabled && styles.dayLabelDisabled]}>
-                {WEEKDAYS[i].slice(0, 3)}
-              </Text>
-            </View>
-            {h.enabled ? (
-              <View style={styles.timeRow}>
-                <TextInput
-                  style={styles.timeInput}
-                  value={h.open}
-                  onChangeText={(v) => setOpen(i, v)}
-                  placeholder="09:00"
-                  placeholderTextColor={P.textTertiary}
-                  keyboardType="numbers-and-punctuation"
+      <View style={styles.hoursCard}>
+        {hours.map((h, i) => (
+          <FadeField key={i} index={i + 1}>
+            <View style={[styles.hourRow, i < hours.length - 1 && styles.hourRowBorder]}>
+              <View style={styles.hourLeft}>
+                <Switch
+                  value={h.enabled}
+                  onValueChange={(v) => toggleDay(i, v)}
+                  trackColor={{ false: F.border, true: F.accent }}
+                  thumbColor="#fff"
+                  ios_backgroundColor={F.border}
                 />
-                <Text style={styles.timeDash}>–</Text>
-                <TextInput
-                  style={styles.timeInput}
-                  value={h.close}
-                  onChangeText={(v) => setClose(i, v)}
-                  placeholder="21:00"
-                  placeholderTextColor={P.textTertiary}
-                  keyboardType="numbers-and-punctuation"
-                />
+                <View>
+                  <Text style={[styles.dayLabel, !h.enabled && styles.dayLabelDisabled]}>
+                    {WEEKDAYS[i].slice(0, 3)}
+                  </Text>
+                  <Text style={[styles.dayStatus, !h.enabled && styles.dayStatusDisabled]}>
+                    {h.enabled ? 'Open' : 'Closed'}
+                  </Text>
+                </View>
               </View>
-            ) : (
-              <Text style={styles.closedLabel}>Closed</Text>
-            )}
-          </View>
-        </FadeField>
-      ))}
+              {h.enabled ? (
+                <View style={styles.timeRow}>
+                  <TextInput
+                    style={styles.timeInput}
+                    value={h.open}
+                    onChangeText={(v) => setOpen(i, v)}
+                    placeholder="09:00"
+                    placeholderTextColor={F.textTer}
+                    keyboardType="numbers-and-punctuation"
+                  />
+                  <Text style={styles.timeDash}>–</Text>
+                  <TextInput
+                    style={styles.timeInput}
+                    value={h.close}
+                    onChangeText={(v) => setClose(i, v)}
+                    placeholder="21:00"
+                    placeholderTextColor={F.textTer}
+                    keyboardType="numbers-and-punctuation"
+                  />
+                </View>
+              ) : (
+                <Text style={styles.closedLabel}>Closed</Text>
+              )}
+            </View>
+          </FadeField>
+        ))}
+      </View>
     </View>
   );
 }
 
 // ─── Service Step ─────────────────────────────────────────────────────────────
 function ServiceStep({
-  serviceName,
-  setServiceName,
-  servicePrice,
-  setServicePrice,
-  serviceDuration,
-  setServiceDuration,
-  serviceCategory,
-  setServiceCategory,
+  serviceName, setServiceName, servicePrice, setServicePrice,
+  serviceDuration, setServiceDuration, serviceCategory, setServiceCategory,
 }: {
-  serviceName: string;
-  setServiceName: (v: string) => void;
-  servicePrice: string;
-  setServicePrice: (v: string) => void;
-  serviceDuration: string;
-  setServiceDuration: (v: string) => void;
-  serviceCategory: string;
-  setServiceCategory: (v: string) => void;
+  serviceName: string; setServiceName: (v: string) => void;
+  servicePrice: string; setServicePrice: (v: string) => void;
+  serviceDuration: string; setServiceDuration: (v: string) => void;
+  serviceCategory: string; setServiceCategory: (v: string) => void;
 }) {
   return (
     <View style={styles.stepContent}>
       <FadeField index={0}>
-        <Text style={styles.stepHeading}>First service</Text>
-        <Text style={styles.stepSubheading}>Add your first service (optional)</Text>
+        <Text style={styles.stepHeading}>Add your first service</Text>
+        <Text style={styles.stepSubheading}>Optional — you can add more later</Text>
       </FadeField>
 
       <FadeField index={1}>
@@ -1095,7 +905,7 @@ function ServiceStep({
           value={serviceName}
           onChangeText={setServiceName}
           placeholder="e.g. Classic Haircut"
-          placeholderTextColor={P.textTertiary}
+          placeholderTextColor={F.textTer}
           returnKeyType="next"
         />
       </FadeField>
@@ -1107,7 +917,7 @@ function ServiceStep({
           value={servicePrice}
           onChangeText={setServicePrice}
           placeholder="0.000"
-          placeholderTextColor={P.textTertiary}
+          placeholderTextColor={F.textTer}
           keyboardType="decimal-pad"
           returnKeyType="next"
         />
@@ -1115,20 +925,13 @@ function ServiceStep({
 
       <FadeField index={3}>
         <Text style={styles.fieldLabel}>Duration</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipRow}
-        >
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
           {DURATION_OPTIONS.map((d) => {
             const active = serviceDuration === d;
             return (
               <AnimatedPressable
                 key={d}
-                onPress={() => {
-                  console.log('[Setup] Duration selected:', d, 'min');
-                  setServiceDuration(d);
-                }}
+                onPress={() => { console.log('[Setup] Duration selected:', d, 'min'); setServiceDuration(d); }}
                 style={[styles.chip, active && styles.chipActive]}
               >
                 <Text style={[styles.chipText, active && styles.chipTextActive]}>{d} min</Text>
@@ -1140,20 +943,13 @@ function ServiceStep({
 
       <FadeField index={4}>
         <Text style={styles.fieldLabel}>Category</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipRow}
-        >
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
           {SERVICE_CATEGORIES.map((c) => {
             const active = serviceCategory === c;
             return (
               <AnimatedPressable
                 key={c}
-                onPress={() => {
-                  console.log('[Setup] Service category selected:', c);
-                  setServiceCategory(c);
-                }}
+                onPress={() => { console.log('[Setup] Service category selected:', c); setServiceCategory(c); }}
                 style={[styles.chip, active && styles.chipActive]}
               >
                 <Text style={[styles.chipText, active && styles.chipTextActive]}>{c}</Text>
@@ -1170,73 +966,60 @@ function ServiceStep({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: P.bg,
+    backgroundColor: F.bg,
   },
 
   // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
   },
-  headerBackBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: P.surface,
+  headerIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: F.surface,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: P.border,
-  },
-  headerStepLabel: {
-    color: P.textSecondary,
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 0.3,
+    borderColor: F.border,
   },
 
-  // Progress
-  progressTrack: {
-    height: 3,
-    backgroundColor: P.surface,
-    marginHorizontal: 20,
-    borderRadius: 2,
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: P.accent,
-    borderRadius: 2,
-  },
-
-  // Dots
-  dotsRow: {
+  // 3-segment progress bar
+  segmentRow: {
     flexDirection: 'row',
+    paddingHorizontal: 16,
+    gap: 6,
+    marginBottom: 4,
+    marginTop: 4,
+  },
+  segmentItem: {
+    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
+    gap: 4,
   },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: P.surface,
-    borderWidth: 1,
-    borderColor: P.border,
-    alignItems: 'center',
-    justifyContent: 'center',
+  segmentBar: {
+    height: 4,
+    width: '100%',
+    borderRadius: 999,
+    backgroundColor: F.border,
   },
-  dotCompleted: {
-    backgroundColor: P.accent,
-    borderColor: P.accent,
+  segmentBarActive: {
+    backgroundColor: F.accent,
   },
-  dotCurrent: {
-    borderColor: P.accent,
-    borderWidth: 2,
-    backgroundColor: P.accentLight,
+  segmentBarDone: {
+    backgroundColor: F.accent,
+    opacity: 0.6,
+  },
+  segmentLabel: {
+    color: F.textTer,
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  segmentLabelActive: {
+    color: F.textSec,
   },
 
   // Slide container
@@ -1250,18 +1033,18 @@ const styles = StyleSheet.create({
   // Step content
   stepContent: {
     paddingHorizontal: 20,
-    paddingTop: 8,
+    paddingTop: 12,
     gap: 4,
   },
   stepHeading: {
-    color: P.text,
+    color: F.text,
     fontSize: 26,
     fontWeight: '700',
     letterSpacing: -0.4,
     marginBottom: 4,
   },
   stepSubheading: {
-    color: P.textSecondary,
+    color: F.textSec,
     fontSize: 15,
     marginBottom: 20,
     lineHeight: 22,
@@ -1269,7 +1052,7 @@ const styles = StyleSheet.create({
 
   // Fields
   fieldLabel: {
-    color: P.textSecondary,
+    color: F.textSec,
     fontSize: 13,
     fontWeight: '600',
     marginBottom: 8,
@@ -1277,16 +1060,16 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   required: {
-    color: P.danger,
+    color: F.danger,
   },
   input: {
-    backgroundColor: P.surface,
+    backgroundColor: F.surface,
     borderRadius: 12,
-    padding: 14,
-    color: P.text,
+    padding: 16,
+    color: F.text,
     borderWidth: 1,
-    borderColor: P.border,
-    fontSize: 15,
+    borderColor: F.border,
+    fontSize: 16,
   },
   textarea: {
     minHeight: 96,
@@ -1302,17 +1085,17 @@ const styles = StyleSheet.create({
   chip: {
     paddingHorizontal: 16,
     paddingVertical: 9,
-    borderRadius: 24,
-    backgroundColor: P.surface,
+    borderRadius: 999,
+    backgroundColor: F.surface,
     borderWidth: 1,
-    borderColor: P.border,
+    borderColor: F.border,
   },
   chipActive: {
-    backgroundColor: P.accent,
-    borderColor: P.accent,
+    backgroundColor: F.accent,
+    borderColor: F.accent,
   },
   chipText: {
-    color: P.textSecondary,
+    color: F.textSec,
     fontSize: 13,
     fontWeight: '500',
   },
@@ -1326,15 +1109,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: P.accentLight,
+    backgroundColor: F.accentLight,
     borderRadius: 12,
-    padding: 14,
+    padding: 16,
     borderWidth: 1,
     borderColor: 'rgba(124,58,237,0.3)',
     marginTop: 8,
   },
   locationBtnText: {
-    color: P.accent,
+    color: F.accent,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -1342,17 +1125,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(76,175,125,0.12)',
+    backgroundColor: 'rgba(34,197,94,0.1)',
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 6,
     alignSelf: 'flex-start',
     marginTop: 8,
     borderWidth: 1,
-    borderColor: 'rgba(76,175,125,0.25)',
+    borderColor: 'rgba(34,197,94,0.25)',
   },
   coordsText: {
-    color: P.success,
+    color: F.success,
     fontSize: 12,
     fontWeight: '500',
   },
@@ -1363,8 +1146,8 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: P.border,
-    backgroundColor: P.surface,
+    borderColor: F.border,
+    backgroundColor: F.surface,
   },
   coverPreview: {
     width: '100%',
@@ -1380,19 +1163,19 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: P.surfaceElevated,
+    backgroundColor: F.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: P.border,
+    borderColor: F.border,
   },
   photoPlaceholderTitle: {
-    color: P.textSecondary,
+    color: F.textSec,
     fontSize: 14,
     fontWeight: '600',
   },
   photoPlaceholderSub: {
-    color: P.textTertiary,
+    color: F.textTer,
     fontSize: 12,
   },
   coverEditBadge: {
@@ -1402,7 +1185,7 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: P.accent,
+    backgroundColor: F.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1418,8 +1201,8 @@ const styles = StyleSheet.create({
     borderRadius: 48,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: P.border,
-    backgroundColor: P.surface,
+    borderColor: F.border,
+    backgroundColor: F.surface,
   },
   logoPreview: {
     width: '100%',
@@ -1437,7 +1220,7 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: P.accent,
+    backgroundColor: F.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1446,125 +1229,123 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   logoHintTitle: {
-    color: P.text,
+    color: F.text,
     fontSize: 15,
     fontWeight: '600',
   },
   logoHintSub: {
-    color: P.textTertiary,
+    color: F.textTer,
     fontSize: 13,
     lineHeight: 18,
   },
 
   // Hours
+  hoursCard: {
+    backgroundColor: F.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: F.border,
+    marginTop: 8,
+    overflow: 'hidden',
+  },
   hourRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: P.divider,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     gap: 12,
+  },
+  hourRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: F.divider,
   },
   hourLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    width: 90,
+    width: 110,
   },
   dayLabel: {
-    color: P.text,
+    color: F.text,
     fontSize: 14,
     fontWeight: '600',
-    width: 36,
   },
   dayLabelDisabled: {
-    opacity: 0.35,
+    opacity: 0.4,
+  },
+  dayStatus: {
+    color: F.success,
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 1,
+  },
+  dayStatusDisabled: {
+    color: F.textTer,
   },
   timeRow: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    justifyContent: 'flex-end',
   },
   timeInput: {
-    flex: 1,
-    backgroundColor: P.surfaceElevated,
+    backgroundColor: F.surfaceElevated,
     borderRadius: 8,
     paddingVertical: 8,
     paddingHorizontal: 10,
-    color: P.text,
+    color: F.text,
     fontSize: 13,
     textAlign: 'center',
     borderWidth: 1,
-    borderColor: P.border,
+    borderColor: F.border,
+    minWidth: 60,
   },
   timeDash: {
-    color: P.textTertiary,
+    color: F.textTer,
     fontSize: 14,
   },
   closedLabel: {
-    color: P.textTertiary,
+    color: F.textTer,
     fontSize: 13,
     flex: 1,
+    textAlign: 'right',
   },
 
   // Bottom bar
   bottomBar: {
-    flexDirection: 'row',
-    gap: 10,
     paddingHorizontal: 20,
     paddingTop: 12,
-    backgroundColor: P.surface,
+    backgroundColor: F.bg,
     borderTopWidth: 1,
-    borderTopColor: P.border,
+    borderTopColor: F.border,
   },
-  ghostBtn: {
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: P.border,
+  primaryBtn: {
+    width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: F.accent,
+    paddingVertical: 16,
+    borderRadius: 999,
+    minHeight: 52,
   },
-  ghostBtnText: {
-    color: P.textSecondary,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  accentBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: P.accent,
-    paddingVertical: 14,
-    borderRadius: 12,
-    minHeight: 50,
-  },
-  accentBtnDisabled: {
+  primaryBtnDisabled: {
     opacity: 0.4,
   },
-  accentBtnText: {
+  primaryBtnText: {
     color: '#fff',
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
   },
   finishColumn: {
-    flex: 1,
     gap: 8,
-  },
-  finishRow: {
-    flexDirection: 'row',
-    gap: 10,
   },
   skipLink: {
     alignItems: 'center',
     paddingVertical: 6,
   },
   skipLinkText: {
-    color: P.textSecondary,
+    color: F.textSec,
     fontSize: 14,
     textDecorationLine: 'underline',
   },
@@ -1576,7 +1357,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(232,84,84,0.3)',
   },
   errorBannerText: {
-    color: P.danger,
+    color: F.danger,
     fontSize: 13,
     lineHeight: 18,
   },
@@ -1584,37 +1365,37 @@ const styles = StyleSheet.create({
   // Welcome
   welcomeContainer: {
     flex: 1,
-    backgroundColor: P.bg,
+    backgroundColor: F.bg,
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 28,
   },
   orbWrapper: {
-    width: 200,
-    height: 200,
+    width: 160,
+    height: 160,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 20,
   },
   orbOuter: {
     position: 'absolute',
-    width: 200,
-    height: 200,
-    borderRadius: 100,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
     backgroundColor: 'rgba(124,58,237,0.08)',
   },
   orbInner: {
     position: 'absolute',
-    width: 140,
-    height: 140,
-    borderRadius: 70,
+    width: 110,
+    height: 110,
+    borderRadius: 55,
     backgroundColor: 'rgba(124,58,237,0.14)',
   },
   orbIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: P.accentLight,
+    width: 72,
+    height: 72,
+    borderRadius: 999,
+    backgroundColor: 'rgba(124,58,237,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -1626,7 +1407,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   welcomeHeadline: {
-    color: P.text,
+    color: F.text,
     fontSize: 34,
     fontWeight: '800',
     textAlign: 'center',
@@ -1634,7 +1415,7 @@ const styles = StyleSheet.create({
     lineHeight: 42,
   },
   welcomeSub: {
-    color: P.textSecondary,
+    color: F.textSec,
     fontSize: 15,
     textAlign: 'center',
     lineHeight: 22,
@@ -1644,11 +1425,11 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: 10,
     marginTop: 8,
-    backgroundColor: P.surface,
+    backgroundColor: F.surface,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: P.border,
+    borderColor: F.border,
   },
   welcomeFeatureRow: {
     flexDirection: 'row',
@@ -1659,12 +1440,12 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 10,
-    backgroundColor: P.accentLight,
+    backgroundColor: F.accentLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   welcomeFeatureText: {
-    color: P.text,
+    color: F.text,
     fontSize: 14,
     fontWeight: '500',
   },
@@ -1673,8 +1454,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: P.accent,
-    borderRadius: 16,
+    backgroundColor: F.accent,
+    borderRadius: 999,
     paddingVertical: 16,
     width: '100%',
   },

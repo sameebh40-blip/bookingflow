@@ -202,7 +202,7 @@ export default function PartnerMore() {
   const GRID_ITEMS = [
     { label: 'Home', icon: <Home size={18} color={P.accent} />, onPress: () => navigate('/(partner)') },
     { label: 'Clients', icon: <Users size={18} color={P.accent} />, onPress: () => navigate('/(partner)/clients') },
-    { label: 'Online booking', icon: <Globe size={18} color={P.accent} />, onPress: () => showToast('Coming soon') },
+    { label: 'Online booking', icon: <Globe size={18} color={P.accent} />, onPress: () => navigate('/(partner)/online-booking') },
     { label: 'Catalog', icon: <BookOpen size={18} color={P.accent} />, onPress: () => navigate('/(partner)/catalog') },
     { label: 'Marketing', icon: <Megaphone size={18} color={P.accent} />, onPress: () => showToast('Coming soon') },
     { label: 'Team', icon: <UserCheck size={18} color={P.accent} />, onPress: () => navigate('/(partner)/team') },
