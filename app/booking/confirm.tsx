@@ -216,30 +216,6 @@ export default function BookingConfirmScreen() {
           console.log('[Booking/Confirm] Supabase insert error (non-fatal):', error.message);
         } else {
           console.log('[Booking/Confirm] Booking saved to Supabase (hallaq)');
-          // Auto-send confirmation message from venue to client
-          const confirmMsg = `✅ Booking confirmed! Your appointment at ${shopName} is scheduled for ${dateDisplay} at ${timeDisplay}. We look forward to seeing you!`;
-          const { error: msgErr } = await supabase.from('messages').insert({
-            venue_id: venueId,
-            sender_id: null,
-            client_id: user.id,
-            text: confirmMsg,
-            is_from_venue: true,
-          });
-          if (msgErr) {
-            console.log('[Booking/Confirm] Could not insert confirmation message:', msgErr.message);
-          } else {
-            console.log('[Booking/Confirm] Auto-confirmation message sent to messages table');
-            // Auto-send a warm welcome reply from the shop
-            const shopReply = `👋 Hi! We've received your booking and we're excited to see you! Please arrive 5 minutes early. If you need to make any changes, feel free to message us here. See you soon! 💈`;
-            await supabase.from('messages').insert({
-              venue_id: venueId,
-              sender_id: null,
-              client_id: user.id,
-              text: shopReply,
-              is_from_venue: true,
-            });
-            console.log('[Booking/Confirm] Shop welcome reply sent');
-          }
         }
       }
       setConfirmed(true);

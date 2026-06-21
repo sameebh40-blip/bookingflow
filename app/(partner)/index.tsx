@@ -211,6 +211,10 @@ export default function PartnerHome() {
     console.log('[PartnerHome] Setting up real-time subscription for shop:', shopId);
     const channel = supabase
       .channel(`partner-home-${shopId}-${Date.now()}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'bookings', filter: `shop_id=eq.${shopId}` }, () => {
+        console.log('[PartnerHome] Booking updated, re-fetching dashboard data');
+        fetchData();
+      })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'bookings', filter: `shop_id=eq.${shopId}` }, (payload) => {
         console.log('[PartnerHome] New booking received:', payload.new);
         const newBooking = payload.new as Booking;
@@ -322,7 +326,7 @@ export default function PartnerHome() {
           <AnimatedPressable
             onPress={() => {
               console.log('[PartnerHome] Complete Setup button pressed');
-              router.push('/(partner)/ob-welcome' as never);
+              router.push('/(partner)/ob-essentials' as never);
             }}
             style={{ backgroundColor: P.gold, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 24 }}
           >
