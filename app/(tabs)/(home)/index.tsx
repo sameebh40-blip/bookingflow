@@ -269,8 +269,8 @@ export default function HomeScreen() {
   const [allVenues, setAllVenues] = useState<Venue[]>([]);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [barbers, setBarbers] = useState<Barber[]>(MOCK_BARBERS);
-  const [reels, setReels] = useState<ReelItem[]>(MOCK_REELS);
-  const [rebook, setRebook] = useState<RebookItem[]>(MOCK_REBOOK);
+  const [reels, setReels] = useState<ReelItem[]>([]);
+  const [rebook, setRebook] = useState<RebookItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const greeting = React.useMemo(() => {
@@ -398,8 +398,8 @@ export default function HomeScreen() {
         });
         setReels(mappedReels);
       } else {
-        console.log('[Home] Using mock reels');
-        setReels(MOCK_REELS);
+        console.log('[Home] No reels found');
+        setReels([]);
       }
 
       console.log('[Home] Rebook fetch result:', rebookRes.error?.message ?? 'ok', 'count:', rebookRes.data?.length ?? 0);
@@ -424,7 +424,7 @@ export default function HomeScreen() {
       console.log('[Home] Exception, using mock data:', err);
       setVenues(MOCK_VENUES);
       setBarbers(MOCK_BARBERS);
-      setReels(MOCK_REELS);
+      setReels([]);
       setRebook([]);
     } finally {
       setLoading(false);
@@ -648,42 +648,44 @@ export default function HomeScreen() {
       </View>
 
       {/* Trending Reels */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Trending Reels</Text>
-          <AnimatedPressable onPress={handleSeeAllReels}>
-            <Text style={styles.seeAll}>View all</Text>
-          </AnimatedPressable>
-        </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 10 }}
-        >
-          {reels.map((reel) => (
-            <AnimatedPressable
-              key={reel.id}
-              onPress={() => handleReelPress(reel.id)}
-              style={styles.reelCard}
-            >
-              <Image source={resolveImageSource(reel.image_url)} style={styles.reelImage} resizeMode="cover" />
-              <LinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.75)']}
-                style={styles.reelGradient}
-              />
-              <View style={styles.trendingBadge}>
-                <Text style={styles.trendingBadgeText}>TRENDING</Text>
-              </View>
-              <View style={styles.reelPlayBtn}>
-                <Play size={14} color="#fff" fill="#fff" />
-              </View>
-              {reel.duration ? (
-                <Text style={styles.reelDuration}>{reel.duration}</Text>
-              ) : null}
+      {reels.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Trending Reels</Text>
+            <AnimatedPressable onPress={handleSeeAllReels}>
+              <Text style={styles.seeAll}>View all</Text>
             </AnimatedPressable>
-          ))}
-        </ScrollView>
-      </View>
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 10 }}
+          >
+            {reels.map((reel) => (
+              <AnimatedPressable
+                key={reel.id}
+                onPress={() => handleReelPress(reel.id)}
+                style={styles.reelCard}
+              >
+                <Image source={resolveImageSource(reel.image_url)} style={styles.reelImage} resizeMode="cover" />
+                <LinearGradient
+                  colors={['transparent', 'rgba(0,0,0,0.75)']}
+                  style={styles.reelGradient}
+                />
+                <View style={styles.trendingBadge}>
+                  <Text style={styles.trendingBadgeText}>TRENDING</Text>
+                </View>
+                <View style={styles.reelPlayBtn}>
+                  <Play size={14} color="#fff" fill="#fff" />
+                </View>
+                {reel.duration ? (
+                  <Text style={styles.reelDuration}>{reel.duration}</Text>
+                ) : null}
+              </AnimatedPressable>
+            ))}
+          </ScrollView>
+        </View>
+      )}
 
       <View style={{ height: 120 }} />
     </ScrollView>

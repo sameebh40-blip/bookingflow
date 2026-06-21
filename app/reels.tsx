@@ -166,7 +166,7 @@ export default function ReelsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [activeIndex, setActiveIndex] = useState(0);
-  const [reels, setReels] = useState<Reel[]>(MOCK_REELS);
+  const [reels, setReels] = useState<Reel[]>([]);
 
   useEffect(() => {
     console.log('[Reels] Fetching real venue data from Supabase');
@@ -192,8 +192,8 @@ export default function ReelsScreen() {
           }));
           setReels(mapped);
         } else {
-          console.log('[Reels] No real venues found, using mock data');
-          // MOCK_REELS already set as initial state — no change needed
+          console.log('[Reels] No real venues found');
+          setReels([]);
         }
       });
   }, []);
@@ -205,22 +205,28 @@ export default function ReelsScreen() {
 
   return (
     <View style={styles.container}>
-      <FlatList
-        data={reels}
-        renderItem={({ item, index }) => (
-          <ReelItem reel={item} isActive={activeIndex === index} />
-        )}
-        keyExtractor={item => item.id}
-        pagingEnabled
-        showsVerticalScrollIndicator={false}
-        onMomentumScrollEnd={(e) => {
-          const index = Math.round(e.nativeEvent.contentOffset.y / screenHeight);
-          console.log('[Reels] Scrolled to reel:', index);
-          setActiveIndex(index);
-        }}
-        snapToInterval={screenHeight}
-        decelerationRate="fast"
-      />
+      {reels.length === 0 ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ color: '#fff', fontSize: 16 }}>No reels yet</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={reels}
+          renderItem={({ item, index }) => (
+            <ReelItem reel={item} isActive={activeIndex === index} />
+          )}
+          keyExtractor={item => item.id}
+          pagingEnabled
+          showsVerticalScrollIndicator={false}
+          onMomentumScrollEnd={(e) => {
+            const index = Math.round(e.nativeEvent.contentOffset.y / screenHeight);
+            console.log('[Reels] Scrolled to reel:', index);
+            setActiveIndex(index);
+          }}
+          snapToInterval={screenHeight}
+          decelerationRate="fast"
+        />
+      )}
 
       {/* Close button */}
       <AnimatedPressable
