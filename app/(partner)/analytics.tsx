@@ -4,7 +4,7 @@ import {
   ActivityIndicator, Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router, useRootNavigationState } from 'expo-router';
+import { router } from 'expo-router';
 import Svg, { Path, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { ArrowLeft, TrendingUp, Users, Briefcase, Zap, AlertCircle } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
@@ -334,13 +334,12 @@ const styles = StyleSheet.create({
 });
 
 export default function PartnerAnalytics() {
-  const navState = useRootNavigationState();
-  if (!navState?.key) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#0B0C10', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color="#7C3AED" size="large" />
-      </View>
-    );
-  }
+  const [ready, setReady] = React.useState(false);
+  React.useEffect(() => { setReady(true); }, []);
+  if (!ready) return (
+    <View style={{ flex: 1, backgroundColor: '#0B0C10', alignItems: 'center', justifyContent: 'center' }}>
+      <ActivityIndicator color="#7C3AED" size="large" />
+    </View>
+  );
   return <PartnerAnalyticsInner />;
 }

@@ -4,7 +4,7 @@ import {
   Modal, ActivityIndicator, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRootNavigationState, router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Plus, Minus, Trash2, User, Tag, Percent, ChevronRight, CreditCard, Banknote, Gift, X, Check } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/utils/supabase';
@@ -602,14 +602,13 @@ function NewSaleInner() {
 }
 
 export default function NewSale() {
-  const navState = useRootNavigationState();
-  if (!navState?.key) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#0B0C10', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color="#7C3AED" size="large" />
-      </View>
-    );
-  }
+  const [ready, setReady] = React.useState(false);
+  React.useEffect(() => { setReady(true); }, []);
+  if (!ready) return (
+    <View style={{ flex: 1, backgroundColor: '#0B0C10', alignItems: 'center', justifyContent: 'center' }}>
+      <ActivityIndicator color="#7C3AED" size="large" />
+    </View>
+  );
   return <NewSaleInner />;
 }
 

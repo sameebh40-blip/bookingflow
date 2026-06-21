@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router, useRootNavigationState } from 'expo-router';
+import { router } from 'expo-router';
 import {
   User, Building2, Scissors, ImageIcon, Star, Settings,
   CreditCard, Calendar, Users, AlertTriangle, ChevronRight,
@@ -201,13 +201,12 @@ const styles = StyleSheet.create({
 });
 
 export default function PartnerPortal() {
-  const navState = useRootNavigationState();
-  if (!navState?.key) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#0B0C10', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color="#7C3AED" size="large" />
-      </View>
-    );
-  }
+  const [ready, setReady] = React.useState(false);
+  React.useEffect(() => { setReady(true); }, []);
+  if (!ready) return (
+    <View style={{ flex: 1, backgroundColor: '#0B0C10', alignItems: 'center', justifyContent: 'center' }}>
+      <ActivityIndicator color="#7C3AED" size="large" />
+    </View>
+  );
   return <PartnerPortalInner />;
 }
