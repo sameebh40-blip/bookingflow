@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Animated,
   TouchableOpacity,
+  Pressable,
   Modal,
   ActivityIndicator,
   Image,
@@ -708,7 +709,7 @@ function PartnerCalendarInner() {
                       <View key={`h${h}`} style={{ position: 'absolute', top: (h - START_HOUR) * HOUR_HEIGHT + HOUR_HEIGHT / 2, left: 0, right: 0, height: 1, backgroundColor: P.border + '33' }} />
                     ))}
                     {hours.map(h => (
-                      <TouchableOpacity
+                      <Pressable
                         key={`slot${h}`}
                         style={{ position: 'absolute', top: (h - START_HOUR) * HOUR_HEIGHT, left: 0, right: 0, height: HOUR_HEIGHT, zIndex: 1 }}
                         onPress={() => {
@@ -717,7 +718,6 @@ function PartnerCalendarInner() {
                           console.log('[Calendar] Empty slot tapped, date:', dateStr, 'time:', timeStr, 'barber:', col.barberId ?? 'any');
                           expoRouter.push(`/(partner)/new-booking?date=${dateStr}&time=${timeStr}${col.barberId ? `&barberId=${col.barberId}` : ''}` as never);
                         }}
-                        activeOpacity={0.2}
                       />
                     ))}
                     {isColToday && nowTop >= 0 && nowTop <= totalGridHeight && (
@@ -772,7 +772,7 @@ function PartnerCalendarInner() {
               const dayNumStyle = isToday ? '#fff' : P.text;
               const circleBg = isToday ? P.accent : isSelected ? P.accentLight : 'transparent';
               return (
-                <TouchableOpacity
+                <Pressable
                   key={di}
                   style={{ width: cellW, height: 90, borderRightWidth: 1, borderRightColor: P.border, padding: 4 }}
                   onPress={() => {
@@ -796,7 +796,7 @@ function PartnerCalendarInner() {
                   {dayBookings.length > 2 && (
                     <Text style={{ color: P.textTertiary, fontSize: 9, marginTop: 1 }}>+{dayBookings.length - 2}</Text>
                   )}
-                </TouchableOpacity>
+                </Pressable>
               );
             })}
           </View>
@@ -820,7 +820,7 @@ function PartnerCalendarInner() {
         <Text style={[styles.barberChipText, !selectedBarberId && styles.barberChipTextActive]}>All</Text>
       </TouchableOpacity>
       {barbers.map(b => (
-        <TouchableOpacity
+        <Pressable
           key={b.id}
           style={[styles.barberChip, selectedBarberId === b.id && styles.barberChipActive]}
           onPress={() => { console.log('[Calendar] Barber filter:', b.display_name); setSelectedBarberId(b.id); }}
@@ -833,7 +833,7 @@ function PartnerCalendarInner() {
             </View>
           )}
           <Text style={[styles.barberChipText, selectedBarberId === b.id && styles.barberChipTextActive]}>{b.display_name}</Text>
-        </TouchableOpacity>
+        </Pressable>
       ))}
     </ScrollView>
   );
