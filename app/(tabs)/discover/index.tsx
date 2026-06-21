@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { supabase } from '@/utils/supabase';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -33,6 +34,7 @@ interface Reel {
   saves: number;
   image_url: string;
   avatar: string;
+  shop_id?: string;
 }
 
 const MOCK_REELS: Reel[] = [
@@ -77,14 +79,16 @@ function ReelItem({ item }: { item: Reel }) {
   }, [item.id]);
 
   const handleBookNow = useCallback(() => {
-    console.log('[Discover/Reels] Book now pressed, business:', item.business);
-    router.push(`/venue/${item.id}`);
-  }, [item.id, item.business, router]);
+    const venueId = item.shop_id ?? item.id;
+    console.log('[Discover/Reels] Book now pressed, business:', item.business, 'venue:', venueId);
+    router.push(`/venue/${venueId}`);
+  }, [item.id, item.shop_id, item.business, router]);
 
   const handleViewProfile = useCallback(() => {
-    console.log('[Discover/Reels] View profile pressed, business:', item.business);
-    router.push(`/venue/${item.id}`);
-  }, [item.id, item.business, router]);
+    const venueId = item.shop_id ?? item.id;
+    console.log('[Discover/Reels] View profile pressed, business:', item.business, 'venue:', venueId);
+    router.push(`/venue/${venueId}`);
+  }, [item.id, item.shop_id, item.business, router]);
 
   const likeCountStr = likeCount >= 1000 ? `${(likeCount / 1000).toFixed(1)}k` : String(likeCount);
   const saveCountStr = saveCount >= 1000 ? `${(saveCount / 1000).toFixed(1)}k` : String(saveCount);
@@ -165,6 +169,42 @@ function ReelItem({ item }: { item: Reel }) {
 export default function DiscoverScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const [reels, setReels] = useState<Reel[]>(MOCK_REELS);
+
+  useEffect(() => {
+    const fetchPosts = async () => {
+      try {
+        const { data } = await supabase
+          .from('posts')
+          .select('id, caption, media_url, thumbnail_url, media_type, likes_count, views_count, shop_id, barbershops(name, cover_url, address)')
+          .eq('is_active', true)
+          .order('created_at', { ascending: false })
+          .limit(30);
+        if (data && data.length > 0) {
+          const mapped: Reel[] = data.map((p: any) => ({
+            id: p.id,
+            business: p.barbershops?.name ?? 'Barbershop',
+            caption: p.caption ?? '',
+            location: p.barbershops?.address ?? 'Bahrain',
+            likes: p.likes_count ?? 0,
+            saves: 0,
+            image_url: p.thumbnail_url ?? p.media_url,
+            avatar: p.barbershops?.cover_url
+              ? supabase.storage.from('shop-covers').getPublicUrl(p.barbershops.cover_url).data.publicUrl
+              : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
+            shop_id: p.shop_id,
+          }));
+          setReels(mapped);
+          console.log('[Discover/Reels] Loaded', mapped.length, 'posts from DB');
+        } else {
+          console.log('[Discover/Reels] No posts in DB, using mock data');
+        }
+      } catch (err) {
+        console.log('[Discover/Reels] Error fetching posts:', err);
+      }
+    };
+    fetchPosts();
+  }, []);
 
   const handleBack = useCallback(() => {
     console.log('[Discover/Reels] Back pressed');
@@ -174,7 +214,7 @@ export default function DiscoverScreen() {
   return (
     <View style={styles.container}>
       <FlatList
-        data={MOCK_REELS}
+        data={reels}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <ReelItem item={item} />}
         pagingEnabled
