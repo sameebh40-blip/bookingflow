@@ -23,19 +23,6 @@ const DevErrorBoundary = __DEV__
   ? ErrorBoundary
   : ({ children }: { children: React.ReactNode }) => <>{children}</>;
 
-// Suppress __sourceLocation dev-mode prop warning (injected by Babel transform, non-fatal)
-if (__DEV__) {
-  const originalError = console.error;
-  console.error = (...args: any[]) => {
-    if (
-      typeof args[0] === 'string' &&
-      args[0].includes('__sourceLocation')
-    ) {
-      return; // suppress this specific warning
-    }
-    originalError(...args);
-  };
-}
 
 SplashScreen.preventAutoHideAsync();
 
