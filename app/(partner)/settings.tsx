@@ -11,6 +11,7 @@ import {
   Image,
   Alert,
   Modal,
+  Platform,
   ImageSourcePropType,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -72,51 +73,53 @@ interface Post {
 
 async function uploadImage(bucket: string, localUri: string): Promise<string | null> {
   try {
-    console.log('[Settings] Uploading to bucket:', bucket);
+    console.log('[Settings] Uploading to bucket:', bucket, 'uri:', localUri.slice(0, 80));
     const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
 
-    // Read as base64 using FileSystem (Hermes-safe)
-    const base64 = await FileSystem.readAsStringAsync(localUri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-
-    // Decode base64 to binary without relying on global atob
-    const binaryStr = globalThis.atob ? globalThis.atob(base64) : Buffer.from(base64, 'base64').toString('binary');
-    const bytes = new Uint8Array(binaryStr.length);
-    for (let i = 0; i < binaryStr.length; i++) {
-      bytes[i] = binaryStr.charCodeAt(i);
-    }
-
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .upload(fileName, bytes.buffer, {
-        contentType: 'image/jpeg',
-        upsert: true,
-      });
-
-    if (error) {
-      console.log('[Settings] Binary upload error:', error.message, '— trying blob fallback');
-      // Fallback: fetch blob
+    if (Platform.OS === 'web') {
+      // Web: fetch the blob URI directly
       const response = await fetch(localUri);
+      if (!response.ok) throw new Error('fetch failed: ' + response.status);
       const blob = await response.blob();
-      const fallbackName = fileName + '_b';
-      const { data: data2, error: error2 } = await supabase.storage
+      const { data, error } = await supabase.storage
         .from(bucket)
-        .upload(fallbackName, blob, { contentType: 'image/jpeg', upsert: true });
-      if (error2) {
-        console.log('[Settings] Blob upload also failed:', error2.message);
-        return null;
+        .upload(fileName, blob, { contentType: 'image/jpeg', upsert: true });
+      if (error) { console.log('[Settings] Web upload error:', error.message); return null; }
+      const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(data.path);
+      console.log('[Settings] Web upload success:', urlData.publicUrl);
+      return urlData.publicUrl;
+    } else {
+      // Native: use FileSystem base64
+      const base64 = await FileSystem.readAsStringAsync(localUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      const binaryStr = atob(base64);
+      const bytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
       }
-      const { data: urlData2 } = supabase.storage.from(bucket).getPublicUrl(data2.path);
-      console.log('[Settings] Blob upload success:', urlData2.publicUrl);
-      return urlData2.publicUrl;
+      const { data, error } = await supabase.storage
+        .from(bucket)
+        .upload(fileName, bytes.buffer, { contentType: 'image/jpeg', upsert: true });
+      if (error) {
+        // Fallback: try fetch blob on native too
+        console.log('[Settings] Native binary error:', error.message, '— trying fetch fallback');
+        const response = await fetch(localUri);
+        const blob = await response.blob();
+        const fallbackName = fileName + '_fb';
+        const { data: d2, error: e2 } = await supabase.storage
+          .from(bucket)
+          .upload(fallbackName, blob, { contentType: 'image/jpeg', upsert: true });
+        if (e2) { console.log('[Settings] Native fallback error:', e2.message); return null; }
+        const { data: u2 } = supabase.storage.from(bucket).getPublicUrl(d2.path);
+        return u2.publicUrl;
+      }
+      const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(data.path);
+      console.log('[Settings] Native upload success:', urlData.publicUrl);
+      return urlData.publicUrl;
     }
-
-    const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(data.path);
-    console.log('[Settings] Upload success:', urlData.publicUrl);
-    return urlData.publicUrl;
   } catch (err) {
-    console.log('[Settings] uploadImage exception:', err);
+    console.log('[Settings] uploadImage exception:', String(err));
     return null;
   }
 }
@@ -467,55 +470,50 @@ export default function PartnerSettings() {
       </ScrollView>
 
       {/* Image preview modal */}
-      <Modal
-        visible={!!previewUri}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setPreviewUri(null)}
-      >
+      <Modal visible={!!previewUri} transparent animationType="fade" onRequestClose={() => setPreviewUri(null)}>
         <View style={styles.previewOverlay}>
-          <Text style={styles.previewTitle}>Preview</Text>
-          {previewUri && (
-            <Image
-              source={resolveImageSource(previewUri)}
-              style={[
-                styles.previewImage,
-                { height: previewBucket === 'shop-covers' ? 180 : 320 },
-              ]}
-              resizeMode="cover"
-            />
-          )}
-          <View style={styles.previewActions}>
-            <TouchableOpacity
-              style={styles.previewCancelBtn}
-              onPress={() => {
+          <View style={styles.previewCard}>
+            <Text style={styles.previewTitle}>Preview Photo</Text>
+            <Text style={styles.previewSub}>This is how your photo will appear</Text>
+            {previewUri && (
+              <View style={[styles.previewImgWrap, previewBucket === 'shop-covers' ? styles.previewCover : styles.previewSquare]}>
+                <Image
+                  source={{ uri: previewUri }}
+                  style={{ width: '100%', height: '100%', borderRadius: 12 }}
+                  resizeMode="cover"
+                />
+              </View>
+            )}
+            <View style={styles.previewActions}>
+              <TouchableOpacity style={styles.previewCancelBtn} onPress={() => {
                 console.log('[Settings] Preview cancelled');
                 setPreviewUri(null);
-              }}
-            >
-              <Text style={styles.previewCancelText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.previewConfirmBtn}
-              onPress={async () => {
-                if (!previewUri || !previewOnConfirm) return;
-                console.log('[Settings] Preview confirmed, uploading to:', previewBucket);
-                const uri = previewUri;
-                const bucket = previewBucket;
-                const onConfirm = previewOnConfirm;
-                setPreviewUri(null);
-                setSaving(true);
-                const url = await uploadImage(bucket, uri);
-                setSaving(false);
-                if (url) {
-                  onConfirm(url);
-                } else {
-                  Alert.alert('Upload failed', 'Could not upload image. Please try again.');
+              }}>
+                <Text style={styles.previewCancelText}>Retake</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.previewConfirmBtn, saving && { opacity: 0.6 }]}
+                disabled={saving}
+                onPress={async () => {
+                  if (!previewUri || !previewOnConfirm) return;
+                  console.log('[Settings] Preview confirmed, uploading to:', previewBucket);
+                  setPreviewUri(null);
+                  setSaving(true);
+                  const url = await uploadImage(previewBucket, previewUri);
+                  setSaving(false);
+                  if (url) {
+                    previewOnConfirm(url);
+                  } else {
+                    Alert.alert('Upload failed', 'Could not upload image. Check your connection and try again.');
+                  }
+                }}
+              >
+                {saving
+                  ? <ActivityIndicator color="#fff" size="small" />
+                  : <Text style={styles.previewConfirmText}>Use Photo</Text>
                 }
-              }}
-            >
-              <Text style={styles.previewConfirmText}>Use Photo</Text>
-            </TouchableOpacity>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -623,30 +621,18 @@ const styles = StyleSheet.create({
   },
   addBranchBtnText: { color: P.accent, fontSize: 15, fontWeight: '600' },
   // Preview modal
-  previewOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.95)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  previewTitle: { color: '#fff', fontSize: 16, fontWeight: '700', marginBottom: 16 },
-  previewImage: { width: 320, borderRadius: 12 },
-  previewActions: { flexDirection: 'row', gap: 12, marginTop: 24 },
-  previewCancelBtn: {
-    backgroundColor: P.border,
-    borderRadius: 12,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-  },
-  previewCancelText: { color: '#fff', fontWeight: '600' },
-  previewConfirmBtn: {
-    backgroundColor: P.accent,
-    borderRadius: 12,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-  },
-  previewConfirmText: { color: '#fff', fontWeight: '700' },
+  previewOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center', padding: 20 },
+  previewCard: { backgroundColor: '#1A1A2E', borderRadius: 24, padding: 24, width: '100%', maxWidth: 420, borderWidth: 1, borderColor: '#2A2A45' },
+  previewTitle: { color: '#F0F0FF', fontSize: 20, fontWeight: '800', textAlign: 'center', marginBottom: 4 },
+  previewSub: { color: '#9090B0', fontSize: 13, textAlign: 'center', marginBottom: 20 },
+  previewImgWrap: { width: '100%', borderRadius: 12, overflow: 'hidden', marginBottom: 20 },
+  previewCover: { height: 200 },
+  previewSquare: { height: 300 },
+  previewActions: { flexDirection: 'row', gap: 12 },
+  previewCancelBtn: { flex: 1, backgroundColor: '#242438', borderRadius: 14, paddingVertical: 15, alignItems: 'center', borderWidth: 1, borderColor: '#2A2A45' },
+  previewCancelText: { color: '#F0F0FF', fontSize: 15, fontWeight: '600' },
+  previewConfirmBtn: { flex: 1, backgroundColor: '#7C3AED', borderRadius: 14, paddingVertical: 15, alignItems: 'center' },
+  previewConfirmText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   // Shop picker modal
   pickerOverlay: {
     flex: 1,
