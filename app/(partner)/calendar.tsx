@@ -15,12 +15,7 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-function useSafeInsets() {
-  const insets = useSafeAreaInsets();
-  return insets ?? { top: 0, bottom: 0, left: 0, right: 0 };
-}
-import { router, useRootNavigationState } from 'expo-router';
+import { router as expoRouter } from 'expo-router';
 import {
   CalendarDays,
   Tag,
@@ -43,6 +38,11 @@ import {
 } from 'lucide-react-native';
 import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+
+function useSafeInsets() {
+  const insets = useSafeAreaInsets();
+  return insets ?? { top: 0, bottom: 0, left: 0, right: 0 };
+}
 
 const P = {
   bg: '#0F0F1A',
@@ -326,7 +326,6 @@ function PartnerCalendarInner() {
   const { profile } = useAuth();
   const shopId = profile?.shop_id;
 
-  const [clientReady, setClientReady] = React.useState(false);
   const [calView, setCalView] = useState<'day' | '3day' | 'week' | 'month'>('day');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -363,8 +362,6 @@ function PartnerCalendarInner() {
     const n = new Date();
     return n.getHours() * 60 + n.getMinutes();
   });
-
-  useEffect(() => { setClientReady(true); }, []);
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -557,14 +554,6 @@ function PartnerCalendarInner() {
     setSelectedDate(d);
   };
 
-  if (!clientReady) {
-    return (
-      <View style={{ flex: 1, backgroundColor: P.bg, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color={P.accent} size="large" />
-      </View>
-    );
-  }
-
   // ── Filtered bookings ──
   const filteredBookings = selectedBarberId
     ? bookings.filter(b => b.barber_id === selectedBarberId)
@@ -715,7 +704,7 @@ function PartnerCalendarInner() {
                           const dateStr = col.date.toISOString().split('T')[0];
                           const timeStr = `${String(h).padStart(2, '0')}:00`;
                           console.log('[Calendar] Empty slot tapped, date:', dateStr, 'time:', timeStr, 'barber:', col.barberId ?? 'any');
-                          router.push(`/(partner)/new-booking?date=${dateStr}&time=${timeStr}${col.barberId ? `&barberId=${col.barberId}` : ''}` as never);
+                          expoRouter.push(`/(partner)/new-booking?date=${dateStr}&time=${timeStr}${col.barberId ? `&barberId=${col.barberId}` : ''}` as never);
                         }}
                         activeOpacity={0.2}
                       />
@@ -878,11 +867,11 @@ function PartnerCalendarInner() {
           <TouchableOpacity style={styles.iconBtn} onPress={() => console.log('[Calendar] Messages pressed')}>
             <MessageCircle size={20} color={P.textSecondary} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => { console.log('[Calendar] Notifications pressed'); router.push('/(partner)/notifications' as never); }}>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => { console.log('[Calendar] Notifications pressed'); expoRouter.push('/(partner)/notifications' as never); }}>
             <Bell size={20} color={P.textSecondary} />
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => { console.log('[Calendar] New booking button pressed'); router.push('/(partner)/new-booking' as never); }}
+            onPress={() => { console.log('[Calendar] New booking button pressed'); expoRouter.push('/(partner)/new-booking' as never); }}
             style={styles.addBtn}
           >
             <Plus size={18} color="#fff" />
@@ -967,19 +956,19 @@ function PartnerCalendarInner() {
 
       {/* Bottom action bar */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 8 }]}>
-        <TouchableOpacity style={styles.bbBtn} onPress={() => { console.log('[Calendar] Bottom bar: Calendar pressed'); router.push('/(partner)/calendar' as never); }}>
+        <TouchableOpacity style={styles.bbBtn} onPress={() => { console.log('[Calendar] Bottom bar: Calendar pressed'); expoRouter.push('/(partner)/calendar' as never); }}>
           <CalendarDays size={22} color={P.accent} />
         </TouchableOpacity>
         <TouchableOpacity style={styles.bbBtn} onPress={() => console.log('[Calendar] Bottom bar: Tag pressed')}>
           <Tag size={22} color={P.textSecondary} />
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.bbBtn, styles.bbCenter]} onPress={() => { console.log('[Calendar] Bottom bar: New booking pressed'); router.push('/(partner)/new-booking' as never); }}>
+        <TouchableOpacity style={[styles.bbBtn, styles.bbCenter]} onPress={() => { console.log('[Calendar] Bottom bar: New booking pressed'); expoRouter.push('/(partner)/new-booking' as never); }}>
           <Plus size={24} color="#fff" />
         </TouchableOpacity>
         <TouchableOpacity style={styles.bbBtn} onPress={() => console.log('[Calendar] Bottom bar: Smile pressed')}>
           <Smile size={22} color={P.textSecondary} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.bbBtn} onPress={() => { console.log('[Calendar] Bottom bar: More pressed'); router.push('/(partner)/more' as never); }}>
+        <TouchableOpacity style={styles.bbBtn} onPress={() => { console.log('[Calendar] Bottom bar: More pressed'); expoRouter.push('/(partner)/more' as never); }}>
           <Grid3x3 size={22} color={P.textSecondary} />
         </TouchableOpacity>
       </View>
@@ -1016,7 +1005,7 @@ function PartnerCalendarInner() {
                 onPress={() => {
                   console.log('[Calendar] Rebook pressed for booking:', selectedBooking?.id);
                   setSelectedBooking(null);
-                  router.push('/(partner)/new-booking' as never);
+                  expoRouter.push('/(partner)/new-booking' as never);
                 }}
               >
                 <Text style={styles.rebookBtnText}>Rebook</Text>
@@ -1703,8 +1692,17 @@ const styles = StyleSheet.create({
 });
 
 export default function PartnerCalendar() {
-  const navState = useRootNavigationState();
-  if (!navState?.key) {
+  const [ready, setReady] = React.useState(false);
+  React.useEffect(() => {
+    // Double-RAF ensures navigation container is fully mounted
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setReady(true);
+      });
+    });
+  }, []);
+
+  if (!ready) {
     return (
       <View style={{ flex: 1, backgroundColor: '#0F0F1A', alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color="#7C3AED" size="large" />

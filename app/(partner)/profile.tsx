@@ -6,7 +6,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Image,
-  Alert,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -57,20 +57,18 @@ export default function PartnerProfile() {
   const displayName = profile?.full_name ?? 'Partner';
   const reviewText = reviewCount === 0 ? 'No reviews yet' : `${reviewCount} reviews`;
 
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
   const handleLogout = () => {
     console.log('[PartnerProfile] Log out pressed');
-    Alert.alert('Log out', 'Are you sure you want to log out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Log out',
-        style: 'destructive',
-        onPress: async () => {
-          console.log('[PartnerProfile] Confirmed log out');
-          await signOut();
-          router.replace('/auth');
-        },
-      },
-    ]);
+    setShowLogoutModal(true);
+  };
+
+  const confirmLogout = async () => {
+    console.log('[PartnerProfile] Confirmed log out');
+    setShowLogoutModal(false);
+    await signOut();
+    router.replace('/auth');
   };
 
   const handleBack = () => {
@@ -229,6 +227,24 @@ export default function PartnerProfile() {
           })}
         </View>
       </ScrollView>
+
+      <Modal visible={showLogoutModal} transparent animationType="fade" onRequestClose={() => setShowLogoutModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalIconWrap}>
+              <LogOut size={28} color={P.danger} />
+            </View>
+            <Text style={styles.modalTitle}>Log out</Text>
+            <Text style={styles.modalBody}>Are you sure you want to log out of your account?</Text>
+            <TouchableOpacity style={styles.modalLogoutBtn} onPress={confirmLogout}>
+              <Text style={styles.modalLogoutBtnText}>Log out</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowLogoutModal(false)}>
+              <Text style={styles.modalCancelBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -347,4 +363,13 @@ const styles = StyleSheet.create({
     backgroundColor: P.divider,
     marginLeft: 66,
   },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  modalCard: { backgroundColor: '#1A1A2E', borderRadius: 24, padding: 28, width: '100%', maxWidth: 360, alignItems: 'center', borderWidth: 1, borderColor: '#2A2A45' },
+  modalIconWrap: { width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(232,84,84,0.15)', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  modalTitle: { color: '#F0F0FF', fontSize: 22, fontWeight: '800', marginBottom: 8 },
+  modalBody: { color: '#9090B0', fontSize: 15, textAlign: 'center', marginBottom: 24, lineHeight: 22 },
+  modalLogoutBtn: { width: '100%', backgroundColor: '#E85454', borderRadius: 14, paddingVertical: 15, alignItems: 'center', marginBottom: 10 },
+  modalLogoutBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  modalCancelBtn: { width: '100%', backgroundColor: '#242438', borderRadius: 14, paddingVertical: 15, alignItems: 'center', borderWidth: 1, borderColor: '#2A2A45' },
+  modalCancelBtnText: { color: '#F0F0FF', fontSize: 16, fontWeight: '600' },
 });
