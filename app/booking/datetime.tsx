@@ -68,7 +68,7 @@ export default function BookingDatetimeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { venueId, services, staffId } = useLocalSearchParams<{ venueId: string; services: string; staffId: string }>();
-  const dates = generateDates(14);
+  const dates = React.useMemo(() => generateDates(14), []);
   const [selectedDate, setSelectedDate] = useState(0);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [timeSlots, setTimeSlots] = useState<{ time: string; available: boolean }[]>([]);
