@@ -502,7 +502,21 @@ export default function PartnerSettings() {
                   const url = await uploadImage(previewBucket, previewUri);
                   setSaving(false);
                   if (url) {
+                    // Update local state
                     previewOnConfirm(url);
+                    // Auto-save to Supabase immediately
+                    if (shopId) {
+                      const updateField = previewBucket === 'shop-covers' ? 'cover_url' : 'logo_url';
+                      const { error } = await supabase
+                        .from('barbershops')
+                        .update({ [updateField]: url })
+                        .eq('id', shopId);
+                      if (error) {
+                        console.log('[Settings] Auto-save error:', error.message);
+                      } else {
+                        console.log('[Settings] Auto-saved', updateField, 'to Supabase');
+                      }
+                    }
                   } else {
                     Alert.alert('Upload failed', 'Could not upload image. Check your connection and try again.');
                   }
