@@ -133,8 +133,8 @@ export default function AppointmentDetailScreen() {
       ]);
 
       if (bookingRes.error || !bookingRes.data) {
-        console.log('[AppointmentDetail] Booking not found, using mock:', bookingRes.error?.message);
-        setAppt(MOCK_APPT_DETAIL[apptId] ?? MOCK_APPT_DETAIL['1']);
+        console.log('[AppointmentDetail] Booking not found:', bookingRes.error?.message);
+        setAppt(null);
         return;
       }
 
@@ -176,8 +176,8 @@ export default function AppointmentDetailScreen() {
       console.log('[AppointmentDetail] Loaded booking:', detail.id, 'status:', detail.status);
       setAppt(detail);
     } catch (err) {
-      console.log('[AppointmentDetail] Exception, using mock:', err);
-      setAppt(MOCK_APPT_DETAIL[apptId] ?? MOCK_APPT_DETAIL['1']);
+      console.log('[AppointmentDetail] Exception fetching booking:', err);
+      setAppt(null);
     } finally {
       setLoading(false);
     }
@@ -252,7 +252,14 @@ export default function AppointmentDetailScreen() {
     );
   }
 
-  if (!appt) return null;
+  if (!appt) return (
+    <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', paddingTop: insets.top }]}>
+      <AnimatedPressable onPress={() => router.back()} style={{ position: 'absolute', top: insets.top + 12, left: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: MADAR_COLORS.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: MADAR_COLORS.border }}>
+        <ArrowLeft size={20} color={MADAR_COLORS.text} />
+      </AnimatedPressable>
+      <Text style={{ color: MADAR_COLORS.textSecondary, fontSize: 16 }}>Booking not found</Text>
+    </View>
+  );
 
   const totalPrice = appt.services.reduce((s: number, sv: Service) => s + sv.price, 0);
   const totalPriceStr = totalPrice.toFixed(3);

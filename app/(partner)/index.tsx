@@ -239,6 +239,20 @@ export default function PartnerHome() {
           if (msgErr) console.log('[PartnerHome] Could not insert booking notification message:', msgErr.message);
           else console.log('[PartnerHome] Booking notification message inserted for venue:', shopId);
         });
+        // Auto-reply to client
+        const clientId = (newBooking as any).customer_profile_id;
+        if (clientId && shopId) {
+          supabase.from('messages').insert({
+            venue_id: shopId,
+            sender_id: null,
+            client_id: clientId,
+            text: `📅 Your booking has been received! We're looking forward to seeing you. If you have any questions, just message us here. See you soon! ✂️`,
+            is_from_venue: true,
+          }).then(({ error }) => {
+            if (error) console.log('[PartnerHome] Auto-reply error:', error.message);
+            else console.log('[PartnerHome] Auto-reply sent to client:', clientId);
+          });
+        }
       })
       .subscribe();
 

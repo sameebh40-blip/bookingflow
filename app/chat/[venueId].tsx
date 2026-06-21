@@ -94,13 +94,8 @@ export default function ChatScreen() {
         setMessages(data);
         setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 100);
       } else {
-        console.log('[Chat] No messages found, showing welcome');
-        setMessages([{
-          id: '0',
-          text: 'Welcome! How can we help you today?',
-          is_from_venue: true,
-          created_at: new Date().toISOString(),
-        }]);
+        console.log('[Chat] No messages yet');
+        setMessages([]);
       }
     } catch (err) {
       console.log('[Chat] Exception fetching messages:', err);
@@ -193,6 +188,14 @@ export default function ChatScreen() {
         contentContainerStyle={styles.messagesList}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
         showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          <View style={{ alignItems: 'center', justifyContent: 'center', paddingTop: 60, gap: 12 }}>
+            <Text style={{ fontSize: 40 }}>💬</Text>
+            <Text style={{ color: MADAR_COLORS.textSecondary, fontSize: 15, textAlign: 'center' }}>
+              {'No messages yet.\nSend a message to start the conversation.'}
+            </Text>
+          </View>
+        }
       />
 
       {/* Input */}

@@ -339,7 +339,7 @@ export default function BookingsScreen() {
     setLoading(true);
     try {
       if (!user) {
-        setAppointments(MOCK_APPOINTMENTS);
+        setAppointments([]);
         return;
       }
       console.log('[Bookings] Fetching from hallaq bookings table for user:', user.id);
@@ -361,8 +361,8 @@ export default function BookingsScreen() {
         .limit(20);
 
       if (error || !data || data.length === 0) {
-        console.log('[Bookings] Using mock appointments:', error?.message);
-        setAppointments(MOCK_APPOINTMENTS);
+        console.log('[Bookings] No appointments found:', error?.message);
+        setAppointments([]);
       } else {
         console.log('[Bookings] Loaded', data.length, 'bookings from hallaq');
         const mapped = data.map((row: any) => {
@@ -391,8 +391,8 @@ export default function BookingsScreen() {
         setAppointments(mapped);
       }
     } catch (err) {
-      console.log('[Bookings] Exception, using mock:', err);
-      setAppointments(MOCK_APPOINTMENTS);
+      console.log('[Bookings] Exception fetching appointments:', err);
+      setAppointments([]);
     } finally {
       setLoading(false);
     }
