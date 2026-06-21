@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Search, RefreshCw, CreditCard, Award, Calendar, Clock } from 'lucide-react-native';
+import { Search, RefreshCw, CreditCard, Award, Calendar, Clock, MessageCircle } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
@@ -144,6 +144,11 @@ function UpcomingCard({ appt, onViewDetails, onRebook, onCancelled }: {
     router.push(`/booking/datetime?venueId=${appt.venue_id}`);
   }, [appt.id, appt.venue_id, router]);
 
+  const handleMessage = useCallback(() => {
+    console.log('[Bookings] Message shop pressed for venue:', appt.venue_id);
+    router.push(`/chat/${appt.venue_id}`);
+  }, [appt.venue_id, router]);
+
   const handleGetDirections = useCallback(() => {
     console.log('[Bookings] Get directions pressed for:', appt.venue_name);
     const url = Platform.OS === 'ios'
@@ -204,6 +209,13 @@ function UpcomingCard({ appt, onViewDetails, onRebook, onCancelled }: {
           <AnimatedPressable style={upcomingCardStyles.rescheduleBtn} onPress={handleReschedulePress}>
             <Text style={upcomingCardStyles.rescheduleBtnText}>Reschedule</Text>
           </AnimatedPressable>
+          <AnimatedPressable
+            style={[upcomingCardStyles.rescheduleBtn, upcomingCardStyles.messageBtn]}
+            onPress={handleMessage}
+          >
+            <MessageCircle size={14} color={'#7C3AED'} />
+            <Text style={[upcomingCardStyles.rescheduleBtnText, upcomingCardStyles.messageBtnText]}>Message</Text>
+          </AnimatedPressable>
         </View>
       </View>
     </AnimatedPressable>
@@ -263,6 +275,14 @@ const upcomingCardStyles = StyleSheet.create({
     alignItems: 'center',
   },
   rescheduleBtnText: { fontSize: 14, fontWeight: '700', color: '#0A0A0F' },
+  messageBtn: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#7C3AED',
+    flexDirection: 'row',
+    gap: 4,
+  },
+  messageBtnText: { color: '#7C3AED' },
 });
 
 function PastCard({ appt, onRebook }: { appt: Appointment; onRebook: () => void }) {

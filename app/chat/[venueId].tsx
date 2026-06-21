@@ -27,7 +27,8 @@ interface Message {
 export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { venueId } = useLocalSearchParams<{ venueId: string }>();
+  const { venueId: venueIdParam } = useLocalSearchParams<{ venueId: string }>();
+  const venueId = Array.isArray(venueIdParam) ? venueIdParam[0] : venueIdParam;
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
@@ -36,6 +37,7 @@ export default function ChatScreen() {
   const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
+    if (!venueId || !user) return;
     fetchVenueInfo();
     fetchMessages();
 
@@ -59,7 +61,7 @@ export default function ChatScreen() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [venueId]);
+  }, [venueId, user?.id]);
 
   const fetchVenueInfo = async () => {
     console.log('[Chat] Fetching barbershop info for:', venueId);
@@ -75,30 +77,29 @@ export default function ChatScreen() {
   };
 
   const fetchMessages = async () => {
-    console.log('[Chat] Fetching messages for venue:', venueId, 'user:', user?.id ?? 'anonymous');
+    if (!venueId || !user) return;
+    console.log('[Chat] Fetching messages for venue:', venueId, 'user:', user.id);
     try {
-      let query = supabase
+      const { data, error } = await supabase
         .from('messages')
-        .select('*')
+        .select('id, text, is_from_venue, created_at, sender_id, client_id')
         .eq('venue_id', venueId)
+        .or(`sender_id.eq.${user.id},client_id.eq.${user.id},is_from_venue.eq.true`)
         .order('created_at', { ascending: true });
 
-      if (user) {
-        query = query.or(`sender_id.eq.${user.id},is_from_venue.eq.true,client_id.eq.${user.id}`);
-      }
-
-      const { data, error } = await query;
-
-      if (!error && data && data.length > 0) {
-        console.log('[Chat] Loaded', data.length, 'messages for user');
-        setMessages(data);
-        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 100);
-      } else {
-        console.log('[Chat] No messages yet');
+      if (error) {
+        console.log('[Chat] Fetch error:', error.message);
         setMessages([]);
+        return;
+      }
+      console.log('[Chat] Loaded', data?.length ?? 0, 'messages');
+      setMessages((data ?? []) as Message[]);
+      if (data && data.length > 0) {
+        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 150);
       }
     } catch (err) {
-      console.log('[Chat] Exception fetching messages:', err);
+      console.log('[Chat] Exception:', err);
+      setMessages([]);
     }
   };
 

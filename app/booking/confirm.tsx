@@ -79,13 +79,18 @@ export default function BookingConfirmScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
-  const { venueId, services, staffId, date, time } = useLocalSearchParams<{
+  const params = useLocalSearchParams<{
     venueId: string;
     services: string;
     staffId: string;
     date: string;
     time: string;
   }>();
+  const venueId = Array.isArray(params.venueId) ? params.venueId[0] : (params.venueId ?? '');
+  const services = params.services;
+  const staffId = params.staffId;
+  const date = params.date;
+  const time = params.time;
 
   const [loading, setLoading] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
