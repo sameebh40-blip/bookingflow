@@ -228,6 +228,11 @@ export default function BookingConfirmScreen() {
     }
   }, [user, venueId, serviceIds, staffId, date, time, totalPrice, shopName, dateDisplay, timeDisplay]);
 
+  const handleViewConfirmationMessage = useCallback(() => {
+    console.log('[Booking/Confirm] View confirmation message pressed, navigating to chat:', venueId);
+    router.push(`/chat/${venueId}`);
+  }, [router, venueId]);
+
   const handleViewBookings = useCallback(() => {
     console.log('[Booking/Confirm] View Booking pressed, navigating to bookings');
     router.replace('/(tabs)/bookings');
@@ -355,6 +360,14 @@ export default function BookingConfirmScreen() {
               <BookOpen size={18} color={MADAR_COLORS.background} />
               <Text style={styles.viewBookingText}>View Booking</Text>
             </LinearGradient>
+          </AnimatedPressable>
+
+          {/* View confirmation message button */}
+          <AnimatedPressable
+            onPress={handleViewConfirmationMessage}
+            style={styles.viewMessageBtn}
+          >
+            <Text style={styles.viewMessageText}>💬 View confirmation message</Text>
           </AnimatedPressable>
         </ScrollView>
       </View>
@@ -648,4 +661,14 @@ const styles = StyleSheet.create({
   confirmBtn: { borderRadius: 28 },
   confirmBtnGradient: { paddingVertical: 16, borderRadius: 28, alignItems: 'center' },
   confirmBtnText: { fontSize: 16, fontWeight: '700', color: MADAR_COLORS.background },
+  viewMessageBtn: {
+    width: '100%',
+    marginTop: 4,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: MADAR_COLORS.border,
+    alignItems: 'center',
+  },
+  viewMessageText: { color: MADAR_COLORS.text, fontSize: 15, fontWeight: '600' },
 });

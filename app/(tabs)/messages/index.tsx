@@ -60,26 +60,40 @@ export default function MessagesScreen() {
 
   useEffect(() => {
     fetchConversations();
+    const channel = supabase
+      .channel('messages-list')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => {
+        console.log('[Messages] Realtime INSERT received, refreshing conversations');
+        fetchConversations();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, [user]);
 
   const fetchConversations = async () => {
-    console.log('[Messages] Fetching conversations from Supabase (hallaq)');
+    console.log('[Messages] Fetching conversations from Supabase (hallaq), user:', user?.id);
+    if (!user) {
+      setConversations([]);
+      setLoading(false);
+      return;
+    }
     try {
       const { data: msgs, error } = await supabase
         .from('messages')
-        .select('id, venue_id, text, created_at')
+        .select('id, venue_id, text, created_at, sender_id, is_from_venue')
+        .or(`sender_id.eq.${user.id},is_from_venue.eq.true`)
         .order('created_at', { ascending: false })
         .limit(100);
 
       if (error) {
-        console.log('[Messages] Messages fetch error:', error.message, '— using mock');
-        setConversations(MOCK_CONVERSATIONS);
+        console.log('[Messages] Messages fetch error:', error.message);
+        setConversations([]);
         return;
       }
 
       if (!msgs || msgs.length === 0) {
-        console.log('[Messages] No messages found, using mock');
-        setConversations(MOCK_CONVERSATIONS);
+        console.log('[Messages] No messages found for user');
+        setConversations([]);
         return;
       }
 
@@ -120,10 +134,10 @@ export default function MessagesScreen() {
       }
 
       console.log('[Messages] Built', convs.length, 'conversations');
-      setConversations(convs.length > 0 ? convs : MOCK_CONVERSATIONS);
+      setConversations(convs);
     } catch (err) {
-      console.log('[Messages] Exception, using mock:', err);
-      setConversations(MOCK_CONVERSATIONS);
+      console.log('[Messages] Exception:', err);
+      setConversations([]);
     } finally {
       setLoading(false);
     }

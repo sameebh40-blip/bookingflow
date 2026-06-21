@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { supabase } from '@/utils/supabase';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -72,6 +73,8 @@ function ReelItem({ reel, isActive }: { reel: Reel; isActive: boolean }) {
     console.log('[Reels] Share pressed:', reel.id);
   }, [reel.id]);
 
+  const isRealVenue = reel.venue_id.length > 10; // UUIDs are 36 chars
+
   const handleBook = useCallback(() => {
     console.log('[Reels] Book now pressed:', reel.venue_id, reel.business);
     router.push(`/venue/${reel.venue_id}`);
@@ -108,9 +111,11 @@ function ReelItem({ reel, isActive }: { reel: Reel; isActive: boolean }) {
             <Text style={styles.locationText}>{reel.location}</Text>
           </View>
           <View style={styles.actionBtns}>
-            <AnimatedPressable onPress={handleBook} style={styles.bookNowBtn}>
-              <Text style={styles.bookNowText}>Book now</Text>
-            </AnimatedPressable>
+            {isRealVenue && (
+              <AnimatedPressable onPress={handleBook} style={styles.bookNowBtn}>
+                <Text style={styles.bookNowText}>Book now</Text>
+              </AnimatedPressable>
+            )}
             <AnimatedPressable onPress={handleProfile} style={styles.viewProfileBtn}>
               <Text style={styles.viewProfileText}>View profile</Text>
             </AnimatedPressable>
@@ -161,6 +166,36 @@ export default function ReelsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [activeIndex, setActiveIndex] = useState(0);
+  const [reels, setReels] = useState<Reel[]>(MOCK_REELS);
+
+  useEffect(() => {
+    console.log('[Reels] Fetching real venue data from Supabase');
+    supabase
+      .from('barbershops')
+      .select('id, name, cover_url, address')
+      .eq('is_active', true)
+      .limit(10)
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          console.log('[Reels] Loaded', data.length, 'real venues');
+          const mapped: Reel[] = data.map((shop: any, i: number) => ({
+            id: shop.id,
+            business: shop.name ?? 'Venue',
+            caption: `Book your appointment at ${shop.name} today! ✨`,
+            location: shop.address ?? 'Bahrain',
+            likes: Math.floor(Math.random() * 2000) + 100,
+            saves: Math.floor(Math.random() * 200) + 10,
+            shares: Math.floor(Math.random() * 100) + 5,
+            comments: Math.floor(Math.random() * 50) + 2,
+            image_url: shop.cover_url ?? MOCK_REELS[i % MOCK_REELS.length].image_url,
+            venue_id: shop.id,
+          }));
+          setReels([...mapped, ...MOCK_REELS]);
+        } else {
+          console.log('[Reels] No real venues found, using mock data');
+        }
+      });
+  }, []);
 
   const handleClose = useCallback(() => {
     console.log('[Reels] Close pressed');
@@ -170,7 +205,7 @@ export default function ReelsScreen() {
   return (
     <View style={styles.container}>
       <FlatList
-        data={MOCK_REELS}
+        data={reels}
         renderItem={({ item, index }) => (
           <ReelItem reel={item} isActive={activeIndex === index} />
         )}
