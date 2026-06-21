@@ -208,15 +208,17 @@ export default function BookingConfirmScreen() {
           total_price: totalPrice,
           price_bhd: totalPrice,
           currency: 'BHD',
-          source: 'mobile_app',
+          source: 'customer',
           customer_name: user.user_metadata?.full_name ?? null,
           customer_email: user.email ?? null,
         });
         if (error) {
-          console.log('[Booking/Confirm] Supabase insert error (non-fatal):', error.message);
-        } else {
-          console.log('[Booking/Confirm] Booking saved to Supabase (hallaq)');
+          console.log('[Booking/Confirm] Supabase insert error:', error.message);
+          Alert.alert('Booking Failed', error.message || 'Could not save your booking. Please try again.');
+          setLoading(false);
+          return;
         }
+        console.log('[Booking/Confirm] Booking saved to Supabase');
       }
       setConfirmed(true);
     } catch (err) {
