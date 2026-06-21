@@ -15,6 +15,11 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+function useSafeInsets() {
+  const insets = useSafeAreaInsets();
+  return insets ?? { top: 0, bottom: 0, left: 0, right: 0 };
+}
 import { router, useRootNavigationState } from 'expo-router';
 import {
   CalendarDays,
@@ -317,10 +322,11 @@ const DateColHeader = React.memo(({ col, colWidth, isToday, isSelected, onPress 
 ));
 
 function PartnerCalendarInner() {
-  const insets = useSafeAreaInsets();
+  const insets = useSafeInsets();
   const { profile } = useAuth();
   const shopId = profile?.shop_id;
 
+  const [clientReady, setClientReady] = React.useState(false);
   const [calView, setCalView] = useState<'day' | '3day' | 'week' | 'month'>('day');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -357,6 +363,8 @@ function PartnerCalendarInner() {
     const n = new Date();
     return n.getHours() * 60 + n.getMinutes();
   });
+
+  useEffect(() => { setClientReady(true); }, []);
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -821,6 +829,14 @@ function PartnerCalendarInner() {
       ))}
     </ScrollView>
   );
+
+  if (!clientReady) {
+    return (
+      <View style={{ flex: 1, backgroundColor: P.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={P.accent} size="large" />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
