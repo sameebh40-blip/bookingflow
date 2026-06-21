@@ -115,7 +115,7 @@ export default function PartnerPosts() {
     try {
       const ext = (picked.uri.split('.').pop() ?? (picked.type === 'video' ? 'mp4' : 'jpg')).toLowerCase().split('?')[0];
       const folder = picked.type === 'video' ? 'reels' : 'posts';
-      const fileName = `${folder}/${shopId}/${Date.now()}.${ext}`;
+      const storagePath = `${folder}/${shopId}/${Date.now()}.${ext}`;
       const mimeType = picked.mimeType ?? (picked.type === 'video' ? 'video/mp4' : 'image/jpeg');
 
       setUploadProgress(30);
@@ -125,19 +125,30 @@ export default function PartnerPosts() {
 
       const { error: uploadErr } = await supabase.storage
         .from('shop-covers')
-        .upload(fileName, blob, { contentType: mimeType, upsert: false });
+        .upload(storagePath, blob, { contentType: mimeType, upsert: false });
       if (uploadErr) throw new Error(uploadErr.message);
 
       setUploadProgress(80);
-      const { data: urlData } = supabase.storage.from('shop-covers').getPublicUrl(fileName);
+      const { data: urlData } = supabase.storage.from('shop-covers').getPublicUrl(storagePath);
+      const publicUrl = urlData.publicUrl;
 
       const { error: insertErr } = await supabase.from('posts').insert({
         shop_id: shopId,
+        created_by: user.id,
+        owner_type: 'shop',
         caption: caption.trim() || null,
-        media_url: urlData.publicUrl,
-        thumbnail_url: urlData.publicUrl,
+        media_url: publicUrl,
+        media_path: storagePath,
+        media_bucket: 'shop-covers',
+        thumbnail_url: publicUrl,
+        thumbnail_path: storagePath,
+        thumbnail_bucket: 'shop-covers',
         media_type: picked.type,
+        // video/image specific columns
+        video_url: picked.type === 'video' ? publicUrl : null,
+        image_url: picked.type === 'image' ? publicUrl : null,
         is_active: true,
+        status: 'approved',
       });
       if (insertErr) throw new Error(insertErr.message);
 
