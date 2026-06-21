@@ -193,10 +193,10 @@ export default function AppointmentDetailScreen() {
   }, [apptId]);
 
   const handleSendMessage = useCallback(() => {
-    if (!appt) return;
+    if (!appt?.shop_id) return;
     console.log('[AppointmentDetail] Send message pressed, navigating to chat for shop:', appt.shop_id);
     router.push(`/chat/${appt.shop_id}`);
-  }, [appt, router]);
+  }, [appt?.shop_id, router]);
 
   const handleVenueDetails = useCallback(() => {
     if (!appt) return;
@@ -360,13 +360,15 @@ export default function AppointmentDetailScreen() {
             </AnimatedPressable>
           )}
 
-          <AnimatedPressable onPress={handleSendMessage} style={styles.actionRow}>
-            <View style={[styles.actionIcon, { backgroundColor: 'rgba(123,94,167,0.15)' }]}>
-              <MessageCircle size={18} color="#7B5EA7" />
-            </View>
-            <Text style={styles.actionLabel}>Send message</Text>
-            <ChevronRight size={18} color={MADAR_COLORS.textTertiary} />
-          </AnimatedPressable>
+          {appt.shop_id ? (
+            <AnimatedPressable onPress={handleSendMessage} style={styles.actionRow}>
+              <View style={[styles.actionIcon, { backgroundColor: 'rgba(123,94,167,0.15)' }]}>
+                <MessageCircle size={18} color="#7B5EA7" />
+              </View>
+              <Text style={styles.actionLabel}>Send message</Text>
+              <ChevronRight size={18} color={MADAR_COLORS.textTertiary} />
+            </AnimatedPressable>
+          ) : null}
 
           <AnimatedPressable onPress={handleVenueDetails} style={styles.actionRow}>
             <View style={[styles.actionIcon, { backgroundColor: MADAR_COLORS.surfaceSecondary }]}>

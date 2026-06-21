@@ -25,11 +25,23 @@ interface Appointment {
   venue_name: string;
   venue_image: string;
   date: string;
+  start_at?: string;
   price: number;
   items: number;
   status: 'upcoming' | 'past';
   venue_id: string;
   services?: { name: string; price: number }[];
+}
+
+function getCountdown(startAt?: string): string {
+  if (!startAt) return 'Upcoming';
+  const diff = new Date(startAt).getTime() - Date.now();
+  if (diff <= 0) return 'Now';
+  const hours = Math.floor(diff / 3600000);
+  const mins = Math.floor((diff % 3600000) / 60000);
+  if (hours > 24) return `In ${Math.floor(hours / 24)}d`;
+  if (hours > 0) return `In ${hours}h ${mins}m`;
+  return `In ${mins}m`;
 }
 
 const MOCK_APPOINTMENTS: Appointment[] = [
@@ -174,7 +186,7 @@ function UpcomingCard({ appt, onViewDetails, onRebook, onCancelled }: {
         />
         {/* "In X hours" badge */}
         <View style={upcomingCardStyles.countdownBadge}>
-          <Text style={upcomingCardStyles.countdownText}>In 3 hours</Text>
+          <Text style={upcomingCardStyles.countdownText}>{getCountdown(appt.start_at)}</Text>
         </View>
         {/* Venue name overlay */}
         <Text style={upcomingCardStyles.venueNameOverlay} numberOfLines={1}>
@@ -397,6 +409,7 @@ export default function BookingsScreen() {
             venue_id: row.shop_id,
             venue_name: shop.name ?? 'Unknown Venue',
             venue_image: shop.cover_url ?? '',
+            start_at: row.start_at,
             date: row.start_at
               ? new Date(row.start_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) +
                 ' at ' +

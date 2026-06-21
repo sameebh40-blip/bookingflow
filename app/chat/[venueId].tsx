@@ -17,6 +17,12 @@ import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
+function getPublicUrl(path: string | null | undefined, bucket = 'shop-covers'): string {
+  if (!path) return '';
+  if (path.startsWith('http')) return path;
+  return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+}
+
 interface Message {
   id: string;
   text: string;
@@ -69,7 +75,7 @@ export default function ChatScreen() {
       const { data } = await supabase.from('barbershops').select('name, cover_url').eq('id', venueId).single();
       if (data) {
         setVenueName(data.name ?? 'Venue');
-        setVenueImage(data.cover_url ?? '');
+        setVenueImage(getPublicUrl(data.cover_url));
       }
     } catch (err) {
       console.log('[Chat] Could not fetch venue info:', err);

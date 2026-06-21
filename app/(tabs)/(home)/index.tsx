@@ -51,8 +51,11 @@ function isVenueOpenNow(openingHours?: Record<string, { open: string; close: str
   return nowMinutes >= openMinutes && nowMinutes < closeMinutes;
 }
 
-function applyFilters(venues: Venue[], filters: { options: string[]; serviceTypes: string[] }): Venue[] {
+function applyFilters(venues: Venue[], filters: { options: string[]; serviceTypes: string[] }, category = 'all'): Venue[] {
   let result = [...venues];
+  if (category !== 'all') {
+    result = result.filter(v => v.category?.toLowerCase().includes(category.toLowerCase()));
+  }
   if (filters.options.includes('Open now')) result = result.filter(v => v.is_open);
   if (filters.options.includes('Top rated')) result = result.sort((a, b) => b.rating - a.rating);
   if (filters.serviceTypes.length > 0) {
@@ -273,9 +276,9 @@ export default function HomeScreen() {
     return filterStore.subscribe(() => {
       const f = filterStore.get();
       console.log('[Home] Filter changed, applying:', f);
-      setVenues(applyFilters(allVenues, f));
+      setVenues(applyFilters(allVenues, f, activeCategory));
     });
-  }, [allVenues]);
+  }, [allVenues, activeCategory]);
 
   const fetchData = async () => {
     console.log('[Home] Fetching barbershops, barbers, posts, bookings from Supabase');
@@ -322,7 +325,7 @@ export default function HomeScreen() {
       if (venuesRes.error || !venuesRes.data || venuesRes.data.length === 0) {
         console.log('[Home] Using mock venues:', venuesRes.error?.message);
         setAllVenues(MOCK_VENUES);
-        setVenues(applyFilters(MOCK_VENUES, filterStore.get()));
+        setVenues(applyFilters(MOCK_VENUES, filterStore.get(), activeCategory));
       } else {
         console.log('[Home] Loaded', venuesRes.data.length, 'barbershops');
         const mapped: Venue[] = venuesRes.data.map((b: any) => ({
@@ -339,7 +342,7 @@ export default function HomeScreen() {
           is_open: isVenueOpenNow(b.opening_hours) || b.is_active,
         }));
         setAllVenues(mapped);
-        setVenues(applyFilters(mapped, filterStore.get()));
+        setVenues(applyFilters(mapped, filterStore.get(), activeCategory));
       }
 
       if (barbersRes.error || !barbersRes.data || barbersRes.data.length === 0) {
@@ -398,15 +401,15 @@ export default function HomeScreen() {
         });
         setRebook(mappedRebook);
       } else {
-        console.log('[Home] Using mock rebook');
-        setRebook(MOCK_REBOOK);
+        console.log('[Home] No rebook data found');
+        setRebook([]);
       }
     } catch (err) {
       console.log('[Home] Exception, using mock data:', err);
       setVenues(MOCK_VENUES);
       setBarbers(MOCK_BARBERS);
       setReels(MOCK_REELS);
-      setRebook(MOCK_REBOOK);
+      setRebook([]);
     } finally {
       setLoading(false);
     }
@@ -425,7 +428,8 @@ export default function HomeScreen() {
   const handleCategoryPress = useCallback((id: string, label: string) => {
     console.log('[Home] Category pressed:', id, label);
     setActiveCategory(id);
-  }, []);
+    setVenues(applyFilters(allVenues, filterStore.get(), id));
+  }, [allVenues]);
 
   const handleSeeAllNearby = useCallback(() => {
     console.log('[Home] See all nearby pressed');
@@ -520,47 +524,49 @@ export default function HomeScreen() {
       </ScrollView>
 
       {/* Book again section */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Book again</Text>
-          <AnimatedPressable onPress={() => console.log('[Home] See all rebook pressed')}>
-            <Text style={styles.seeAll}>See all</Text>
-          </AnimatedPressable>
+      {rebook.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Book again</Text>
+            <AnimatedPressable onPress={() => console.log('[Home] See all rebook pressed')}>
+              <Text style={styles.seeAll}>See all</Text>
+            </AnimatedPressable>
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.rebookScroll}
+          >
+            {rebook.map((item, index) => (
+              <AnimatedListItem key={item.id} index={index}>
+                <AnimatedPressable
+                  onPress={() => handleRebook(item)}
+                  style={styles.rebookCard}
+                >
+                  <Image
+                    source={resolveImageSource(item.image_url)}
+                    style={styles.rebookImage}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.rebookInfo}>
+                    <Text style={styles.rebookName} numberOfLines={1}>{item.name}</Text>
+                    <Text style={styles.rebookMeta}>
+                      BHD {Number(item.price).toFixed(3)}
+                    </Text>
+                    <AnimatedPressable
+                      onPress={() => handleRebook(item)}
+                      style={styles.rebookButton}
+                    >
+                      <RefreshCw size={12} color={MADAR_COLORS.gold} />
+                      <Text style={styles.rebookButtonText}>Rebook</Text>
+                    </AnimatedPressable>
+                  </View>
+                </AnimatedPressable>
+              </AnimatedListItem>
+            ))}
+          </ScrollView>
         </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.rebookScroll}
-        >
-          {rebook.map((item, index) => (
-            <AnimatedListItem key={item.id} index={index}>
-              <AnimatedPressable
-                onPress={() => handleRebook(item)}
-                style={styles.rebookCard}
-              >
-                <Image
-                  source={resolveImageSource(item.image_url)}
-                  style={styles.rebookImage}
-                  resizeMode="cover"
-                />
-                <View style={styles.rebookInfo}>
-                  <Text style={styles.rebookName} numberOfLines={1}>{item.name}</Text>
-                  <Text style={styles.rebookMeta}>
-                    BHD {Number(item.price).toFixed(3)}
-                  </Text>
-                  <AnimatedPressable
-                    onPress={() => handleRebook(item)}
-                    style={styles.rebookButton}
-                  >
-                    <RefreshCw size={12} color={MADAR_COLORS.gold} />
-                    <Text style={styles.rebookButtonText}>Rebook</Text>
-                  </AnimatedPressable>
-                </View>
-              </AnimatedPressable>
-            </AnimatedListItem>
-          ))}
-        </ScrollView>
-      </View>
+      )}
 
       {/* Nearby Shops — horizontal carousel */}
       <View style={styles.section}>

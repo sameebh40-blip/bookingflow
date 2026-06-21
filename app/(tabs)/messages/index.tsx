@@ -27,6 +27,12 @@ interface Conversation {
 }
 
 
+function getPublicUrl(path: string | null | undefined, bucket = 'shop-covers'): string {
+  if (!path) return '';
+  if (path.startsWith('http')) return path;
+  return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+}
+
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: '' };
   if (typeof source === 'string') return { uri: source };
@@ -55,8 +61,9 @@ export default function MessagesScreen() {
 
   useEffect(() => {
     fetchConversations();
+    if (!user) return;
     const channel = supabase
-      .channel('messages-list')
+      .channel(`messages-list-${user.id}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => {
         console.log('[Messages] Realtime INSERT received, refreshing conversations');
         fetchConversations();
@@ -107,7 +114,7 @@ export default function MessagesScreen() {
         convs.push({
           id: msg.venue_id,
           venue_name: shop?.name ?? 'Venue',
-          avatar: shop?.cover_url ?? '',
+          avatar: getPublicUrl(shop?.cover_url),
           last_message: msg.text ?? '',
           timestamp: new Date(msg.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
           unread: 0,

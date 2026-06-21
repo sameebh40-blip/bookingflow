@@ -190,9 +190,10 @@ export default function ReelsScreen() {
             image_url: shop.cover_url ?? MOCK_REELS[i % MOCK_REELS.length].image_url,
             venue_id: shop.id,
           }));
-          setReels([...mapped, ...MOCK_REELS]);
+          setReels(mapped);
         } else {
           console.log('[Reels] No real venues found, using mock data');
+          // MOCK_REELS already set as initial state — no change needed
         }
       });
   }, []);

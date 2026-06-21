@@ -233,6 +233,7 @@ export default function PartnerHome() {
         supabase.from('messages').insert({
           venue_id: shopId,
           sender_id: newBooking.customer_profile_id ?? null,
+          client_id: newBooking.customer_profile_id ?? null,
           text: `📅 New booking from ${customerName}! Check your schedule.`,
           is_from_venue: false,
         }).then(({ error: msgErr }) => {

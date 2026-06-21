@@ -16,6 +16,12 @@ import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 
+function getPublicUrl(path: string | null | undefined, bucket = 'shop-covers'): string {
+  if (!path) return '';
+  if (path.startsWith('http')) return path;
+  return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+}
+
 const P = {
   bg: '#0F0F1A',
   surface: '#1A1A2E',
@@ -99,11 +105,14 @@ export default function PartnerChatList() {
       for (const [senderId, messages] of grouped.entries()) {
         const p = profileMap.get(senderId);
         const last = messages[0];
-        const unread = messages.filter(m => !m.is_from_venue).length;
+        const lastVenueMsg = messages.filter(m => m.is_from_venue)[0];
+        const unread = lastVenueMsg
+          ? messages.filter(m => !m.is_from_venue && new Date(m.created_at) > new Date(lastVenueMsg.created_at)).length
+          : messages.filter(m => !m.is_from_venue).length;
         convList.push({
           senderId,
           senderName: p?.full_name ?? 'Unknown',
-          senderAvatar: p?.avatar_url,
+          senderAvatar: p?.avatar_url ? getPublicUrl(p.avatar_url, 'avatars') : undefined,
           lastMessage: last.text,
           lastTime: new Date(last.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
           unreadCount: unread,
