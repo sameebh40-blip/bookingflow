@@ -326,8 +326,7 @@ const DateColHeader = React.memo(({ col, colWidth, isToday, isSelected, onPress 
   </TouchableOpacity>
 ));
 
-function PartnerCalendarInner() {
-  const expoRouter = useRouter();
+function PartnerCalendarInner({ router: expoRouter }: { router: ReturnType<typeof useRouter> }) {
   const insets = useSafeInsets();
   const { profile } = useAuth();
   const shopId = profile?.shop_id;
@@ -1857,6 +1856,7 @@ const styles = StyleSheet.create({
 
 export default function PartnerCalendar() {
   const navState = useRootNavigationState();
+  const router = useRouter();
   const [ready, setReady] = React.useState(false);
 
   React.useEffect(() => {
@@ -1872,5 +1872,5 @@ export default function PartnerCalendar() {
       </View>
     );
   }
-  return <PartnerCalendarInner />;
+  return <PartnerCalendarInner router={router} />;
 }
