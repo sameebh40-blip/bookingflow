@@ -45,8 +45,14 @@ function RoleRouter() {
     console.log('[RoleRouter] profile role:', profile?.role, 'segments:', segments[0], 'isPartner:', isPartner);
 
     if (isPartner && !inPartner && !inAuth) {
-      console.log('[RoleRouter] Redirecting to partner dashboard');
-      router.replace('/(partner)');
+      const hasShop = !!profile?.shop_id;
+      if (!hasShop) {
+        console.log('[RoleRouter] Partner has no shop, redirecting to onboarding');
+        router.replace('/(partner)/ob-essentials');
+      } else {
+        console.log('[RoleRouter] Redirecting to partner dashboard');
+        router.replace('/(partner)');
+      }
     } else if (!isPartner && inPartner) {
       console.log('[RoleRouter] Redirecting to customer tabs');
       router.replace('/(tabs)');

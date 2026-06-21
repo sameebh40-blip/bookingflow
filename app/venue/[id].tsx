@@ -201,7 +201,7 @@ export default function VenueDetailScreen() {
           .limit(20),
         supabase
           .from('reviews')
-          .select('id, rating, text, created_at, customer_profile_id, profiles!customer_profile_id(full_name, avatar_url)')
+          .select('id, rating, text, comment, created_at, customer_profile_id')
           .eq('shop_id', id)
           .eq('target_type', 'shop')
           .order('created_at', { ascending: false })
@@ -210,7 +210,7 @@ export default function VenueDetailScreen() {
           .from('barbers')
           .select('id, display_name, specialty, avatar_url, rating_avg, reviews_count')
           .eq('shop_id', id)
-          .eq('status', 'approved')
+          .or('status.eq.approved,is_active.eq.true')
           .limit(10),
         supabase
           .from('posts')
@@ -272,9 +272,8 @@ export default function VenueDetailScreen() {
       console.log('[VenueDetail] Reviews fetch result:', reviewsRes.error?.message ?? 'ok', 'count:', reviewsRes.data?.length ?? 0);
       if (reviewsRes.data && reviewsRes.data.length > 0) {
         const mappedReviews = reviewsRes.data.map((r: any) => {
-          const profile = r.profiles;
-          const fullName: string = profile?.full_name ?? 'Customer';
-          const initials = fullName.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2).toUpperCase() || 'C';
+          const fullName = 'Customer';
+          const initials = 'C';
           const dateStr = r.created_at
             ? new Date(r.created_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
             : '';
@@ -285,7 +284,7 @@ export default function VenueDetailScreen() {
             rating: r.rating,
             comment: r.comment ?? r.text ?? '',
             date: dateStr,
-            avatar_url: profile?.avatar_url ?? undefined,
+            avatar_url: undefined,
           };
         });
         // Also update review_count on venue
@@ -336,6 +335,8 @@ export default function VenueDetailScreen() {
       customer_profile_id: user.id,
       rating: reviewRating,
       comment: reviewComment.trim(),
+      target_type: 'shop',
+      target_id: id,
     });
     if (error) {
       console.log('[VenueDetail] Review submit error:', error.message);
@@ -349,19 +350,19 @@ export default function VenueDetailScreen() {
     // Re-fetch reviews
     const { data: reviewData } = await supabase
       .from('reviews')
-      .select('id, rating, comment, created_at, customer_profile_id, profiles!customer_profile_id(full_name, avatar_url)')
+      .select('id, rating, text, comment, created_at, customer_profile_id')
       .eq('shop_id', id)
+      .eq('target_type', 'shop')
       .order('created_at', { ascending: false })
       .limit(20);
     if (reviewData && reviewData.length > 0) {
       const mapped = reviewData.map((r: any) => {
-        const profile = r.profiles;
-        const fullName: string = profile?.full_name ?? 'Customer';
-        const initials = fullName.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2).toUpperCase() || 'C';
+        const fullName = 'Customer';
+        const initials = 'C';
         const dateStr = r.created_at
           ? new Date(r.created_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
           : '';
-        return { id: r.id, name: fullName, initials, rating: r.rating, comment: r.comment ?? '', date: dateStr, avatar_url: profile?.avatar_url ?? undefined };
+        return { id: r.id, name: fullName, initials, rating: r.rating, comment: r.comment ?? r.text ?? '', date: dateStr, avatar_url: undefined };
       });
       setReviews(mapped);
       setVenue(prev => prev ? { ...prev, review_count: mapped.length } : prev);

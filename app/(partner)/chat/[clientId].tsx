@@ -63,7 +63,7 @@ export default function PartnerChatThread() {
         .from('messages')
         .select('id, sender_id, text, created_at, is_from_venue')
         .eq('venue_id', shopId)
-        .or(`sender_id.eq.${clientId},is_from_venue.eq.true`)
+        .or(`sender_id.eq.${clientId},client_id.eq.${clientId},is_from_venue.eq.true,sender_id.is.null`)
         .order('created_at', { ascending: true });
       setMessages((data as Message[]) ?? []);
     } catch (err) {

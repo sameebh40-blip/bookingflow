@@ -37,18 +37,31 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/utils/supabase';
 import { filterStore } from '@/utils/filterStore';
 
-function isVenueOpenNow(openingHours?: Record<string, { open: string; close: string; enabled: boolean }>): boolean {
+function isVenueOpenNow(openingHours?: Record<string, unknown>): boolean {
   if (!openingHours) return false;
   const now = new Date();
-  const dayIndex = now.getDay();
-  const dayHours = openingHours[String(dayIndex)];
-  if (!dayHours?.enabled) return false;
-  const [openH, openM] = dayHours.open.split(':').map(Number);
-  const [closeH, closeM] = dayHours.close.split(':').map(Number);
+  const dayIndex = now.getDay(); // 0=Sun
+  const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+  // Try numeric key first, then day-name key
+  const raw = openingHours[String(dayIndex)] ?? openingHours[DAY_KEYS[dayIndex]];
+  if (!raw) return false;
+
+  let openStr = '09:00', closeStr = '18:00', enabled = true;
+  if (typeof raw === 'string') {
+    const parts = (raw as string).split('-');
+    if (parts.length === 2) { openStr = parts[0].trim(); closeStr = parts[1].trim(); }
+  } else if (typeof raw === 'object') {
+    const obj = raw as { open?: string; close?: string; enabled?: boolean };
+    if (obj.enabled === false) return false;
+    if (obj.open) openStr = obj.open;
+    if (obj.close) closeStr = obj.close;
+  }
+  if (!enabled) return false;
+
+  const [openH, openM] = openStr.split(':').map(Number);
+  const [closeH, closeM] = closeStr.split(':').map(Number);
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  const openMinutes = openH * 60 + openM;
-  const closeMinutes = closeH * 60 + closeM;
-  return nowMinutes >= openMinutes && nowMinutes < closeMinutes;
+  return nowMinutes >= openH * 60 + openM && nowMinutes < closeH * 60 + closeM;
 }
 
 function applyFilters(venues: Venue[], filters: { options: string[]; serviceTypes: string[] }, category = 'all'): Venue[] {

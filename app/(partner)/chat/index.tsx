@@ -47,7 +47,8 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
 
 interface Message {
   id: string;
-  sender_id: string;
+  sender_id: string | null;
+  client_id: string | null;
   text: string;
   created_at: string;
   is_from_venue: boolean;
@@ -77,40 +78,42 @@ export default function PartnerChatList() {
     try {
       const { data: msgs } = await supabase
         .from('messages')
-        .select('id, sender_id, text, created_at, is_from_venue')
+        .select('id, sender_id, client_id, text, created_at, is_from_venue')
         .eq('venue_id', shopId)
         .order('created_at', { ascending: false });
 
       const allMsgs = (msgs ?? []) as Message[];
-      const clientMsgs = allMsgs.filter(m => !m.is_from_venue && m.sender_id);
-      const grouped = new Map<string, Message[]>();
-      for (const m of clientMsgs) {
-        if (!grouped.has(m.sender_id)) grouped.set(m.sender_id, []);
-        grouped.get(m.sender_id)!.push(m);
+      // Group by client_id instead of sender_id to avoid null-sender duplicates
+      const grouped: Record<string, Message[]> = {};
+      for (const msg of allMsgs) {
+        const key = msg.client_id;
+        if (!key) continue; // skip system messages with no client
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(msg);
       }
 
-      const senderIds = Array.from(grouped.keys());
+      const clientIds = Object.keys(grouped);
       const profileMap = new Map<string, { full_name: string; avatar_url?: string }>();
-      if (senderIds.length > 0) {
+      if (clientIds.length > 0) {
         const { data: profiles } = await supabase
           .from('profiles')
           .select('id, full_name, avatar_url')
-          .in('id', senderIds);
+          .in('id', clientIds);
         for (const p of (profiles ?? []) as { id: string; full_name: string; avatar_url?: string }[]) {
           profileMap.set(p.id, p);
         }
       }
 
       const convList: Conversation[] = [];
-      for (const [senderId, messages] of grouped.entries()) {
-        const p = profileMap.get(senderId);
+      for (const [key, messages] of Object.entries(grouped)) {
+        const p = profileMap.get(key);
         const last = messages[0];
         const lastVenueMsg = messages.filter(m => m.is_from_venue)[0];
         const unread = lastVenueMsg
           ? messages.filter(m => !m.is_from_venue && new Date(m.created_at) > new Date(lastVenueMsg.created_at)).length
           : messages.filter(m => !m.is_from_venue).length;
         convList.push({
-          senderId,
+          senderId: key,
           senderName: p?.full_name ?? 'Unknown',
           senderAvatar: p?.avatar_url ? getPublicUrl(p.avatar_url, 'avatars') : undefined,
           lastMessage: last.text,

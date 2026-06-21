@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Image,
   ImageSourcePropType,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -182,6 +183,11 @@ export default function BookingConfirmScreen() {
   const handleConfirm = useCallback(async () => {
     console.log('[Booking/Confirm] Confirm booking pressed, venueId:', venueId, 'services:', serviceIds, 'staff:', staffId, 'date:', date, 'time:', time);
     setLoading(true);
+    if (!serviceIds || serviceIds.length === 0 || !serviceIds[0]) {
+      Alert.alert('Missing Service', 'Please go back and select a service.');
+      setLoading(false);
+      return;
+    }
     try {
       if (user) {
         const scheduledAt = date && time
@@ -472,7 +478,7 @@ export default function BookingConfirmScreen() {
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
         <AnimatedPressable
           onPress={handleConfirm}
-          disabled={loading || dataLoading}
+          disabled={loading || dataLoading || !serviceIds || serviceIds.length === 0}
           style={styles.confirmBtn}
         >
           <LinearGradient
