@@ -16,7 +16,7 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router as expoRouter } from 'expo-router';
+import { router as expoRouter, useRootNavigationState } from 'expo-router';
 import {
   CalendarDays,
   Tag,
@@ -327,7 +327,6 @@ function PartnerCalendarInner() {
   const { profile } = useAuth();
   const shopId = profile?.shop_id;
 
-  const [clientReady, setClientReady] = React.useState(false);
   const [calView, setCalView] = useState<'day' | '3day' | 'week' | 'month'>('day');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -372,8 +371,6 @@ function PartnerCalendarInner() {
     }, 60000);
     return () => clearInterval(t);
   }, []);
-
-  useEffect(() => { setClientReady(true); }, []);
 
   const nowTop = ((nowMinutes - START_HOUR * 60) / 60) * HOUR_HEIGHT;
   const nowHour = Math.floor(nowMinutes / 60);
@@ -484,14 +481,6 @@ function PartnerCalendarInner() {
     setSelectedBooking(b);
     setDetailTab('details');
   }, []);
-
-  if (!clientReady) {
-    return (
-      <View style={{ flex: 1, backgroundColor: P.bg, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color={P.accent} size="large" />
-      </View>
-    );
-  }
 
   // ── Payment ──
   const handlePayCash = async () => {
@@ -1703,17 +1692,16 @@ const styles = StyleSheet.create({
 });
 
 export default function PartnerCalendar() {
+  const navState = useRootNavigationState();
   const [ready, setReady] = React.useState(false);
-  React.useEffect(() => {
-    // Double-RAF ensures navigation container is fully mounted
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        setReady(true);
-      });
-    });
-  }, []);
 
-  if (!ready) {
+  React.useEffect(() => {
+    if (navState?.key) {
+      setReady(true);
+    }
+  }, [navState?.key]);
+
+  if (!ready || !navState?.key) {
     return (
       <View style={{ flex: 1, backgroundColor: '#0F0F1A', alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color="#7C3AED" size="large" />
