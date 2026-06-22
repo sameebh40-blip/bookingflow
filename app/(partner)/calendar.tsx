@@ -1,58 +1,41 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
-  Animated,
-  TouchableOpacity,
   Pressable,
   Modal,
   ActivityIndicator,
   Image,
   ImageSourcePropType,
-  PanResponder,
   Dimensions,
-  Platform,
+  Animated as RNAnimated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  runOnJS,
+} from 'react-native-reanimated';
+import { Gesture, GestureDetector, ScrollView as GHScrollView } from 'react-native-gesture-handler';
 import {
-  CalendarDays,
-  Tag,
-  Plus,
-  Smile,
-  Grid3x3,
-  Bell,
-  MessageCircle,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  X,
-  Check,
-  MoreHorizontal,
-  RefreshCw,
-  CreditCard,
-  Gift,
-  Zap,
-  DollarSign,
-  Menu,
+  Plus, ChevronLeft, ChevronRight, X, Calendar as CalendarIcon,
+  Clock, Check, DollarSign, RefreshCw, Bell,
 } from 'lucide-react-native';
 import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
-function useSafeInsets() {
-  const insets = useSafeAreaInsets();
-  return insets ?? { top: 0, bottom: 0, left: 0, right: 0 };
-}
-
+// ─── Palette ────────────────────────────────────────────────────────────────
 const P = {
   bg: '#0F0F1A',
   surface: '#1A1A2E',
   surfaceElevated: '#242438',
   border: '#2A2A45',
   accent: '#7C3AED',
-  accentLight: 'rgba(124,58,237,0.15)',
+  accentLight: 'rgba(124,58,237,0.18)',
   gold: '#C9A84C',
   text: '#F0F0FF',
   textSecondary: '#9090B0',
@@ -60,401 +43,226 @@ const P = {
   success: '#4CAF7D',
   danger: '#E85454',
   warning: '#F59E0B',
+  blue: '#3B82F6',
+  teal: '#14B8A6',
   divider: '#1E1E35',
 };
 
-const HOUR_HEIGHT = 64;
-const START_HOUR = 6;
-const END_HOUR = 23;
-const TIME_COL_WIDTH = 52;
-const COL_WIDTH = 120;
+// ─── Grid geometry ──────────────────────────────────────────────────────────
+const HOUR_HEIGHT = 80;
+const PX_PER_MIN = HOUR_HEIGHT / 60; // 1.333 px per minute
+const SNAP_MIN = 15;                 // snap dragging to 15-minute increments
+const TIME_COL_W = 52;
+const MIN_COL_W = 96;
 const SCREEN_W = Dimensions.get('window').width;
-const SCREEN_H = Dimensions.get('window').height;
-const GRID_HEIGHT = SCREEN_H - 280;
 
+// ─── Types ──────────────────────────────────────────────────────────────────
 interface Booking {
   id: string;
   start_at: string;
   end_at: string | null;
   status: string;
-  customer_name: string;
+  customer_name: string | null;
   barber_id: string | null;
   shop_id: string;
-  payment_status?: string;
-  payment_method?: string;
-  cancel_reason?: string;
-  source?: string;
-
+  service_name?: string | null;
+  total_price?: number | null;
 }
+interface BarberRow { id: string; display_name: string; avatar_url: string | null; }
+interface Column { key: string; barberId: string | null; label: string; initial: string; avatar: string | null; }
 
-interface BarberRow {
-  id: string;
-  display_name: string;
-  avatar_url: string | null;
-}
-
-interface ColDef {
-  key: string;
-  label: string;
-  sublabel?: string;
-  initial?: string;
-  avatar_url?: string | null;
-  date: Date;
-  barberId?: string;
-}
-
-function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
-  if (!source) return { uri: '' };
-  if (typeof source === 'string') return { uri: source };
-  return source as ImageSourcePropType;
-}
-
-const todayAt = (h: number, m: number) => {
-  const d = new Date();
-  d.setHours(h, m, 0, 0);
-  return d.toISOString();
+// ─── Status styling + workflow ────────────────────────────────────────────────
+const STATUS_META: Record<string, { label: string; color: string }> = {
+  pending:     { label: 'Booked',    color: P.gold },
+  confirmed:   { label: 'Confirmed', color: P.blue },
+  arrived:     { label: 'Arrived',   color: P.teal },
+  in_progress: { label: 'Started',   color: P.accent },
+  completed:   { label: 'Completed', color: P.success },
+  no_show:     { label: 'No-show',   color: P.danger },
+  cancelled:   { label: 'Cancelled', color: P.textTertiary },
 };
+const STATUS_ACTIONS = ['confirmed', 'arrived', 'in_progress', 'completed', 'no_show', 'cancelled'];
 
-const DEMO_BOOKINGS: Booking[] = [
-  { id: 'dc1', start_at: todayAt(8, 45), end_at: todayAt(9, 30), status: 'confirmed', customer_name: 'John Doe', barber_id: 'b1', shop_id: '' },
-  { id: 'dc2', start_at: todayAt(8, 45), end_at: todayAt(9, 30), status: 'confirmed', customer_name: 'John Doe', barber_id: 'b2', shop_id: '' },
-  { id: 'dc3', start_at: todayAt(10, 0), end_at: todayAt(10, 35), status: 'confirmed', customer_name: 'Jack Doe', barber_id: 'b1', shop_id: '' },
-  { id: 'dc4', start_at: todayAt(11, 0), end_at: todayAt(12, 15), status: 'confirmed', customer_name: 'Jane Doe', barber_id: 'b1', shop_id: '' },
-];
-
-const DEMO_BARBERS: BarberRow[] = [
-  { id: 'b1', display_name: 'S2 Khaled', avatar_url: null },
-  { id: 'b2', display_name: 'Wendy Smith (Demo)', avatar_url: null },
-];
-
-const BARBER_COLORS = ['#7C3AED', '#0EA5E9', '#10B981', '#F59E0B', '#E85454', '#8B5CF6', '#06B6D4'];
-
-function statusColor(status: string) {
-  if (status === 'confirmed') return '#5B9CF6';
-  if (status === 'pending') return P.warning;
-  if (status === 'cancelled') return P.danger;
-  if (status === 'in_progress') return P.accent;
-  if (status === 'completed') return P.gold;
-  return P.textSecondary;
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function resolveImageSource(source: string | null | undefined): ImageSourcePropType {
+  if (!source) return { uri: '' };
+  return { uri: source };
 }
-
-function statusLabel(status: string) {
-  if (status === 'confirmed') return 'Confirmed';
-  if (status === 'pending') return 'Pending';
-  if (status === 'cancelled') return 'Cancelled';
-  if (status === 'in_progress') return 'In Progress';
-  if (status === 'completed') return 'Completed';
-  return status;
+function sameDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
-
-function formatTime(date: Date): string {
-  const h = date.getHours();
-  const m = date.getMinutes();
-  const ampm = h >= 12 ? 'pm' : 'am';
-  const hh = h % 12 === 0 ? 12 : h % 12;
+function minutesOf(iso: string) { const d = new Date(iso); return d.getHours() * 60 + d.getMinutes(); }
+function durationOf(b: Booking) {
+  if (!b.end_at) return 30;
+  const d = (new Date(b.end_at).getTime() - new Date(b.start_at).getTime()) / 60000;
+  return Math.max(15, Math.round(d));
+}
+function fmtTime(min: number) {
+  const h = Math.floor(min / 60); const m = min % 60;
+  const ampm = h >= 12 ? 'pm' : 'am'; const hh = h % 12 === 0 ? 12 : h % 12;
   return `${hh}:${String(m).padStart(2, '0')} ${ampm}`;
 }
 
-function formatHour(h: number): string {
-  if (h === 0) return '12am';
-  if (h < 12) return `${h}am`;
-  if (h === 12) return '12pm';
-  return `${h - 12}pm`;
-}
+const todayAt = (h: number, m: number) => { const d = new Date(); d.setHours(h, m, 0, 0); return d.toISOString(); };
+const DEMO_BARBERS: BarberRow[] = [
+  { id: 'b1', display_name: 'Khaled', avatar_url: null },
+  { id: 'b2', display_name: 'Wendy', avatar_url: null },
+];
+const DEMO_BOOKINGS: Booking[] = [
+  { id: 'dc1', start_at: todayAt(9, 0), end_at: todayAt(9, 45), status: 'confirmed', customer_name: 'John Doe', barber_id: 'b1', shop_id: '', service_name: 'Haircut' },
+  { id: 'dc2', start_at: todayAt(10, 30), end_at: todayAt(11, 15), status: 'pending', customer_name: 'Jack Doe', barber_id: 'b2', shop_id: '', service_name: 'Beard trim' },
+  { id: 'dc3', start_at: todayAt(11, 30), end_at: todayAt(12, 45), status: 'arrived', customer_name: 'Jane Doe', barber_id: 'b1', shop_id: '', service_name: 'Color' },
+];
 
-function getMonthDays(date: Date): (Date | null)[] {
-  const year = date.getFullYear();
-  const month = date.getMonth();
-  const first = new Date(year, month, 1);
-  const last = new Date(year, month + 1, 0);
-  const result: (Date | null)[] = [];
-  for (let i = 0; i < first.getDay(); i++) result.push(null);
-  for (let d = 1; d <= last.getDate(); d++) result.push(new Date(year, month, d));
-  return result;
-}
-
-function isSameDay(a: Date, b: Date) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
-
-function chunk<T>(arr: T[], size: number): T[][] {
-  const result: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) result.push(arr.slice(i, i + size));
-  return result;
-}
-
-function getWeekMonday(d: Date): Date {
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  const mon = new Date(d);
-  mon.setDate(d.getDate() + diff);
-  return mon;
-}
-
-const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-const DAY_NAMES_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-
-const hours = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i);
-const totalGridHeight = (END_HOUR - START_HOUR) * HOUR_HEIGHT;
-
-// ── BookingBlock — memoized with its own PanResponder ──
-const BookingBlock = React.memo(({
-  booking,
-  colWidth,
-  onPress,
-  onDragEnd,
+// ─── Appointment block (draggable + resizable) ────────────────────────────────
+function AppointmentBlock({
+  booking, colIndex, numCols, colWidth, dayStartMin, scrollRef,
+  onCommitMove, onCommitResize, onOpen,
 }: {
   booking: Booking;
+  colIndex: number;
+  numCols: number;
   colWidth: number;
-  onPress: (b: Booking) => void;
-  onDragEnd: (b: Booking, deltaMinutes: number) => void;
-}) => {
-  const dragY = useRef(new Animated.Value(0)).current;
-  const isDragging = useRef(false);
+  dayStartMin: number;
+  scrollRef: React.RefObject<any>;
+  onCommitMove: (id: string, deltaMin: number, colShift: number) => void;
+  onCommitResize: (id: string, newDuration: number) => void;
+  onOpen: (b: Booking) => void;
+}) {
+  const startMin = minutesOf(booking.start_at);
+  const durMin = durationOf(booking);
+  const top = (startMin - dayStartMin) * PX_PER_MIN;
+  const baseHeight = Math.max(durMin * PX_PER_MIN, 26);
+  const left = TIME_COL_W + colIndex * colWidth;
 
-  const panResponder = useRef(
-    Platform.OS !== 'web'
-      ? PanResponder.create({
-          onStartShouldSetPanResponder: () => false,
-          onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dy) > 10 && Math.abs(gs.dy) > Math.abs(gs.dx) * 2,
-          onPanResponderGrant: () => {
-            isDragging.current = true;
-            console.log('[Calendar] Drag started for booking:', booking.id);
-          },
-          onPanResponderMove: Animated.event([null, { dy: dragY }], { useNativeDriver: false }),
-          onPanResponderRelease: (_, gs) => {
-            isDragging.current = false;
-            const deltaMin = Math.round((gs.dy / HOUR_HEIGHT) * 60 / 15) * 15;
-            dragY.setValue(0);
-            if (Math.abs(deltaMin) >= 15) {
-              console.log('[Calendar] Drag released, delta minutes:', deltaMin, 'booking:', booking.id);
-              onDragEnd(booking, deltaMin);
-            }
-          },
-          onPanResponderTerminate: () => {
-            isDragging.current = false;
-            dragY.setValue(0);
-          },
-        })
-      : { panHandlers: {} }
-  ).current;
+  const tx = useSharedValue(0);
+  const ty = useSharedValue(0);
+  const dh = useSharedValue(0);
+  const active = useSharedValue(0);
 
-  const start = new Date(booking.start_at);
-  const end = booking.end_at ? new Date(booking.end_at) : new Date(start.getTime() + 30 * 60000);
-  const startMins = (start.getHours() - START_HOUR) * 60 + start.getMinutes();
-  const endMins = (end.getHours() - START_HOUR) * 60 + end.getMinutes();
-  const top = (startMins / 60) * HOUR_HEIGHT;
-  const height = Math.max(((endMins - startMins) / 60) * HOUR_HEIGHT, 32);
-  const color = statusColor(booking.status);
-  const clientName = booking.customer_name ?? 'Walk-in';
-  const serviceName = 'Service';
-  const startLabel = formatTime(start);
-  const endLabel = formatTime(end);
+  const meta = STATUS_META[booking.status] ?? STATUS_META.pending;
 
+  // Press & hold to pick up, then drag — disambiguates from grid scrolling.
+  const move = Gesture.Pan()
+    .activateAfterLongPress(200)
+    .blocksExternalGesture(scrollRef)
+    .onStart(() => { active.value = 1; })
+    .onUpdate((e) => { tx.value = e.translationX; ty.value = e.translationY; })
+    .onEnd((e) => {
+      const deltaMin = Math.round((e.translationY / PX_PER_MIN) / SNAP_MIN) * SNAP_MIN;
+      const colShift = Math.round(e.translationX / colWidth);
+      runOnJS(onCommitMove)(booking.id, deltaMin, colShift);
+      tx.value = withTiming(0, { duration: 120 });
+      ty.value = withTiming(0, { duration: 120 });
+      active.value = 0;
+    });
+
+  const tap = Gesture.Tap().maxDistance(10).onEnd(() => { runOnJS(onOpen)(booking); });
+  const body = Gesture.Exclusive(move, tap);
+
+  // Bottom edge: drag to change duration.
+  const resize = Gesture.Pan()
+    .blocksExternalGesture(scrollRef)
+    .onStart(() => { active.value = 1; })
+    .onUpdate((e) => { dh.value = e.translationY; })
+    .onEnd((e) => {
+      const newDur = Math.max(15, Math.round((durMin + e.translationY / PX_PER_MIN) / SNAP_MIN) * SNAP_MIN);
+      runOnJS(onCommitResize)(booking.id, newDur);
+      dh.value = withTiming(0, { duration: 120 });
+      active.value = 0;
+    });
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: tx.value }, { translateY: ty.value }, { scale: active.value ? 1.02 : 1 }],
+    height: Math.max(baseHeight + dh.value, 26),
+    zIndex: active.value ? 999 : 1,
+    shadowOpacity: active.value ? 0.4 : 0,
+  }));
+
+  const tall = baseHeight > 42;
   return (
-    <Animated.View
-      {...(Platform.OS !== 'web' ? panResponder.panHandlers : {})}
-      style={{
-        position: 'absolute',
-        top,
-        left: 2,
-        right: 2,
-        height,
-        transform: [{ translateY: dragY }],
-        opacity: isDragging.current ? 0.4 : 1,
-        borderRadius: 6,
-        borderLeftWidth: 4,
-        borderLeftColor: color,
-        backgroundColor: color + '30',
-        overflow: 'hidden',
-        zIndex: 5,
-      }}
-    >
-      <TouchableOpacity
-        style={{ flex: 1, padding: 4 }}
-        onPress={() => {
-          if (!isDragging.current) {
-            console.log('[Calendar] Booking block tapped:', booking.id, 'customer:', clientName);
-            onPress(booking);
-          }
-        }}
-        activeOpacity={0.9}
+    <GestureDetector gesture={body}>
+      <Animated.View
+        style={[
+          styles.appt,
+          { left, top, width: colWidth - 4, backgroundColor: meta.color + '26', borderColor: meta.color },
+          animStyle,
+        ]}
       >
-        <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: '600' }} numberOfLines={1}>
-          {startLabel} - {endLabel}
-        </Text>
-        <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700', marginTop: 1 }} numberOfLines={1}>
-          {clientName}
-        </Text>
-        {height > 48 && (
-          <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11 }} numberOfLines={1}>
-            {serviceName}
+        <View style={[styles.apptAccent, { backgroundColor: meta.color }]} />
+        <Text numberOfLines={1} style={styles.apptName}>{booking.customer_name || 'Walk-in'}</Text>
+        {tall && (
+          <Text numberOfLines={1} style={styles.apptMeta}>
+            {fmtTime(startMin)} · {booking.service_name || meta.label}
           </Text>
         )}
-      </TouchableOpacity>
-    </Animated.View>
+        <GestureDetector gesture={resize}>
+          <View style={styles.resizeHandle}>
+            <View style={styles.resizeBar} />
+          </View>
+        </GestureDetector>
+      </Animated.View>
+    </GestureDetector>
   );
-});
+}
 
-// ── Day column header (barber) ──
-const BarberColHeader = React.memo(({ col, colWidth }: { col: ColDef; colWidth: number }) => (
-  <View style={{ width: colWidth, alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: P.border, borderLeftWidth: 1, borderLeftColor: P.border }}>
-    {col.avatar_url ? (
-      <Image source={resolveImageSource(col.avatar_url)} style={{ width: 32, height: 32, borderRadius: 16 }} />
-    ) : (
-      <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: P.accentLight, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ color: P.accent, fontSize: 14, fontWeight: '700' }}>{col.initial ?? col.label.charAt(0)}</Text>
-      </View>
-    )}
-    <Text style={{ color: P.text, fontSize: 11, fontWeight: '600', marginTop: 4, textAlign: 'center' }} numberOfLines={1}>{col.label}</Text>
-  </View>
-));
-
-// ── Date column header (week/3day) ──
-const DateColHeader = React.memo(({ col, colWidth, isToday, isSelected, onPress }: { col: ColDef; colWidth: number; isToday: boolean; isSelected: boolean; onPress: () => void }) => (
-  <TouchableOpacity
-    style={{ width: colWidth, alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: P.border, borderLeftWidth: 1, borderLeftColor: P.border }}
-    onPress={onPress}
-  >
-    <Text style={{ color: isToday ? P.accent : P.textSecondary, fontSize: 11, fontWeight: '600' }}>{col.label}</Text>
-    <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: isToday ? P.accent : isSelected ? P.surfaceElevated : 'transparent', alignItems: 'center', justifyContent: 'center', marginTop: 2, borderWidth: isSelected && !isToday ? 1 : 0, borderColor: P.accent }}>
-      <Text style={{ color: isToday ? '#fff' : isSelected ? P.accent : P.text, fontSize: 14, fontWeight: '700' }}>{col.sublabel ?? String(col.date.getDate())}</Text>
-    </View>
-  </TouchableOpacity>
-));
-
-function PartnerCalendarInner({ router: expoRouter }: { router: ReturnType<typeof useRouter> }) {
-  const insets = useSafeInsets();
+// ─── Main inner ────────────────────────────────────────────────────────────────
+function PartnerCalendarInner() {
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { profile } = useAuth();
   const shopId = profile?.shop_id;
 
-  const [calView, setCalView] = useState<'day' | '3day' | 'week' | 'month'>('day');
-  const [selectedDate, setSelectedDate] = useState(new Date());
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [barbers, setBarbers] = useState<BarberRow[]>([]);
-  const [selectedBarberId, setSelectedBarberId] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState(new Date());
   const [loading, setLoading] = useState(true);
   const [isDemo, setIsDemo] = useState(false);
-
-  // Sheets
-  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
-  const [detailTab, setDetailTab] = useState<'details' | 'activity'>('details');
-  const [showViewSwitcher, setShowViewSwitcher] = useState(false);
-  const [showMonthPicker, setShowMonthPicker] = useState(false);
-  const [monthPickerDate, setMonthPickerDate] = useState(new Date());
-
-  // Payment flow
-  const [showPaymentSelect, setShowPaymentSelect] = useState(false);
-  const [showCashModal, setShowCashModal] = useState(false);
-  const [cashAmount, setCashAmount] = useState('');
-
-  // Reschedule confirmation
-  const [pendingReschedule, setPendingReschedule] = useState<{ booking: Booking; deltaMinutes: number } | null>(null);
-  const [notifyClient, setNotifyClient] = useState(true);
-
-  // Drag reschedule bar
-  const [dragBooking, setDragBooking] = useState<Booking | null>(null);
-  const [dragNewTime, setDragNewTime] = useState<Date | null>(null);
-
-  // Status picker
-  const [showStatusPicker, setShowStatusPicker] = useState(false);
-
-  // Add sheet
-  const [showAddSheet, setShowAddSheet] = useState(false);
-  const [clientReady, setClientReady] = React.useState(false);
+  const [selected, setSelected] = useState<Booking | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const toastAnim = useRef(new Animated.Value(-60)).current;
+  const toastY = useRef(new RNAnimated.Value(-80)).current;
+  const gridScrollRef = useRef<any>(null);
 
-  // Scroll refs
-  const timeScrollRef = useRef<ScrollView>(null);
-
-  // Current time
-  const [nowMinutes, setNowMinutes] = useState(() => {
-    const n = new Date();
-    return n.getHours() * 60 + n.getMinutes();
-  });
-
-  useEffect(() => {
-    const t = setInterval(() => {
-      const n = new Date();
-      setNowMinutes(n.getHours() * 60 + n.getMinutes());
-    }, 60000);
-    return () => clearInterval(t);
-  }, []);
-
-  useEffect(() => { setClientReady(true); }, []);
-
-  const nowTop = ((nowMinutes - START_HOUR * 60) / 60) * HOUR_HEIGHT;
-  const nowHour = Math.floor(nowMinutes / 60);
-  const nowMin = nowMinutes % 60;
-  const nowAmPm = nowHour >= 12 ? 'pm' : 'am';
-  const nowH12 = nowHour % 12 === 0 ? 12 : nowHour % 12;
-  const nowLabel = `${nowH12}:${String(nowMin).padStart(2, '0')}`;
-
-  const showToastMsg = useCallback((msg: string) => {
-    setToast(msg);
-    Animated.sequence([
-      Animated.timing(toastAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
-      Animated.delay(2500),
-      Animated.timing(toastAnim, { toValue: -60, duration: 300, useNativeDriver: true }),
-    ]).start(() => setToast(null));
-  }, [toastAnim]);
-
+  // ── Data ──────────────────────────────────────────────────────────────────
   const fetchBarbers = useCallback(async () => {
     if (!shopId) { setBarbers(DEMO_BARBERS); return; }
-    console.log('[Calendar] Fetching barbers for shop:', shopId);
     try {
       const { data } = await supabase
         .from('barbers')
         .select('id, display_name, avatar_url')
         .eq('shop_id', shopId)
-        .eq('status', 'approved')
-        .limit(20);
-      if (data && data.length > 0) {
-        setBarbers(data as BarberRow[]);
-      } else {
-        setBarbers(DEMO_BARBERS);
-      }
-    } catch (err) {
-      console.log('[Calendar] fetchBarbers error:', err);
-      setBarbers(DEMO_BARBERS);
-    }
+        .limit(30);
+      setBarbers(data && data.length > 0 ? (data as BarberRow[]) : []);
+    } catch { setBarbers([]); }
   }, [shopId]);
 
   const fetchBookings = useCallback(async () => {
-    if (!shopId) {
-      console.log('[Calendar] No shop_id, showing demo bookings');
-      setBookings(DEMO_BOOKINGS);
-      setIsDemo(true);
-      setLoading(false);
-      return;
-    }
-    const rangeStart = new Date(selectedDate.getFullYear(), selectedDate.getMonth() - 1, 1);
-    const rangeEnd = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 2, 0, 23, 59, 59);
-    console.log('[Calendar] Fetching bookings range:', rangeStart.toDateString(), '-', rangeEnd.toDateString());
+    if (!shopId) { setBookings(DEMO_BOOKINGS); setIsDemo(true); setLoading(false); return; }
+    const dayStart = new Date(selectedDate); dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(selectedDate); dayEnd.setHours(23, 59, 59, 999);
     try {
-      const { data } = await supabase
+      // Plain select (no join) so a service FK quirk can never blank the calendar.
+      const { data, error } = await supabase
         .from('bookings')
-        .select('id, start_at, end_at, status, customer_name, barber_id, shop_id, payment_status, payment_method, cancel_reason, source')
+        .select('id, start_at, end_at, status, customer_name, barber_id, shop_id, total_price, service_id')
         .eq('shop_id', shopId)
-        .gte('start_at', rangeStart.toISOString())
-        .lte('start_at', rangeEnd.toISOString())
+        .gte('start_at', dayStart.toISOString())
+        .lte('start_at', dayEnd.toISOString())
         .order('start_at');
-      const fetched = (data as Booking[]) ?? [];
-      if (fetched.length === 0) {
-        console.log('[Calendar] No bookings found, showing demo');
-        setBookings(DEMO_BOOKINGS);
-        setIsDemo(true);
-      } else {
-        console.log('[Calendar] Bookings loaded:', fetched.length);
-        setBookings(fetched);
-        setIsDemo(false);
+      if (error) console.log('[Calendar] fetchBookings error:', error.message);
+      let rows: Booking[] = (data as any[]) ?? [];
+      // Resolve service names in one extra lightweight query.
+      const serviceIds = Array.from(new Set(rows.map((r: any) => r.service_id).filter(Boolean)));
+      if (serviceIds.length > 0) {
+        const { data: svcs } = await supabase.from('services').select('id, name').in('id', serviceIds);
+        const nameById = new Map((svcs ?? []).map((s: any) => [s.id, s.name]));
+        rows = rows.map((r: any) => ({ ...r, service_name: nameById.get(r.service_id) ?? null }));
       }
+      setBookings(rows);
+      setIsDemo(false);
     } catch (err) {
-      console.log('[Calendar] fetchBookings error:', err);
-      setBookings(DEMO_BOOKINGS);
-      setIsDemo(true);
+      console.log('[Calendar] fetchBookings exception:', err);
+      setBookings([]);
     } finally {
       setLoading(false);
     }
@@ -463,1494 +271,305 @@ function PartnerCalendarInner({ router: expoRouter }: { router: ReturnType<typeo
   useEffect(() => { fetchBarbers(); }, [fetchBarbers]);
   useEffect(() => { fetchBookings(); }, [fetchBookings]);
 
+  // ── Realtime: new/changed bookings land on the grid live ────────────────────
   useEffect(() => {
     if (!shopId) return;
     const channel = supabase
       .channel(`calendar-${shopId}-${Date.now()}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings', filter: `shop_id=eq.${shopId}` }, () => {
-        console.log('[Calendar] Real-time update received');
-        fetchBookings();
-      })
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'bookings', filter: `shop_id=eq.${shopId}` },
+        (payload) => {
+          if (payload.eventType === 'INSERT') showToast('New booking received');
+          fetchBookings();
+        })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [shopId, fetchBookings]);
 
-  // Auto-scroll to current time on mount
-  useEffect(() => {
-    setTimeout(() => {
-      timeScrollRef.current?.scrollTo({ y: Math.max(0, nowTop - 120), animated: true });
-    }, 600);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    RNAnimated.sequence([
+      RNAnimated.timing(toastY, { toValue: 0, duration: 260, useNativeDriver: true }),
+      RNAnimated.delay(2600),
+      RNAnimated.timing(toastY, { toValue: -80, duration: 260, useNativeDriver: true }),
+    ]).start(() => setToast(null));
+  }, [toastY]);
 
-  // ── Drag end handler ──
-  const handleDragEnd = useCallback((booking: Booking, deltaMinutes: number) => {
-    console.log('[Calendar] Drag end — showing reschedule bar for booking:', booking.id, 'delta:', deltaMinutes);
-    const newStart = new Date(new Date(booking.start_at).getTime() + deltaMinutes * 60000);
-    setDragBooking(booking);
-    setDragNewTime(newStart);
-  }, []);
+  // ── Columns: an "Any" lane + one lane per staff member ──────────────────────
+  const columns: Column[] = useMemo(() => {
+    const staff = barbers.map((b) => ({
+      key: b.id, barberId: b.id, label: b.display_name,
+      initial: (b.display_name || '?').charAt(0).toUpperCase(), avatar: b.avatar_url,
+    }));
+    return [{ key: 'any', barberId: null, label: 'Any staff', initial: 'A', avatar: null }, ...staff];
+  }, [barbers]);
 
-  // ── Booking press handler ──
-  const handleBookingPress = useCallback((b: Booking) => {
-    setSelectedBooking(b);
-    setDetailTab('details');
-  }, []);
+  const numCols = columns.length;
+  const colWidth = Math.max(MIN_COL_W, (SCREEN_W - TIME_COL_W) / numCols);
+  const gridWidth = TIME_COL_W + numCols * colWidth;
 
-  // ── Accept / Decline handler ──
-  const handleUpdateBookingStatus = useCallback(async (bookingId: string, newStatus: 'confirmed' | 'cancelled') => {
-    console.log('[Calendar] Updating booking status:', bookingId, '->', newStatus);
-    const { error } = await supabase.from('bookings').update({ status: newStatus }).eq('id', bookingId);
-    if (error) {
-      console.log('[Calendar] Status update error:', error.message);
-      return;
-    }
-    setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: newStatus } : b));
-    setSelectedBooking(null);
-    console.log('[Calendar] Booking status updated successfully');
-  }, []);
-
-  // ── Early return for incomplete onboarding — after ALL hooks ──
-  if (!shopId) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#0F0F1A', alignItems: 'center', justifyContent: 'center', padding: 32, gap: 16 }}>
-        <Text style={{ color: '#C9A84C', fontSize: 20, fontWeight: '700', textAlign: 'center' }}>Setup Required</Text>
-        <Text style={{ color: '#9090B0', fontSize: 14, textAlign: 'center', lineHeight: 22 }}>
-          Complete your shop onboarding to access the calendar.
-        </Text>
-        <TouchableOpacity
-          onPress={() => expoRouter.push('/(partner)/setup' as never)}
-          style={{ backgroundColor: '#C9A84C', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 24 }}
-        >
-          <Text style={{ color: '#000', fontWeight: '700', fontSize: 15 }}>Complete Setup →</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  // ── Payment ──
-  const handlePayCash = async () => {
-    if (!selectedBooking) return;
-    const amount = parseFloat(cashAmount) || 0;
-    console.log('[Calendar] Cash payment confirmed, booking:', selectedBooking.id, 'amount:', amount);
-    if (!selectedBooking.id.startsWith('d')) {
-      try {
-        await supabase.from('bookings').update({
-          payment_status: 'paid',
-          payment_method: 'cash',
-          status: 'completed',
-        }).eq('id', selectedBooking.id);
-      } catch (err) {
-        console.log('[Calendar] Payment error:', err);
-      }
-    }
-    setShowCashModal(false);
-    setShowPaymentSelect(false);
-    setSelectedBooking(null);
-    setCashAmount('');
-    fetchBookings();
-    showToastMsg('Payment recorded');
-  };
-
-  const handleKeypad = (key: string) => {
-    if (key === '⌫') {
-      setCashAmount(prev => prev.slice(0, -1));
-    } else if (key === '.') {
-      if (!cashAmount.includes('.')) setCashAmount(prev => prev + '.');
-    } else {
-      setCashAmount(prev => (prev.length < 8 ? prev + key : prev));
-    }
-  };
-
-  // ── Header date label ──
-  const formatHeaderDate = () => {
-    if (calView === 'day') {
-      return selectedDate.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
-    }
-    if (calView === '3day') {
-      const end = new Date(selectedDate);
-      end.setDate(end.getDate() + 2);
-      return `${selectedDate.getDate()} – ${end.getDate()} ${MONTH_NAMES[selectedDate.getMonth()].slice(0, 3)} ${selectedDate.getFullYear()}`;
-    }
-    if (calView === 'week') {
-      const mon = getWeekMonday(selectedDate);
-      const sun = new Date(mon);
-      sun.setDate(mon.getDate() + 6);
-      return `${mon.getDate()} – ${sun.getDate()} ${MONTH_NAMES[mon.getMonth()].slice(0, 3)} ${mon.getFullYear()}`;
-    }
-    return `${MONTH_NAMES[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`;
-  };
-
-  const goToPrev = () => {
-    console.log('[Calendar] Navigate prev, view:', calView);
-    const d = new Date(selectedDate);
-    if (calView === 'day') d.setDate(d.getDate() - 1);
-    else if (calView === '3day') d.setDate(d.getDate() - 3);
-    else if (calView === 'week') d.setDate(d.getDate() - 7);
-    else d.setMonth(d.getMonth() - 1);
-    setSelectedDate(d);
-  };
-
-  const goToNext = () => {
-    console.log('[Calendar] Navigate next, view:', calView);
-    const d = new Date(selectedDate);
-    if (calView === 'day') d.setDate(d.getDate() + 1);
-    else if (calView === '3day') d.setDate(d.getDate() + 3);
-    else if (calView === 'week') d.setDate(d.getDate() + 7);
-    else d.setMonth(d.getMonth() + 1);
-    setSelectedDate(d);
-  };
-
-  // ── Filtered bookings ──
-  const filteredBookings = selectedBarberId
-    ? bookings.filter(b => b.barber_id === selectedBarberId)
-    : bookings;
-
-  const bookingsForDateAndBarber = (date: Date, barberId?: string) =>
-    filteredBookings.filter(b => {
-      const bd = new Date(b.start_at);
-      if (!isSameDay(bd, date)) return false;
-      if (barberId) return b.barber_id === barberId;
-      return true;
+  // ── Visible hour range (expands to fit the day's bookings) ──────────────────
+  const dayBookings = bookings.filter((b) => sameDay(new Date(b.start_at), selectedDate));
+  const { startHour, endHour } = useMemo(() => {
+    let lo = 8, hi = 21;
+    dayBookings.forEach((b) => {
+      const s = Math.floor(minutesOf(b.start_at) / 60);
+      const e = Math.ceil((minutesOf(b.start_at) + durationOf(b)) / 60);
+      lo = Math.min(lo, s); hi = Math.max(hi, e);
     });
+    return { startHour: Math.max(0, lo), endHour: Math.min(24, Math.max(hi, lo + 4)) };
+  }, [dayBookings]);
+  const dayStartMin = startHour * 60;
+  const totalHeight = (endHour - startHour) * HOUR_HEIGHT;
 
-  // ── Column definitions ──
-  const dayViewBarbers = selectedBarberId
-    ? barbers.filter(b => b.id === selectedBarberId)
-    : (barbers.length > 0 ? barbers : DEMO_BARBERS);
+  const colIndexFor = useCallback((b: Booking) => {
+    const idx = columns.findIndex((c) => c.barberId && c.barberId === b.barber_id);
+    return idx === -1 ? 0 : idx; // unmatched / null → "Any" lane
+  }, [columns]);
 
-  const dayColumns: ColDef[] = dayViewBarbers.length > 0
-    ? dayViewBarbers.map(bar => ({
-        key: bar.id,
-        label: bar.display_name,
-        initial: bar.display_name.charAt(0),
-        avatar_url: bar.avatar_url,
-        date: selectedDate,
-        barberId: bar.id,
-      }))
-    : [{ key: 'all', label: 'All Staff', initial: 'A', date: selectedDate }];
+  // ── Commit drag-move (time + staff lane) ────────────────────────────────────
+  const commitMove = useCallback(async (id: string, deltaMin: number, colShift: number) => {
+    const b = bookings.find((x) => x.id === id);
+    if (!b) return;
+    const curCol = colIndexFor(b);
+    const newCol = Math.max(0, Math.min(numCols - 1, curCol + colShift));
+    const newBarberId = columns[newCol].barberId;
+    const dur = durationOf(b);
+    let newStartMin = minutesOf(b.start_at) + deltaMin;
+    newStartMin = Math.max(dayStartMin, Math.min(newStartMin, endHour * 60 - dur));
+    if (deltaMin === 0 && newBarberId === b.barber_id) return;
 
-  const threeDayColumns: ColDef[] = [0, 1, 2].map(i => {
-    const d = new Date(selectedDate);
-    d.setDate(d.getDate() + i);
-    return { key: d.toDateString(), label: DAY_NAMES_SHORT[d.getDay()], sublabel: String(d.getDate()), date: d };
-  });
+    const ns = new Date(b.start_at);
+    ns.setHours(Math.floor(newStartMin / 60), newStartMin % 60, 0, 0);
+    const ne = new Date(ns.getTime() + dur * 60000);
+    const startIso = ns.toISOString(); const endIso = ne.toISOString();
 
-  const weekColW = Math.floor((SCREEN_W - TIME_COL_WIDTH) / 7);
-  const weekColumns: ColDef[] = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(getWeekMonday(selectedDate));
-    d.setDate(d.getDate() + i);
-    return { key: d.toDateString(), label: DAY_LETTERS[d.getDay()], sublabel: String(d.getDate()), date: d };
-  });
+    setBookings((prev) => prev.map((x) => x.id === id ? { ...x, start_at: startIso, end_at: endIso, barber_id: newBarberId } : x));
+    if (isDemo || !shopId) return;
+    const { error } = await supabase.from('bookings').update({ start_at: startIso, end_at: endIso, barber_id: newBarberId }).eq('id', id);
+    if (error) { showToast('Could not move booking'); fetchBookings(); }
+  }, [bookings, colIndexFor, columns, numCols, dayStartMin, endHour, isDemo, shopId, fetchBookings, showToast]);
 
-  // ── Week strip days ──
-  const weekStripDays = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(getWeekMonday(selectedDate));
-    d.setDate(d.getDate() + i);
-    return d;
-  });
+  // ── Commit resize (duration) ────────────────────────────────────────────────
+  const commitResize = useCallback(async (id: string, newDuration: number) => {
+    const b = bookings.find((x) => x.id === id);
+    if (!b) return;
+    const ne = new Date(new Date(b.start_at).getTime() + newDuration * 60000);
+    const endIso = ne.toISOString();
+    setBookings((prev) => prev.map((x) => x.id === id ? { ...x, end_at: endIso } : x));
+    if (isDemo || !shopId) return;
+    const { error } = await supabase.from('bookings').update({ end_at: endIso }).eq('id', id);
+    if (error) { showToast('Could not resize booking'); fetchBookings(); }
+  }, [bookings, isDemo, shopId, fetchBookings, showToast]);
 
-  // ── Selected booking helpers ──
-  const selectedBookingPrice = 0;
-  const selectedBookingPriceStr = Number(selectedBookingPrice).toFixed(3);
-  const selectedBookingBarberName = 'Staff';
-  const selectedBookingBarberInitial = selectedBookingBarberName.charAt(0);
+  // ── Status change from the detail sheet ─────────────────────────────────────
+  const changeStatus = useCallback(async (id: string, status: string) => {
+    setBookings((prev) => prev.map((x) => x.id === id ? { ...x, status } : x));
+    setSelected((s) => s && s.id === id ? { ...s, status } : s);
+    if (isDemo || !shopId) { setSelected(null); return; }
+    const { error } = await supabase.from('bookings').update({ status }).eq('id', id);
+    if (error) showToast('Could not update status');
+    setSelected(null);
+  }, [isDemo, shopId, showToast]);
 
-  // ── Month picker ──
-  const monthDays = getMonthDays(monthPickerDate);
-
-  const headerDateText = formatHeaderDate();
-  const profileInitial = profile?.full_name?.charAt(0) ?? 'S';
-
-  // ── Render time grid (single vertical ScrollView, no nested horizontal) ──
-  const renderTimeGrid = (columns: ColDef[], colW: number, isDayView: boolean) => {
-    const innerWidth = TIME_COL_WIDTH + columns.length * colW;
-
+  // ── Setup gate ──────────────────────────────────────────────────────────────
+  if (!shopId && !isDemo) {
     return (
-      <View style={{ flex: 1 }}>
-        {/* Column headers — horizontally scrollable to match grid */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          scrollEnabled={isDayView && columns.length > 2}
-          style={{ flexGrow: 0 }}
-          contentContainerStyle={{ paddingLeft: TIME_COL_WIDTH }}
-        >
-          {columns.map((col) => {
-            const isToday = isSameDay(col.date, new Date());
-            const isSelected = isSameDay(col.date, selectedDate);
-            if (isDayView) {
-              return <BarberColHeader key={col.key} col={col} colWidth={colW} />;
-            }
-            return (
-              <DateColHeader
-                key={col.key}
-                col={col}
-                colWidth={colW}
-                isToday={isToday}
-                isSelected={isSelected}
-                onPress={() => {
-                  console.log('[Calendar] Column header tapped:', col.label, col.sublabel);
-                  setSelectedDate(col.date);
-                }}
-              />
-            );
-          })}
-        </ScrollView>
-
-        {/* Single ScrollView — vertical scroll only, horizontal pan for drag */}
-        <ScrollView
-          ref={timeScrollRef}
-          style={{ flex: 1 }}
-          showsVerticalScrollIndicator={false}
-          scrollEventThrottle={16}
-        >
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            scrollEnabled={isDayView && columns.length > 2}
-            scrollEventThrottle={16}
-          >
-            <View style={{ flexDirection: 'row', width: innerWidth }}>
-              {/* Time labels column */}
-              <View style={{ width: TIME_COL_WIDTH, height: totalGridHeight }}>
-                {nowTop >= 0 && nowTop <= totalGridHeight && (
-                  <View
-                    style={{ position: 'absolute', top: nowTop - 10, left: 0, right: 0, zIndex: 21 }}
-                  >
-                    <View style={{ backgroundColor: '#E85454', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4, alignSelf: 'flex-start', marginLeft: 2 }}>
-                      <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>{nowLabel}</Text>
-                    </View>
-                  </View>
-                )}
-                {hours.map(h => (
-                  <View key={h} style={{ height: HOUR_HEIGHT, justifyContent: 'flex-start', paddingTop: 4, paddingRight: 6, paddingLeft: 4 }}>
-                    <Text style={{ color: P.textTertiary, fontSize: 10, textAlign: 'right' }}>{formatHour(h)}</Text>
-                  </View>
-                ))}
-              </View>
-
-              {/* Each column */}
-              {columns.map((col) => {
-                const colBookings = bookingsForDateAndBarber(col.date, col.barberId);
-                const isColToday = isSameDay(col.date, new Date());
-                return (
-                  <View
-                    key={col.key}
-                    style={{ width: colW, height: totalGridHeight, position: 'relative', borderLeftWidth: 1, borderLeftColor: P.border + '88' }}
-                  >
-                    {hours.map(h => (
-                      <View key={h} style={{ position: 'absolute', top: (h - START_HOUR) * HOUR_HEIGHT, left: 0, right: 0, height: 1, backgroundColor: P.border + '66' }} />
-                    ))}
-                    {hours.map(h => (
-                      <View key={`h${h}`} style={{ position: 'absolute', top: (h - START_HOUR) * HOUR_HEIGHT + HOUR_HEIGHT / 2, left: 0, right: 0, height: 1, backgroundColor: P.border + '33' }} />
-                    ))}
-                    {hours.map(h => (
-                      <Pressable
-                        key={`slot${h}`}
-                        style={{ position: 'absolute', top: (h - START_HOUR) * HOUR_HEIGHT, left: 0, right: 0, height: HOUR_HEIGHT, zIndex: 1 }}
-                        onPress={() => {
-                          const dateStr = col.date.toISOString().split('T')[0];
-                          const timeStr = `${String(h).padStart(2, '0')}:00`;
-                          console.log('[Calendar] Empty slot tapped, date:', dateStr, 'time:', timeStr, 'barber:', col.barberId ?? 'any');
-                          if (clientReady) expoRouter.push(`/(partner)/new-booking?date=${dateStr}&time=${timeStr}${col.barberId ? `&barberId=${col.barberId}` : ''}` as never);
-                        }}
-                      />
-                    ))}
-                    {isColToday && nowTop >= 0 && nowTop <= totalGridHeight && (
-                      <View
-                        style={{ position: 'absolute', top: nowTop, left: 0, right: 0, zIndex: 20, flexDirection: 'row', alignItems: 'center' }}
-                      >
-                        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#E85454', marginLeft: -5 }} />
-                        <View style={{ flex: 1, height: 2, backgroundColor: '#E85454' }} />
-                      </View>
-                    )}
-                    {colBookings.map(b => (
-                      <BookingBlock
-                        key={b.id}
-                        booking={b}
-                        colWidth={colW}
-                        onPress={handleBookingPress}
-                        onDragEnd={handleDragEnd}
-                      />
-                    ))}
-                  </View>
-                );
-              })}
-            </View>
-          </ScrollView>
-        </ScrollView>
-      </View>
-    );
-  };
-
-  // ── Month view ──
-  const renderMonthView = () => {
-    const days = getMonthDays(selectedDate);
-    const weeks = chunk(days, 7);
-    const cellW = Math.floor(SCREEN_W / 7);
-
-    return (
-      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-        <View style={{ flexDirection: 'row', backgroundColor: P.surface, borderBottomWidth: 1, borderBottomColor: P.border }}>
-          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
-            <View key={i} style={{ width: cellW, alignItems: 'center', paddingVertical: 8 }}>
-              <Text style={{ color: P.textSecondary, fontSize: 12, fontWeight: '600' }}>{d}</Text>
-            </View>
-          ))}
-        </View>
-        {weeks.map((week, wi) => (
-          <View key={wi} style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: P.border }}>
-            {week.map((day, di) => {
-              if (!day) return <View key={di} style={{ width: cellW, height: 90, borderRightWidth: 1, borderRightColor: P.border }} />;
-              const isToday = isSameDay(day, new Date());
-              const isSelected = isSameDay(day, selectedDate);
-              const dayBookings = filteredBookings.filter(b => isSameDay(new Date(b.start_at), day));
-              const dayNumStyle = isToday ? '#fff' : P.text;
-              const circleBg = isToday ? P.accent : isSelected ? P.accentLight : 'transparent';
-              return (
-                <Pressable
-                  key={di}
-                  style={{ width: cellW, height: 90, borderRightWidth: 1, borderRightColor: P.border, padding: 4 }}
-                  onPress={() => {
-                    console.log('[Calendar] Month cell tapped:', day.toDateString());
-                    setSelectedDate(day);
-                    setCalView('day');
-                  }}
-                >
-                  <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: circleBg, alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-end' }}>
-                    <Text style={{ color: dayNumStyle, fontSize: 12, fontWeight: '700' }}>{day.getDate()}</Text>
-                  </View>
-                  {dayBookings.slice(0, 2).map((b, bi) => {
-                    const bColor = statusColor(b.status);
-                    const bName = b.customer_name ?? 'Walk-in';
-                    return (
-                      <View key={bi} style={{ backgroundColor: bColor + '33', borderLeftWidth: 2, borderLeftColor: bColor, borderRadius: 2, paddingHorizontal: 3, paddingVertical: 1, marginTop: 2 }}>
-                        <Text style={{ color: bColor, fontSize: 9, fontWeight: '600' }} numberOfLines={1}>{bName}</Text>
-                      </View>
-                    );
-                  })}
-                  {dayBookings.length > 2 && (
-                    <Text style={{ color: P.textTertiary, fontSize: 9, marginTop: 1 }}>+{dayBookings.length - 2}</Text>
-                  )}
-                </Pressable>
-              );
-            })}
-          </View>
-        ))}
-      </ScrollView>
-    );
-  };
-
-  // ── Barber filter chips ──
-  const renderBarberChips = () => (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.barberChipsContent}
-      style={styles.barberChipsScroll}
-    >
-      <TouchableOpacity
-        style={[styles.barberChip, !selectedBarberId && styles.barberChipActive]}
-        onPress={() => { console.log('[Calendar] Barber filter: All'); setSelectedBarberId(null); }}
-      >
-        <Text style={[styles.barberChipText, !selectedBarberId && styles.barberChipTextActive]}>All</Text>
-      </TouchableOpacity>
-      {barbers.map(b => (
-        <Pressable
-          key={b.id}
-          style={[styles.barberChip, selectedBarberId === b.id && styles.barberChipActive]}
-          onPress={() => { console.log('[Calendar] Barber filter:', b.display_name); setSelectedBarberId(b.id); }}
-        >
-          {b.avatar_url ? (
-            <Image source={resolveImageSource(b.avatar_url)} style={styles.barberChipAvatar} />
-          ) : (
-            <View style={styles.barberChipAvatarPlaceholder}>
-              <Text style={styles.barberChipAvatarText}>{b.display_name.charAt(0)}</Text>
-            </View>
-          )}
-          <Text style={[styles.barberChipText, selectedBarberId === b.id && styles.barberChipTextActive]}>{b.display_name}</Text>
+      <View style={[styles.center, { paddingTop: insets.top }]}>
+        <CalendarIcon size={40} color={P.accent} />
+        <Text style={styles.setupTitle}>Set up your shop</Text>
+        <Text style={styles.setupSub}>Create your venue to start receiving bookings on your calendar.</Text>
+        <Pressable style={styles.setupBtn} onPress={() => router.push('/(partner)/setup' as never)}>
+          <Text style={styles.setupBtnText}>Complete setup →</Text>
         </Pressable>
-      ))}
-    </ScrollView>
-  );
-
-  if (!shopId) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#0F0F1A', alignItems: 'center', justifyContent: 'center', padding: 32, gap: 16 }}>
-        <Text style={{ color: '#C9A84C', fontSize: 20, fontWeight: '700', textAlign: 'center' }}>Setup Required</Text>
-        <Text style={{ color: '#9090B0', fontSize: 14, textAlign: 'center', lineHeight: 22 }}>
-          Complete your shop onboarding to access the calendar.
-        </Text>
-        <TouchableOpacity
-          onPress={() => { console.log('[Calendar] Complete Setup pressed'); expoRouter.push('/(partner)/setup' as never); }}
-          style={{ backgroundColor: '#C9A84C', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 24 }}
-        >
-          <Text style={{ color: '#000', fontWeight: '700', fontSize: 15 }}>Complete Setup →</Text>
-        </TouchableOpacity>
       </View>
     );
   }
 
-  if (!clientReady) {
-    return (
-      <View style={{ flex: 1, backgroundColor: P.bg, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color={P.accent} size="large" />
-      </View>
-    );
-  }
+  const isToday = sameDay(selectedDate, new Date());
+  const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+  const nowTop = (nowMin - dayStartMin) * PX_PER_MIN;
+  const dateLabel = selectedDate.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
+  const shiftDay = (d: number) => { const n = new Date(selectedDate); n.setDate(n.getDate() + d); setSelectedDate(n); };
+
+  const hours: number[] = [];
+  for (let h = startHour; h <= endHour; h++) hours.push(h);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Toast */}
-      {toast !== null && (
-        <Animated.View style={[styles.toast, { top: insets.top + 8, transform: [{ translateY: toastAnim }] }]}>
-          <Check size={14} color="#fff" />
-          <Text style={styles.toastText}>{toast}</Text>
-          <TouchableOpacity onPress={() => setToast(null)}>
-            <X size={14} color="rgba(255,255,255,0.7)" />
-          </TouchableOpacity>
-        </Animated.View>
-      )}
-
-      {/* Top bar */}
-      <View style={styles.topBar}>
-        <TouchableOpacity style={styles.topBarBtn} onPress={() => { console.log('[Calendar] Menu button pressed'); setShowViewSwitcher(true); }}>
-          <Menu size={20} color={P.text} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.datePickerBtn} onPress={() => { console.log('[Calendar] Date picker opened'); setShowMonthPicker(true); }}>
-          <Text style={styles.datePickerText}>
-            {selectedDate.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' })}
-          </Text>
-          <ChevronDown size={14} color={P.textSecondary} />
-        </TouchableOpacity>
-        <View style={styles.topBarRight}>
-          <TouchableOpacity style={styles.topBarBtn} onPress={() => { console.log('[Calendar] Chat button pressed'); if (clientReady) expoRouter.push('/(partner)/chat' as never); }}>
-            <MessageCircle size={20} color={P.text} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.topBarBtn} onPress={() => { console.log('[Calendar] Notifications button pressed'); if (clientReady) expoRouter.push('/(partner)/notifications' as never); }}>
-            <Bell size={20} color={P.text} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.avatarBtn} onPress={() => { console.log('[Calendar] Profile avatar pressed'); if (clientReady) expoRouter.push('/(partner)/profile' as never); }}>
-            <View style={styles.avatarCircle}>
-              <Text style={styles.avatarInitials}>{(profile?.full_name ?? 'U').split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)}</Text>
-            </View>
-          </TouchableOpacity>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.dateNav}>
+          <Pressable style={styles.navBtn} onPress={() => shiftDay(-1)} hitSlop={8}><ChevronLeft size={20} color={P.text} /></Pressable>
+          <Pressable style={styles.dateLabelWrap} onPress={() => setSelectedDate(new Date())}>
+            <Text style={styles.dateLabel}>{isToday ? 'Today' : dateLabel}</Text>
+            {!isToday && <Text style={styles.dateSub}>{dateLabel}</Text>}
+          </Pressable>
+          <Pressable style={styles.navBtn} onPress={() => shiftDay(1)} hitSlop={8}><ChevronRight size={20} color={P.text} /></Pressable>
+        </View>
+        <View style={styles.headerActions}>
+          <Pressable style={styles.iconBtn} onPress={() => fetchBookings()} hitSlop={8}><RefreshCw size={18} color={P.textSecondary} /></Pressable>
+          {isDemo && <View style={styles.demoPill}><Text style={styles.demoPillText}>Demo</Text></View>}
         </View>
       </View>
 
-      {/* Staff avatar filter row */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.staffRow} contentContainerStyle={{ paddingHorizontal: 12, gap: 12, alignItems: 'center' }}>
-        <TouchableOpacity style={styles.staffAvatarWrap} onPress={() => { console.log('[Calendar] Staff filter: All'); setSelectedBarberId(null); }}>
-          <View style={[styles.staffAvatar, !selectedBarberId && styles.staffAvatarActive, { backgroundColor: P.accent }]}>
-            <Text style={styles.staffAvatarText}>All</Text>
-          </View>
-          <Text style={styles.staffAvatarName} numberOfLines={1}>All</Text>
-        </TouchableOpacity>
-        {barbers.map(b => {
-          const initials = (b.display_name ?? 'B').split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2);
-          const isActive = selectedBarberId === b.id;
-          return (
-            <TouchableOpacity key={b.id} style={styles.staffAvatarWrap} onPress={() => { console.log('[Calendar] Staff filter:', b.display_name); setSelectedBarberId(isActive ? null : b.id); }}>
-              {b.avatar_url ? (
-                <Image source={{ uri: b.avatar_url }} style={[styles.staffAvatar, isActive && styles.staffAvatarActive]} />
-              ) : (
-                <View style={[styles.staffAvatar, isActive && styles.staffAvatarActive, { backgroundColor: BARBER_COLORS[barbers.indexOf(b) % BARBER_COLORS.length] }]}>
-                  <Text style={styles.staffAvatarText}>{initials}</Text>
-                </View>
-              )}
-              <Text style={[styles.staffAvatarName, isActive && { color: P.accent }]} numberOfLines={1}>{b.display_name?.split(' ')[0] ?? 'Staff'}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
-
-      {/* View switcher row */}
-      <View style={styles.viewSwitcherRow}>
-        {(['day', '3day', 'week', 'month'] as const).map(v => {
-          const isActive = calView === v;
-          const label = v === 'day' ? 'Day' : v === '3day' ? '3 Day' : v === 'week' ? 'Week' : 'Month';
-          return (
-            <TouchableOpacity
-              key={v}
-              onPress={() => { console.log('[Calendar] View switched to:', v); setCalView(v); }}
-              style={[styles.viewTabBtn, isActive && styles.viewTabBtnActive]}
-            >
-              <Text style={[styles.viewTabText, isActive && styles.viewTabTextActive]}>{label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-        <View style={{ flex: 1 }} />
-        <TouchableOpacity style={styles.refreshBtn} onPress={() => { console.log('[Calendar] Refresh pressed'); fetchBookings(); }}>
-          <RefreshCw size={14} color={P.textSecondary} />
-        </TouchableOpacity>
-      </View>
-
-      {/* Week strip */}
-      {calView !== 'month' && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ backgroundColor: P.surface, borderBottomWidth: 1, borderBottomColor: P.border }}>
-          {weekStripDays.map(day => {
-            const isToday = isSameDay(day, new Date());
-            const isSelected = isSameDay(day, selectedDate);
-            const dayBookings = bookings.filter(b => isSameDay(new Date(b.start_at), day));
-            const circleBg = isToday ? P.accent : isSelected ? P.surfaceElevated : 'transparent';
-            const numColor = isToday ? '#fff' : P.text;
-            const letterColor = isToday ? P.accent : P.textSecondary;
-            return (
-              <TouchableOpacity
-                key={day.toDateString()}
-                onPress={() => {
-                  console.log('[Calendar] Week strip day tapped:', day.toDateString());
-                  setSelectedDate(day);
-                }}
-                style={{ alignItems: 'center', paddingVertical: 8, paddingHorizontal: 10, minWidth: 44 }}
-              >
-                <Text style={{ color: letterColor, fontSize: 11, fontWeight: '600' }}>{DAY_LETTERS[day.getDay()]}</Text>
-                <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: circleBg, alignItems: 'center', justifyContent: 'center', marginVertical: 2, borderWidth: isSelected && !isToday ? 1 : 0, borderColor: P.accent }}>
-                  <Text style={{ color: numColor, fontSize: 13, fontWeight: '700' }}>{day.getDate()}</Text>
-                </View>
-                <View style={{ flexDirection: 'row', gap: 2, height: 6 }}>
-                  {dayBookings.slice(0, 3).map((b, i) => (
-                    <View key={i} style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: statusColor(b.status) }} />
-                  ))}
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      )}
-
-      {/* Barber filter chips */}
-      {calView !== 'month' && renderBarberChips()}
-
-      {/* Drag reschedule confirmation bar */}
-      {dragBooking && dragNewTime && (
-        <View style={styles.rescheduleBar}>
-          <Text style={styles.rescheduleBarText}>
-            {`Reschedule to ${dragNewTime.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' })} · ${dragNewTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`}
-          </Text>
-          <View style={styles.rescheduleBarActions}>
-            <TouchableOpacity style={styles.rescheduleBarCancel} onPress={() => { console.log('[Calendar] Reschedule bar cancelled'); setDragBooking(null); setDragNewTime(null); }}>
-              <Text style={styles.rescheduleBarCancelText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.rescheduleBarSave} onPress={async () => {
-              if (!dragBooking || !dragNewTime) return;
-              console.log('[Calendar] Reschedule bar save pressed, booking:', dragBooking.id, 'new time:', dragNewTime.toISOString());
-              const duration = new Date(dragBooking.end_at ?? dragBooking.start_at).getTime() - new Date(dragBooking.start_at).getTime();
-              const newEnd = new Date(dragNewTime.getTime() + duration);
-              const newStart = dragNewTime.toISOString();
-              const newEndIso = newEnd.toISOString();
-              const bookingId = dragBooking.id;
-              const { error } = await supabase.from('bookings').update({ start_at: newStart, end_at: newEndIso }).eq('id', bookingId);
-              if (!error) {
-                setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, start_at: newStart, end_at: newEndIso } : b));
-              }
-              setDragBooking(null);
-              setDragNewTime(null);
-              if (error) fetchBookings();
-            }}>
-              <Text style={styles.rescheduleBarSaveText}>Save</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
-      {/* Calendar grid */}
       {loading ? (
-        <View style={styles.loadingWrap}>
-          <ActivityIndicator color={P.accent} size="large" />
-        </View>
-      ) : !shopId ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 16 }}>
-          <Text style={{ color: P.gold, fontSize: 18, fontWeight: '700', textAlign: 'center' }}>Setup Required</Text>
-          <Text style={{ color: P.textSecondary, fontSize: 14, textAlign: 'center', lineHeight: 22 }}>
-            Complete your shop onboarding to view and manage your calendar.
-          </Text>
-          <TouchableOpacity
-            onPress={() => {
-              console.log('[Calendar] Complete Setup button pressed');
-              expoRouter.push('/(partner)/setup' as never);
-            }}
-            style={{ backgroundColor: P.gold, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 24, alignItems: 'center' }}
-          >
-            <Text style={{ color: '#000', fontWeight: '700', fontSize: 15 }}>Complete Setup →</Text>
-          </TouchableOpacity>
-        </View>
+        <View style={styles.center}><ActivityIndicator color={P.accent} size="large" /></View>
       ) : (
-        <View style={{ flex: 1 }}>
-          {calView === 'day' && renderTimeGrid(dayColumns, COL_WIDTH, true)}
-          {calView === '3day' && renderTimeGrid(threeDayColumns, Math.floor((SCREEN_W - TIME_COL_WIDTH) / 3), false)}
-          {calView === 'week' && renderTimeGrid(weekColumns, weekColW, false)}
-          {calView === 'month' && renderMonthView()}
-        </View>
-      )}
-
-      {/* Bottom action bar */}
-      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 8 }]}>
-        <TouchableOpacity style={styles.bbBtn} onPress={() => { console.log('[Calendar] Bottom bar: Calendar pressed'); if (clientReady) expoRouter.push('/(partner)/calendar' as never); }}>
-          <CalendarDays size={22} color={P.accent} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.bbBtn} onPress={() => console.log('[Calendar] Bottom bar: Tag pressed')}>
-          <Tag size={22} color={P.textSecondary} />
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.bbBtn, styles.bbCenter]} onPress={() => { console.log('[Calendar] Bottom bar: Add sheet opened'); setShowAddSheet(true); }}>
-          <Plus size={24} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.bbBtn} onPress={() => console.log('[Calendar] Bottom bar: Smile pressed')}>
-          <Smile size={22} color={P.textSecondary} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.bbBtn} onPress={() => { console.log('[Calendar] Bottom bar: More pressed'); if (clientReady) expoRouter.push('/(partner)/more' as never); }}>
-          <Grid3x3 size={22} color={P.textSecondary} />
-        </TouchableOpacity>
-      </View>
-
-      {/* ── Booking Detail Sheet ── */}
-      <Modal visible={!!selectedBooking} transparent animationType="slide" onRequestClose={() => setSelectedBooking(null)}>
-        <View style={styles.sheetOverlay}>
-          <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
-            <View style={styles.sheetHandle} />
-
-            <View style={styles.saleHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.saleTitle}>Sale</Text>
-                <Text style={styles.saleSubtitle}>
-                  {selectedBooking ? new Date(selectedBooking.start_at).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' }) : ''}
-                  {' • '}
-                  {selectedBookingBarberInitial}
-                </Text>
-              </View>
-              <TouchableOpacity onPress={() => { console.log('[Calendar] Detail sheet closed'); setSelectedBooking(null); }}>
-                <X size={22} color={P.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.statusRow}>
-              <TouchableOpacity onPress={() => { console.log('[Calendar] Status badge tapped, opening status picker'); setShowStatusPicker(true); }} style={[styles.statusBadge, { backgroundColor: statusColor(selectedBooking?.status ?? '') + '22', borderColor: statusColor(selectedBooking?.status ?? '') }]}>
-                <View style={[styles.statusDot, { backgroundColor: statusColor(selectedBooking?.status ?? '') }]} />
-                <Text style={[styles.statusBadgeText, { color: statusColor(selectedBooking?.status ?? '') }]}>
-                  {statusLabel(selectedBooking?.status ?? '')}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.rebookBtn}
-                onPress={() => {
-                  console.log('[Calendar] Rebook pressed for booking:', selectedBooking?.id);
-                  setSelectedBooking(null);
-                  if (clientReady) expoRouter.push('/(partner)/new-booking' as never);
-                }}
-              >
-                <Text style={styles.rebookBtnText}>Rebook</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.moreBtn} onPress={() => console.log('[Calendar] More options pressed for booking:', selectedBooking?.id)}>
-                <MoreHorizontal size={20} color={P.text} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.tabRow}>
-              {(['details', 'activity'] as const).map(tab => (
-                <TouchableOpacity
-                  key={tab}
-                  style={[styles.tab, detailTab === tab && styles.tabActive]}
-                  onPress={() => { console.log('[Calendar] Detail tab switched to:', tab); setDetailTab(tab); }}
-                >
-                  <Text style={[styles.tabText, detailTab === tab && styles.tabTextActive]}>
-                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                  </Text>
-                </TouchableOpacity>
+        <GHScrollView horizontal showsHorizontalScrollIndicator={false} bounces={false}>
+          <View style={{ width: gridWidth }}>
+            {/* Staff header row */}
+            <View style={styles.staffRow}>
+              <View style={{ width: TIME_COL_W }} />
+              {columns.map((c) => (
+                <View key={c.key} style={[styles.staffCell, { width: colWidth }]}>
+                  <View style={styles.staffAvatar}>
+                    {c.avatar
+                      ? <Image source={resolveImageSource(c.avatar)} style={styles.staffAvatarImg} />
+                      : <Text style={styles.staffInitial}>{c.initial}</Text>}
+                  </View>
+                  <Text numberOfLines={1} style={styles.staffName}>{c.label}</Text>
+                </View>
               ))}
             </View>
 
-            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
-              {detailTab === 'details' && selectedBooking && (
-                <View style={{ paddingHorizontal: 20, paddingTop: 12, gap: 12 }}>
-                  <View style={styles.walkInRow}>
-                    <View style={styles.walkInAvatar}>
-                      <Text style={styles.walkInAvatarText}>
-                        {(selectedBooking.customer_name ?? 'W').charAt(0)}
-                      </Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.walkInName}>
-                        {selectedBooking.customer_name ?? 'Walk-In'}
-                      </Text>
-                      {selectedBooking.source === 'walk_in' && (
-                        <Text style={styles.walkInLabel}>Walk-in</Text>
-                      )}
-                    </View>
-                  </View>
-
-                  <View style={styles.saleCard}>
-                    <Text style={styles.saleCardTitle}>Sale #1</Text>
-                    <Text style={styles.saleCardDate}>
-                      {new Date(selectedBooking.start_at).toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                    </Text>
-
-                    <View style={styles.saleServiceRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.saleServiceName}>Service</Text>
-                        <Text style={styles.saleServiceMeta}>{formatTime(new Date(selectedBooking.start_at))}</Text>
-                        <Text style={styles.saleServiceMeta}>Staff</Text>
-                      </View>
-                      <Text style={styles.saleServicePrice}>BHD —</Text>
-                    </View>
-
-                    <View style={styles.saleDivider} />
-                    <View style={styles.saleTotalRow}>
-                      <Text style={styles.saleTotalLabel}>Subtotal</Text>
-                      <Text style={styles.saleTotalValue}>BHD {selectedBookingPriceStr}</Text>
-                    </View>
-                    <View style={styles.saleTotalRow}>
-                      <Text style={[styles.saleTotalLabel, { fontWeight: '700', color: P.text }]}>Total</Text>
-                      <Text style={[styles.saleTotalValue, { fontWeight: '700', color: P.text }]}>BHD {selectedBookingPriceStr}</Text>
-                    </View>
-                    {selectedBooking.payment_status === 'paid' && (
-                      <View style={[styles.saleTotalRow, { marginTop: 8 }]}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <DollarSign size={14} color={P.success} />
-                          <Text style={styles.saleTotalLabel}>
-                            {selectedBooking.payment_method === 'cash' ? 'Cash' : 'Payment'}
-                          </Text>
-                        </View>
-                        <Text style={[styles.saleTotalValue, { color: P.success }]}>BHD {selectedBookingPriceStr}</Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-              )}
-
-              {detailTab === 'activity' && selectedBooking && (
-                <View style={{ paddingHorizontal: 20, paddingTop: 12 }}>
-                  <Text style={styles.activityMonthLabel}>
-                    {new Date(selectedBooking.start_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                  </Text>
-                  <View style={styles.activityItem}>
-                    <View style={styles.activityLine} />
-                    <View style={styles.activityDot} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.activityTitle}>Sale created</Text>
-                      <Text style={styles.activitySub}>
-                        Today at {formatTime(new Date(selectedBooking.start_at))}
-                      </Text>
-                    </View>
-                    <View style={styles.activityAvatar}>
-                      <Text style={styles.activityAvatarText}>{selectedBookingBarberInitial}</Text>
-                    </View>
-                  </View>
-                  {selectedBooking.payment_status === 'paid' && (
-                    <View style={styles.activityItem}>
-                      <View style={[styles.activityLine, { backgroundColor: P.success + '44' }]} />
-                      <View style={[styles.activityDot, { backgroundColor: P.success }]} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.activityTitle}>BHD {selectedBookingPriceStr} paid by cash</Text>
-                        <Text style={styles.activitySub}>
-                          Today at {formatTime(new Date(selectedBooking.start_at))}
-                        </Text>
-                      </View>
-                      <View style={[styles.activityAvatar, { backgroundColor: P.success + '22' }]}>
-                        <DollarSign size={14} color={P.success} />
-                      </View>
-                    </View>
-                  )}
-                  <Text style={styles.activityFooter}>Activity for this sale in the last 90 days</Text>
-                </View>
-              )}
-            </ScrollView>
-
-            {selectedBooking?.status === 'pending' && (
-              <View style={{ flexDirection: 'row', gap: 10, marginHorizontal: 20, marginBottom: 12 }}>
-                <TouchableOpacity
-                  style={{ flex: 1, backgroundColor: '#4CAF7D', borderRadius: 10, paddingVertical: 12, alignItems: 'center' }}
-                  onPress={() => {
-                    console.log('[Calendar] Accept booking pressed:', selectedBooking.id);
-                    handleUpdateBookingStatus(selectedBooking.id, 'confirmed');
-                  }}
-                >
-                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>✓ Accept</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={{ flex: 1, backgroundColor: '#E85454', borderRadius: 10, paddingVertical: 12, alignItems: 'center' }}
-                  onPress={() => {
-                    console.log('[Calendar] Decline booking pressed:', selectedBooking.id);
-                    handleUpdateBookingStatus(selectedBooking.id, 'cancelled');
-                  }}
-                >
-                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>✕ Decline</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            <View style={styles.sheetFooter}>
-              <TouchableOpacity
-                style={styles.checkoutBtn}
-                onPress={() => {
-                  if (!selectedBooking) return;
-                  console.log('[Calendar] Checkout pressed for booking:', selectedBooking.id, 'navigating to POS');
-                  setSelectedBooking(null);
-                  const clientName = encodeURIComponent(selectedBooking.customer_name ?? 'Walk-In');
-                  const serviceId = '';
-                  if (clientReady) expoRouter.push(`/(partner)/pos/new?clientName=${clientName}&serviceName=${serviceId}&bookingId=${selectedBooking.id}` as never);
-                }}
-              >
-                <Text style={styles.checkoutBtnText}>Checkout</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ── Payment Select Sheet ── */}
-      <Modal visible={showPaymentSelect} transparent animationType="slide" onRequestClose={() => setShowPaymentSelect(false)}>
-        <View style={styles.sheetOverlay}>
-          <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
-            <View style={styles.sheetHandle} />
-            <View style={styles.paymentHeader}>
-              <Text style={styles.paymentTitle}>Select payment</Text>
-              <TouchableOpacity onPress={() => { console.log('[Calendar] Payment select closed'); setShowPaymentSelect(false); }}>
-                <X size={22} color={P.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.paymentGrid}>
-              {[
-                { icon: <DollarSign size={28} color={P.success} />, label: 'Cash', onPress: () => { console.log('[Calendar] Cash payment selected'); setShowCashModal(true); } },
-                { icon: <Gift size={28} color={P.accent} />, label: 'Gift card', onPress: () => console.log('[Calendar] Gift card selected') },
-                { icon: <Zap size={28} color={P.warning} />, label: 'Split payment', onPress: () => console.log('[Calendar] Split payment selected') },
-                { icon: <CreditCard size={28} color={P.textSecondary} />, label: 'Other', onPress: () => console.log('[Calendar] Other payment selected') },
-              ].map((opt, i) => (
-                <TouchableOpacity key={i} style={styles.paymentOption} onPress={opt.onPress}>
-                  {opt.icon}
-                  <Text style={styles.paymentOptionLabel}>{opt.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <View style={styles.paymentFooterRow}>
-              <View>
-                <Text style={styles.paymentFooterLabel}>Total</Text>
-                <Text style={styles.paymentFooterSub}>To pay</Text>
-              </View>
-              <Text style={styles.paymentFooterAmount}>BHD {selectedBookingPriceStr}</Text>
-            </View>
-
-            <TouchableOpacity
-              style={styles.saveUnpaidBtn}
-              onPress={() => { console.log('[Calendar] Save unpaid pressed'); setShowPaymentSelect(false); setSelectedBooking(null); }}
+            {/* Time grid body */}
+            <GHScrollView
+              ref={gridScrollRef}
+              style={{ flex: 1 }}
+              contentContainerStyle={{ height: totalHeight + 40, paddingBottom: 40 }}
+              showsVerticalScrollIndicator={false}
             >
-              <Text style={styles.saveUnpaidText}>Save unpaid</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ── Cash Amount Sheet ── */}
-      <Modal visible={showCashModal} transparent animationType="slide" onRequestClose={() => setShowCashModal(false)}>
-        <View style={styles.sheetOverlay}>
-          <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
-            <View style={styles.sheetHandle} />
-            <View style={styles.cashHeader}>
-              <View style={{ width: 32 }} />
-              <Text style={styles.cashTitle}>Add cash amount</Text>
-              <TouchableOpacity onPress={() => { console.log('[Calendar] Cash modal closed'); setShowCashModal(false); }}>
-                <X size={22} color={P.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.cashAmountRow}>
-              <Text style={styles.cashCurrency}>BHD</Text>
-              <Text style={styles.cashAmount}>{cashAmount || '0'}</Text>
-              <View style={styles.cashCursor} />
-            </View>
-
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cashChips}>
-              {['40', '45', '50', '55'].map(v => (
-                <TouchableOpacity
-                  key={v}
-                  style={[styles.cashChip, cashAmount === v && styles.cashChipActive]}
-                  onPress={() => { console.log('[Calendar] Quick amount chip pressed:', v); setCashAmount(v); }}
-                >
-                  <Text style={[styles.cashChipText, cashAmount === v && styles.cashChipTextActive]}>BHD {v}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            <View style={styles.keypad}>
-              {['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'].map(k => (
-                <TouchableOpacity
-                  key={k}
-                  style={styles.keypadBtn}
-                  onPress={() => { console.log('[Calendar] Keypad pressed:', k); handleKeypad(k); }}
-                >
-                  <Text style={styles.keypadBtnText}>{k}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <View style={styles.cashFooterRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cashFooterLabel}>
-                  Cash received by
-                  <Text style={{ color: P.accent }}> {selectedBookingBarberName}</Text>
-                </Text>
-                <Text style={styles.cashFooterSub}>
-                  Left to pay • BHD {Math.max(0, selectedBookingPrice - (parseFloat(cashAmount) || 0)).toFixed(3)}
-                </Text>
-              </View>
-              <TouchableOpacity style={styles.cashAddBtn} onPress={handlePayCash}>
-                <Text style={styles.cashAddBtnText}>Add</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ── View Switcher Sheet ── */}
-      <Modal visible={showViewSwitcher} transparent animationType="slide" onRequestClose={() => setShowViewSwitcher(false)}>
-        <View style={styles.sheetOverlay}>
-          <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
-            <View style={styles.sheetHandle} />
-            <View style={styles.viewSwitcherHeader}>
-              <Text style={styles.viewSwitcherTitle}>Calendar Views</Text>
-              <TouchableOpacity onPress={() => { console.log('[Calendar] View switcher closed'); setShowViewSwitcher(false); }}>
-                <X size={22} color={P.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.viewCardsRow}>
-              {(['day', '3day', 'week'] as const).map(v => {
-                const isActive = calView === v;
-                const label = v === 'day' ? 'Day' : v === '3day' ? '3 day' : 'Week';
-                return (
-                  <TouchableOpacity
-                    key={v}
-                    style={[styles.viewCard, isActive && styles.viewCardActive]}
-                    onPress={() => {
-                      console.log('[Calendar] View switched to:', v);
-                      setCalView(v);
-                      setShowViewSwitcher(false);
-                    }}
-                  >
-                    <CalendarDays size={22} color={isActive ? P.accent : P.textSecondary} />
-                    <Text style={[styles.viewCardText, isActive && styles.viewCardTextActive]}>{label}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <View style={[styles.viewCardsRow, { marginTop: 10 }]}>
-              <TouchableOpacity
-                style={[styles.viewCard, styles.viewCardWide, calView === 'month' && styles.viewCardActive]}
-                onPress={() => {
-                  console.log('[Calendar] View switched to: month');
-                  setCalView('month');
-                  setShowViewSwitcher(false);
-                }}
-              >
-                <CalendarDays size={22} color={calView === 'month' ? P.accent : P.textSecondary} />
-                <Text style={[styles.viewCardText, calView === 'month' && styles.viewCardTextActive]}>Month</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.viewDivider} />
-
-            {[
-              { label: 'Filters', onPress: () => console.log('[Calendar] Filters pressed') },
-              { label: 'Waitlist', onPress: () => console.log('[Calendar] Waitlist pressed') },
-              { label: 'Personal calendar settings', onPress: () => console.log('[Calendar] Personal calendar settings pressed') },
-            ].map((row, i) => (
-              <TouchableOpacity key={i} style={styles.viewMenuRow} onPress={row.onPress}>
-                <Text style={styles.viewMenuRowText}>{row.label}</Text>
-                <ChevronRight size={18} color={P.textSecondary} />
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      </Modal>
-
-      {/* ── Month Picker Sheet ── */}
-      <Modal visible={showMonthPicker} transparent animationType="slide" onRequestClose={() => setShowMonthPicker(false)}>
-        <View style={styles.sheetOverlay}>
-          <View style={[styles.sheet, { paddingBottom: insets.bottom + 16, maxHeight: '90%' }]}>
-            <View style={styles.sheetHandle} />
-            <View style={styles.monthPickerHeader}>
-              <Text style={styles.monthPickerTitle}>
-                {MONTH_NAMES[monthPickerDate.getMonth()]} {monthPickerDate.getFullYear()}
-              </Text>
-              <TouchableOpacity onPress={() => { console.log('[Calendar] Month picker closed'); setShowMonthPicker(false); }}>
-                <X size={22} color={P.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickChips}>
-              {['In 1 week', 'In 2 weeks', 'In 3 weeks', 'In 4 weeks'].map((label, i) => {
-                const d = new Date();
-                d.setDate(d.getDate() + (i + 1) * 7);
-                return (
-                  <TouchableOpacity
-                    key={i}
-                    style={styles.quickChip}
-                    onPress={() => {
-                      console.log('[Calendar] Quick chip pressed:', label);
-                      setSelectedDate(d);
-                      setMonthPickerDate(d);
-                      setShowMonthPicker(false);
-                    }}
-                  >
-                    <Text style={styles.quickChipText}>{label}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-
-            <View style={styles.monthNavRow}>
-              <TouchableOpacity
-                style={styles.monthNavBtn}
-                onPress={() => {
-                  const d = new Date(monthPickerDate);
-                  d.setMonth(d.getMonth() - 1);
-                  console.log('[Calendar] Month picker prev month');
-                  setMonthPickerDate(d);
-                }}
-              >
-                <ChevronLeft size={18} color={P.textSecondary} />
-              </TouchableOpacity>
-              <Text style={styles.monthNavLabel}>
-                {MONTH_NAMES[monthPickerDate.getMonth()]} {monthPickerDate.getFullYear()}
-              </Text>
-              <TouchableOpacity
-                style={styles.monthNavBtn}
-                onPress={() => {
-                  const d = new Date(monthPickerDate);
-                  d.setMonth(d.getMonth() + 1);
-                  console.log('[Calendar] Month picker next month');
-                  setMonthPickerDate(d);
-                }}
-              >
-                <ChevronRight size={18} color={P.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <View style={styles.pickerDayHeaders}>
-                {['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((d, i) => (
-                  <View key={i} style={styles.pickerDayHeaderCell}>
-                    <Text style={styles.pickerDayHeaderText}>{d}</Text>
+              <View style={{ height: totalHeight }}>
+                {/* Hour lines + labels */}
+                {hours.map((h) => {
+                  const y = (h * 60 - dayStartMin) * PX_PER_MIN;
+                  return (
+                    <View key={h} style={[styles.hourLine, { top: y, width: gridWidth }]}>
+                      <Text style={styles.hourLabel}>{fmtTime(h * 60).replace(':00', '')}</Text>
+                    </View>
+                  );
+                })}
+                {/* Column separators */}
+                {columns.map((c, i) => (
+                  <View key={c.key} style={[styles.colSep, { left: TIME_COL_W + i * colWidth, height: totalHeight }]} />
+                ))}
+                {/* Now line */}
+                {isToday && nowTop >= 0 && nowTop <= totalHeight && (
+                  <View style={[styles.nowLine, { top: nowTop, width: gridWidth }]}>
+                    <View style={styles.nowDot} />
                   </View>
+                )}
+                {/* Appointment blocks */}
+                {dayBookings.map((b) => (
+                  <AppointmentBlock
+                    key={b.id}
+                    booking={b}
+                    colIndex={colIndexFor(b)}
+                    numCols={numCols}
+                    colWidth={colWidth}
+                    dayStartMin={dayStartMin}
+                    scrollRef={gridScrollRef}
+                    onCommitMove={commitMove}
+                    onCommitResize={commitResize}
+                    onOpen={setSelected}
+                  />
                 ))}
               </View>
+            </GHScrollView>
+          </View>
+        </GHScrollView>
+      )}
 
-              {(() => {
-                const days = getMonthDays(monthPickerDate);
-                const weeks: (Date | null)[][] = [];
-                for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
-                return weeks.map((week, wi) => (
-                  <View key={wi} style={styles.pickerWeekRow}>
-                    {week.map((day, di) => {
-                      if (!day) return <View key={di} style={styles.pickerCell} />;
-                      const isToday = isSameDay(day, new Date());
-                      const isSelected = isSameDay(day, selectedDate);
+      {/* Empty hint */}
+      {!loading && dayBookings.length === 0 && (
+        <View pointerEvents="none" style={styles.emptyHint}>
+          <Text style={styles.emptyHintText}>No appointments {isToday ? 'today' : 'this day'}.{'\n'}Tap + to add one.</Text>
+        </View>
+      )}
+
+      {/* FAB → new booking */}
+      <Pressable style={[styles.fab, { bottom: insets.bottom + 20 }]} onPress={() => router.push('/(partner)/new-booking' as never)}>
+        <Plus size={26} color="#fff" />
+      </Pressable>
+
+      {/* Toast */}
+      {toast && (
+        <RNAnimated.View style={[styles.toast, { top: insets.top + 8, transform: [{ translateY: toastY }] }]}>
+          <Bell size={15} color="#fff" />
+          <Text style={styles.toastText}>{toast}</Text>
+        </RNAnimated.View>
+      )}
+
+      {/* Detail sheet */}
+      <Modal visible={!!selected} transparent animationType="slide" onRequestClose={() => setSelected(null)}>
+        <Pressable style={styles.sheetBackdrop} onPress={() => setSelected(null)}>
+          <Pressable style={[styles.sheet, { paddingBottom: insets.bottom + 20 }]} onPress={(e) => e.stopPropagation()}>
+            {selected && (() => {
+              const meta = STATUS_META[selected.status] ?? STATUS_META.pending;
+              const sMin = minutesOf(selected.start_at);
+              const dur = durationOf(selected);
+              return (
+                <>
+                  <View style={styles.sheetHandle} />
+                  <View style={styles.sheetHeader}>
+                    <View style={[styles.statusDot, { backgroundColor: meta.color }]} />
+                    <Text style={styles.sheetName}>{selected.customer_name || 'Walk-in'}</Text>
+                    <Pressable onPress={() => setSelected(null)} hitSlop={10}><X size={20} color={P.textSecondary} /></Pressable>
+                  </View>
+                  <View style={styles.sheetRow}><Clock size={15} color={P.textSecondary} /><Text style={styles.sheetRowText}>{fmtTime(sMin)} – {fmtTime(sMin + dur)} ({dur} min)</Text></View>
+                  {selected.service_name && <View style={styles.sheetRow}><CalendarIcon size={15} color={P.textSecondary} /><Text style={styles.sheetRowText}>{selected.service_name}</Text></View>}
+                  {selected.total_price != null && <View style={styles.sheetRow}><DollarSign size={15} color={P.textSecondary} /><Text style={styles.sheetRowText}>BHD {Number(selected.total_price).toFixed(3)}</Text></View>}
+                  <View style={[styles.statusBadge, { backgroundColor: meta.color + '22', borderColor: meta.color }]}>
+                    <Text style={[styles.statusBadgeText, { color: meta.color }]}>{meta.label}</Text>
+                  </View>
+
+                  <Text style={styles.sheetSection}>Update status</Text>
+                  <View style={styles.statusGrid}>
+                    {STATUS_ACTIONS.map((s) => {
+                      const m = STATUS_META[s];
+                      const isCur = selected.status === s;
                       return (
-                        <TouchableOpacity
-                          key={di}
-                          style={styles.pickerCell}
-                          onPress={() => {
-                            console.log('[Calendar] Month picker date selected:', day.toDateString());
-                            setSelectedDate(day);
-                            setShowMonthPicker(false);
-                          }}
+                        <Pressable
+                          key={s}
+                          style={[styles.statusChip, { borderColor: m.color }, isCur && { backgroundColor: m.color + '22' }]}
+                          onPress={() => changeStatus(selected.id, s)}
                         >
-                          <View style={[
-                            styles.pickerDayCircle,
-                            isToday && styles.pickerDayCircleToday,
-                            isSelected && styles.pickerDayCircleSelected,
-                          ]}>
-                            <Text style={[
-                              styles.pickerDayNum,
-                              isToday && styles.pickerDayNumToday,
-                              isSelected && styles.pickerDayNumSelected,
-                            ]}>
-                              {day.getDate()}
-                            </Text>
-                          </View>
-                        </TouchableOpacity>
+                          {isCur && <Check size={13} color={m.color} />}
+                          <Text style={[styles.statusChipText, { color: m.color }]}>{m.label}</Text>
+                        </Pressable>
                       );
                     })}
                   </View>
-                ));
-              })()}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
 
-      {/* ── Status Picker Sheet ── */}
-      <Modal visible={showStatusPicker} transparent animationType="slide" onRequestClose={() => setShowStatusPicker(false)}>
-        <View style={styles.sheetOverlay}>
-          <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
-            <View style={styles.sheetHandle} />
-            <Text style={[styles.sheetTitle, { marginBottom: 16 }]}>Appointment Status</Text>
-            {[
-              { key: 'pending', label: 'Booked', color: P.textSecondary, icon: '📅' },
-              { key: 'confirmed', label: 'Confirmed', color: '#7C3AED', icon: '✅' },
-              { key: 'arrived', label: 'Arrived', color: '#0EA5E9', icon: '🚶' },
-              { key: 'started', label: 'Started', color: '#F59E0B', icon: '✂️' },
-              { key: 'no_show', label: 'No-show', color: '#E85454', icon: '❌' },
-              { key: 'completed', label: 'Completed', color: '#10B981', icon: '🎉' },
-              { key: 'cancelled', label: 'Cancelled', color: '#E85454', icon: '🚫' },
-            ].map(s => (
-              <TouchableOpacity key={s.key} style={styles.statusPickerRow} onPress={async () => {
-                if (!selectedBooking) return;
-                console.log('[Calendar] Status picker: setting status to', s.key, 'for booking:', selectedBooking.id);
-                await supabase.from('bookings').update({ status: s.key }).eq('id', selectedBooking.id);
-                setSelectedBooking({ ...selectedBooking, status: s.key });
-                setShowStatusPicker(false);
-                fetchBookings();
-              }}>
-                <Text style={{ fontSize: 20 }}>{s.icon}</Text>
-                <Text style={[styles.statusPickerLabel, { color: s.color }]}>{s.label}</Text>
-                {selectedBooking?.status === s.key && <Check size={18} color={s.color} />}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      </Modal>
-
-      {/* ── Add Sheet ── */}
-      <Modal visible={showAddSheet} transparent animationType="slide" onRequestClose={() => setShowAddSheet(false)}>
-        <View style={styles.sheetOverlay}>
-          <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
-            <View style={styles.sheetHandle} />
-            <Text style={[styles.sheetTitle, { marginBottom: 16 }]}>Add</Text>
-            {[
-              { label: 'New Appointment', icon: '📅', route: '/(partner)/new-booking' },
-              { label: 'New Sale', icon: '🏷️', route: '/(partner)/pos/new' },
-              { label: 'Block Time', icon: '🚫', route: null },
-              { label: 'Quick Payment', icon: '💳', route: '/(partner)/pos/new' },
-            ].map((item, i) => (
-              <TouchableOpacity key={i} style={styles.addSheetRow} onPress={() => {
-                console.log('[Calendar] Add sheet item pressed:', item.label);
-                setShowAddSheet(false);
-                if (item.route && clientReady) expoRouter.push(item.route as never);
-              }}>
-                <View style={styles.addSheetIcon}><Text style={{ fontSize: 22 }}>{item.icon}</Text></View>
-                <Text style={styles.addSheetLabel}>{item.label}</Text>
-                <ChevronRight size={16} color={P.textTertiary} />
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      </Modal>
-
-      {/* ── Reschedule Confirmation Modal ── */}
-      <Modal visible={!!pendingReschedule} transparent animationType="fade" onRequestClose={() => setPendingReschedule(null)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-          <View style={{ backgroundColor: P.surface, borderRadius: 16, padding: 24, width: '100%' }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <Text style={{ color: P.text, fontSize: 17, fontWeight: '700' }}>Update appointment</Text>
-              <TouchableOpacity onPress={() => { console.log('[Calendar] Reschedule modal dismissed'); setPendingReschedule(null); }}>
-                <X size={20} color={P.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 }}
-              onPress={() => {
-                console.log('[Calendar] Notify client toggled:', !notifyClient);
-                setNotifyClient(!notifyClient);
-              }}
-            >
-              <View style={{ width: 20, height: 20, borderRadius: 4, backgroundColor: notifyClient ? P.accent : 'transparent', borderWidth: 2, borderColor: notifyClient ? P.accent : P.border, alignItems: 'center', justifyContent: 'center' }}>
-                {notifyClient && <Check size={12} color="#fff" />}
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: P.text, fontSize: 14, fontWeight: '600' }}>
-                  Notify {pendingReschedule?.booking.customer_name ?? 'client'} about reschedule
-                </Text>
-                <Text style={{ color: P.textSecondary, fontSize: 12, marginTop: 2 }}>
-                  Send a message informing their appointment was rescheduled
-                </Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={{ backgroundColor: '#fff', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
-              onPress={async () => {
-                if (!pendingReschedule) return;
-                const { booking, deltaMinutes } = pendingReschedule;
-                console.log('[Calendar] Reschedule confirmed, booking:', booking.id, 'delta:', deltaMinutes, 'notify:', notifyClient);
-                if (!booking.id.startsWith('d')) {
-                  const ns = new Date(new Date(booking.start_at).getTime() + deltaMinutes * 60000);
-                  const ne = new Date(new Date(booking.end_at ?? booking.start_at).getTime() + deltaMinutes * 60000);
-                  await supabase.from('bookings').update({ start_at: ns.toISOString(), end_at: ne.toISOString() }).eq('id', booking.id);
-                  if (notifyClient && booking.shop_id) {
-                    await supabase.from('messages').insert({ venue_id: booking.shop_id, sender_id: null, text: `Your appointment has been rescheduled to ${ns.toLocaleString()}`, is_from_venue: true });
-                  }
-                  fetchBookings();
-                }
-                setPendingReschedule(null);
-                showToastMsg('Appointment rescheduled');
-              }}
-            >
-              <Text style={{ color: '#000', fontSize: 16, fontWeight: '700' }}>Update</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+                  <Pressable style={styles.checkoutBtn} onPress={() => { setSelected(null); router.push('/(partner)/pos/new' as never); }}>
+                    <DollarSign size={18} color="#fff" />
+                    <Text style={styles.checkoutBtnText}>Checkout</Text>
+                  </Pressable>
+                  <Text style={styles.dragHint}>Tip: press & hold an appointment to move it (drag up/down to reschedule, sideways to reassign staff). Drag the bottom edge to change its length.</Text>
+                </>
+              );
+            })()}
+          </Pressable>
+        </Pressable>
       </Modal>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: P.bg },
-
-  // Toast
-  toast: {
-    position: 'absolute',
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(20,20,40,0.97)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 24,
-    zIndex: 999,
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 10,
-  },
-  toastText: { color: '#fff', fontSize: 13, fontWeight: '600' },
-
-  // Top bar
-  topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
-  topBarBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: P.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: P.border },
-  datePickerBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: P.surface, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: P.border },
-  datePickerText: { color: P.text, fontSize: 15, fontWeight: '700' },
-  topBarRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  avatarBtn: { marginLeft: 2 },
-  avatarCircle: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#4C1D95', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: P.accent },
-  avatarInitials: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  demoBadge: { backgroundColor: P.surfaceElevated, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: P.border },
-  demoBadgeText: { color: P.textTertiary, fontSize: 10, fontWeight: '600' },
-
-  // Staff avatar row
-  staffRow: { flexGrow: 0, marginBottom: 8 },
-  staffAvatarWrap: { alignItems: 'center', gap: 4, minWidth: 52 },
-  staffAvatar: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'transparent' },
-  staffAvatarActive: { borderColor: P.accent, borderWidth: 2 },
-  staffAvatarText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  staffAvatarName: { color: P.textSecondary, fontSize: 10, maxWidth: 52, textAlign: 'center' },
-
-  // Reschedule bar
-  rescheduleBar: { backgroundColor: '#1E1040', borderRadius: 12, marginHorizontal: 12, marginBottom: 8, padding: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: P.accent },
-  rescheduleBarText: { color: P.text, fontSize: 13, fontWeight: '600', flex: 1 },
-  rescheduleBarActions: { flexDirection: 'row', gap: 8 },
-  rescheduleBarCancel: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8, backgroundColor: P.surface, borderWidth: 1, borderColor: P.border },
-  rescheduleBarCancelText: { color: P.textSecondary, fontSize: 13, fontWeight: '600' },
-  rescheduleBarSave: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8, backgroundColor: P.accent },
-  rescheduleBarSaveText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-
-  // Sheet title
-  sheetTitle: { color: P.text, fontSize: 20, fontWeight: '700', paddingHorizontal: 20 },
-
-  // Status picker
-  statusPickerRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: P.divider, paddingHorizontal: 20 },
-  statusPickerLabel: { flex: 1, fontSize: 16, fontWeight: '600' },
-
-  // Add sheet
-  addSheetRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: P.divider, paddingHorizontal: 20 },
-  addSheetIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: P.surfaceElevated, alignItems: 'center', justifyContent: 'center' },
-  addSheetLabel: { flex: 1, color: P.text, fontSize: 16, fontWeight: '500' },
-
-  // View switcher row (inline tabs)
-  viewSwitcherRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, gap: 6, borderBottomWidth: 1, borderBottomColor: P.divider },
-  viewTabBtn: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20, backgroundColor: P.surface, borderWidth: 1, borderColor: P.border },
-  viewTabBtnActive: { backgroundColor: P.accent, borderColor: P.accent },
-  viewTabText: { color: P.textSecondary, fontSize: 12, fontWeight: '600' },
-  viewTabTextActive: { color: '#fff' },
-  refreshBtn: { padding: 6 },
-
-  // Barber chips
-  barberChipsScroll: { maxHeight: 44, marginBottom: 2 },
-  barberChipsContent: { paddingHorizontal: 12, gap: 8, alignItems: 'center' },
-  barberChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, backgroundColor: P.surface, borderWidth: 1, borderColor: P.border },
-  barberChipActive: { backgroundColor: P.accentLight, borderColor: P.accent },
-  barberChipText: { color: P.textSecondary, fontSize: 11, fontWeight: '500' },
-  barberChipTextActive: { color: P.accent, fontWeight: '600' },
-  barberChipAvatar: { width: 18, height: 18, borderRadius: 9 },
-  barberChipAvatarPlaceholder: { width: 18, height: 18, borderRadius: 9, backgroundColor: P.accentLight, alignItems: 'center', justifyContent: 'center' },
-  barberChipAvatarText: { color: P.accent, fontSize: 8, fontWeight: '700' },
-
-  // Loading
-  loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-
-  // Bottom bar
-  bottomBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    backgroundColor: P.surface,
-    borderTopWidth: 1,
-    borderTopColor: P.border,
-    paddingTop: 10,
-  },
-  bbBtn: { alignItems: 'center', justifyContent: 'center', padding: 8 },
-  bbCenter: { width: 48, height: 48, borderRadius: 24, backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center', padding: 0 },
-
-  // Sheet
-  sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end' },
-  sheet: { backgroundColor: P.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24 },
-  sheetHandle: { width: 40, height: 4, backgroundColor: P.border, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 4 },
-
-  // Sale header
-  saleHeader: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 20, paddingVertical: 14 },
-  saleTitle: { color: P.text, fontSize: 24, fontWeight: '700' },
-  saleSubtitle: { color: P.textSecondary, fontSize: 13, marginTop: 2 },
-
-  // Status row
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 20, paddingBottom: 12 },
-  statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1 },
-  statusDot: { width: 7, height: 7, borderRadius: 3.5 },
-  statusBadgeText: { fontSize: 13, fontWeight: '700' },
-  rebookBtn: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20, borderWidth: 1.5, borderColor: P.border },
-  rebookBtnText: { color: P.text, fontSize: 13, fontWeight: '600' },
-  moreBtn: { padding: 6, marginLeft: 'auto' },
-
-  // Tabs
-  tabRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: P.divider, marginHorizontal: 20 },
-  tab: { paddingVertical: 10, paddingHorizontal: 4, marginRight: 24 },
-  tabActive: { borderBottomWidth: 2, borderBottomColor: P.text },
-  tabText: { color: P.textSecondary, fontSize: 15, fontWeight: '600' },
-  tabTextActive: { color: P.text },
-
-  // Walk-in row
-  walkInRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: P.surfaceElevated, borderRadius: 12, padding: 14 },
-  walkInAvatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: P.accentLight, alignItems: 'center', justifyContent: 'center' },
-  walkInAvatarText: { color: P.accent, fontSize: 16, fontWeight: '700' },
-  walkInName: { color: P.text, fontSize: 15, fontWeight: '600' },
-  walkInLabel: { color: P.textSecondary, fontSize: 12, marginTop: 2 },
-
-  // Sale card
-  saleCard: { backgroundColor: P.surfaceElevated, borderRadius: 12, padding: 16 },
-  saleCardTitle: { color: P.text, fontSize: 15, fontWeight: '700', marginBottom: 2 },
-  saleCardDate: { color: P.textSecondary, fontSize: 12, marginBottom: 12 },
-  saleServiceRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 8 },
-  saleServiceName: { color: P.text, fontSize: 14, fontWeight: '600' },
-  saleServiceMeta: { color: P.textSecondary, fontSize: 12, marginTop: 1 },
-  saleServicePrice: { color: P.text, fontSize: 14, fontWeight: '700' },
-  saleDivider: { height: 1, backgroundColor: P.divider, marginVertical: 12 },
-  saleTotalRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  saleTotalLabel: { color: P.textSecondary, fontSize: 14 },
-  saleTotalValue: { color: P.textSecondary, fontSize: 14 },
-
-  // Activity
-  activityMonthLabel: { color: P.textSecondary, fontSize: 12, fontWeight: '600', marginBottom: 16 },
-  activityItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 16, position: 'relative' },
-  activityLine: { position: 'absolute', left: 16, top: 20, bottom: -16, width: 1, backgroundColor: P.divider },
-  activityDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: P.accent, marginTop: 4, zIndex: 1 },
-  activityTitle: { color: P.text, fontSize: 14, fontWeight: '600' },
-  activitySub: { color: P.textSecondary, fontSize: 12, marginTop: 2 },
-  activityAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: P.accentLight, alignItems: 'center', justifyContent: 'center' },
-  activityAvatarText: { color: P.accent, fontSize: 13, fontWeight: '700' },
-  activityFooter: { color: P.textTertiary, fontSize: 12, textAlign: 'center', paddingVertical: 12 },
-
-  // Sheet footer
-  sheetFooter: { paddingHorizontal: 20, paddingTop: 12, borderTopWidth: 1, borderTopColor: P.divider },
-  checkoutBtn: { backgroundColor: P.text, borderRadius: 14, paddingVertical: 15, alignItems: 'center' },
-  checkoutBtnText: { color: P.bg, fontSize: 16, fontWeight: '700' },
-
-  // Payment select
-  paymentHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14 },
-  paymentTitle: { color: P.text, fontSize: 20, fontWeight: '700' },
-  paymentGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, paddingHorizontal: 20, paddingVertical: 8 },
-  paymentOption: { width: (SCREEN_W - 52) / 2, alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 24, borderRadius: 14, borderWidth: 1, borderColor: P.border, backgroundColor: P.surfaceElevated },
-  paymentOptionLabel: { color: P.text, fontSize: 14, fontWeight: '600' },
-  paymentFooterRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderTopWidth: 1, borderTopColor: P.divider },
-  paymentFooterLabel: { color: P.text, fontSize: 14, fontWeight: '600' },
-  paymentFooterSub: { color: P.textSecondary, fontSize: 13, marginTop: 2 },
-  paymentFooterAmount: { color: P.text, fontSize: 16, fontWeight: '700' },
-  saveUnpaidBtn: { marginHorizontal: 20, marginTop: 4, paddingVertical: 14, borderRadius: 14, borderWidth: 1.5, borderColor: P.border, alignItems: 'center' },
-  saveUnpaidText: { color: P.text, fontSize: 15, fontWeight: '600' },
-
-  // Cash modal
-  cashHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14 },
-  cashTitle: { color: P.text, fontSize: 20, fontWeight: '700' },
-  cashAmountRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16 },
-  cashCurrency: { color: P.text, fontSize: 28, fontWeight: '700' },
-  cashAmount: { color: P.text, fontSize: 44, fontWeight: '700', minWidth: 60, textAlign: 'center' },
-  cashCursor: { width: 2, height: 44, backgroundColor: P.accent },
-  cashChips: { paddingHorizontal: 20, gap: 8, paddingBottom: 12 },
-  cashChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: P.border, backgroundColor: P.surfaceElevated },
-  cashChipActive: { borderColor: P.accent, backgroundColor: P.accentLight },
-  cashChipText: { color: P.textSecondary, fontSize: 13, fontWeight: '600' },
-  cashChipTextActive: { color: P.accent },
-  keypad: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 20 },
-  keypadBtn: { width: '33.33%', height: 56, alignItems: 'center', justifyContent: 'center' },
-  keypadBtnText: { color: P.text, fontSize: 22, fontWeight: '500' },
-  cashFooterRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 12, borderTopWidth: 1, borderTopColor: P.divider },
-  cashFooterLabel: { color: P.textSecondary, fontSize: 13 },
-  cashFooterSub: { color: P.textSecondary, fontSize: 13, marginTop: 2 },
-  cashAddBtn: { backgroundColor: P.text, borderRadius: 12, paddingHorizontal: 28, paddingVertical: 12 },
-  cashAddBtnText: { color: P.bg, fontSize: 15, fontWeight: '700' },
-
-  // View switcher sheet
-  viewSwitcherHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14 },
-  viewSwitcherTitle: { color: P.text, fontSize: 20, fontWeight: '700' },
-  viewCardsRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 20 },
-  viewCard: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 20, borderRadius: 14, borderWidth: 1.5, borderColor: P.border, backgroundColor: P.surfaceElevated },
-  viewCardActive: { borderColor: P.accent, backgroundColor: P.accentLight },
-  viewCardWide: { flex: 0, width: 100 },
-  viewCardText: { color: P.textSecondary, fontSize: 13, fontWeight: '600' },
-  viewCardTextActive: { color: P.accent },
-  viewDivider: { height: 1, backgroundColor: P.divider, marginHorizontal: 20, marginVertical: 16 },
-  viewMenuRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: P.divider },
-  viewMenuRowText: { color: P.text, fontSize: 15, fontWeight: '500' },
-
-  // Month picker sheet
-  monthPickerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14 },
-  monthPickerTitle: { color: P.text, fontSize: 20, fontWeight: '700' },
-  quickChips: { paddingHorizontal: 20, gap: 8, paddingBottom: 12 },
-  quickChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: P.border, backgroundColor: P.surfaceElevated },
-  quickChipText: { color: P.text, fontSize: 13, fontWeight: '500' },
-  monthNavRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 10 },
-  monthNavBtn: { padding: 8 },
-  monthNavLabel: { color: P.text, fontSize: 16, fontWeight: '700' },
-  pickerDayHeaders: { flexDirection: 'row', paddingHorizontal: 20, marginBottom: 4 },
-  pickerDayHeaderCell: { flex: 1, alignItems: 'center', paddingVertical: 6 },
-  pickerDayHeaderText: { color: P.textTertiary, fontSize: 11, fontWeight: '600' },
-  pickerWeekRow: { flexDirection: 'row', paddingHorizontal: 20, marginBottom: 4 },
-  pickerCell: { flex: 1, alignItems: 'center', paddingVertical: 4 },
-  pickerDayCircle: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  pickerDayCircleToday: { borderWidth: 1.5, borderColor: P.accent },
-  pickerDayCircleSelected: { backgroundColor: P.accent },
-  pickerDayNum: { color: P.text, fontSize: 14, fontWeight: '500' },
-  pickerDayNumToday: { color: P.accent, fontWeight: '700' },
-  pickerDayNumSelected: { color: '#fff', fontWeight: '700' },
-});
-
-class CalendarErrorBoundary extends React.Component<
-  { children: React.ReactNode },
-  { hasError: boolean; error: string }
-> {
-  constructor(props: { children: React.ReactNode }) {
-    super(props);
-    this.state = { hasError: false, error: '' };
-  }
-  static getDerivedStateFromError(error: Error) {
-    return { hasError: true, error: error?.message ?? 'Unknown error' };
-  }
+// ─── Error boundary (prevents white crash screen) ──────────────────────────────
+class CalendarErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: React.ReactNode }) { super(props); this.state = { hasError: false }; }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(err: any) { console.log('[Calendar] render error:', err?.message); }
   render() {
     if (this.state.hasError) {
       return (
-        <View style={{ flex: 1, backgroundColor: '#0F0F1A', alignItems: 'center', justifyContent: 'center', padding: 32, gap: 16 }}>
-          <Text style={{ color: '#E85454', fontSize: 18, fontWeight: '700', textAlign: 'center' }}>Calendar Error</Text>
-          <Text style={{ color: '#9090B0', fontSize: 13, textAlign: 'center', lineHeight: 20 }}>{this.state.error}</Text>
-          <TouchableOpacity
-            onPress={() => this.setState({ hasError: false, error: '' })}
-            style={{ backgroundColor: '#7C3AED', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 24 }}
-          >
-            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Retry</Text>
-          </TouchableOpacity>
+        <View style={styles.center}>
+          <Text style={{ color: P.text, fontSize: 16, fontWeight: '700' }}>Something went wrong</Text>
+          <Pressable style={styles.setupBtn} onPress={() => this.setState({ hasError: false })}>
+            <Text style={styles.setupBtnText}>Reload calendar</Text>
+          </Pressable>
         </View>
       );
     }
@@ -1959,10 +578,79 @@ class CalendarErrorBoundary extends React.Component<
 }
 
 export default function PartnerCalendar() {
-  const router = useRouter();
   return (
     <CalendarErrorBoundary>
-      <PartnerCalendarInner router={router} />
+      <PartnerCalendarInner />
     </CalendarErrorBoundary>
   );
 }
+
+// ─── Styles ─────────────────────────────────────────────────────────────────
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: P.bg },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: P.bg, gap: 12, paddingHorizontal: 32 },
+  setupTitle: { color: P.text, fontSize: 20, fontWeight: '800' },
+  setupSub: { color: P.textSecondary, fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  setupBtn: { backgroundColor: P.accent, paddingHorizontal: 24, paddingVertical: 13, borderRadius: 12, marginTop: 8 },
+  setupBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 10 },
+  dateNav: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  navBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: P.surface },
+  dateLabelWrap: { alignItems: 'center', minWidth: 96 },
+  dateLabel: { color: P.text, fontSize: 17, fontWeight: '800' },
+  dateSub: { color: P.textSecondary, fontSize: 11, marginTop: 1 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  iconBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: P.surface },
+  demoPill: { backgroundColor: P.warning + '22', borderColor: P.warning, borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
+  demoPillText: { color: P.warning, fontSize: 11, fontWeight: '700' },
+
+  staffRow: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: P.border, paddingVertical: 8, backgroundColor: P.surface },
+  staffCell: { alignItems: 'center', gap: 4, paddingHorizontal: 4 },
+  staffAvatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: P.accentLight, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  staffAvatarImg: { width: 34, height: 34 },
+  staffInitial: { color: P.accent, fontWeight: '800', fontSize: 14 },
+  staffName: { color: P.textSecondary, fontSize: 11, fontWeight: '600', maxWidth: '94%' },
+
+  hourLine: { position: 'absolute', left: 0, height: 1, backgroundColor: P.divider, justifyContent: 'flex-start' },
+  hourLabel: { position: 'absolute', left: 6, top: -7, color: P.textTertiary, fontSize: 11, width: TIME_COL_W - 8 },
+  colSep: { position: 'absolute', top: 0, width: 1, backgroundColor: P.divider },
+  nowLine: { position: 'absolute', left: 0, height: 2, backgroundColor: P.danger },
+  nowDot: { position: 'absolute', left: TIME_COL_W - 4, top: -3, width: 8, height: 8, borderRadius: 4, backgroundColor: P.danger },
+
+  appt: {
+    position: 'absolute', borderRadius: 8, borderLeftWidth: 0, borderWidth: 1, paddingHorizontal: 8, paddingTop: 4,
+    overflow: 'hidden', shadowColor: '#000', shadowRadius: 8, shadowOffset: { width: 0, height: 3 },
+  },
+  apptAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3 },
+  apptName: { color: P.text, fontSize: 12, fontWeight: '700' },
+  apptMeta: { color: P.textSecondary, fontSize: 10, marginTop: 1 },
+  resizeHandle: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 16, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 2 },
+  resizeBar: { width: 24, height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.5)' },
+
+  emptyHint: { position: 'absolute', top: '46%', left: 0, right: 0, alignItems: 'center' },
+  emptyHintText: { color: P.textTertiary, fontSize: 14, textAlign: 'center', lineHeight: 20 },
+
+  fab: { position: 'absolute', right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center', shadowColor: P.accent, shadowOpacity: 0.5, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 8 },
+
+  toast: { position: 'absolute', alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: P.accent, paddingHorizontal: 16, paddingVertical: 11, borderRadius: 12, zIndex: 1000 },
+  toastText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+
+  sheetBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
+  sheet: { backgroundColor: P.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10, borderTopWidth: 1, borderColor: P.border },
+  sheetHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: P.border, alignSelf: 'center', marginBottom: 14 },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
+  statusDot: { width: 12, height: 12, borderRadius: 6 },
+  sheetName: { color: P.text, fontSize: 18, fontWeight: '800', flex: 1 },
+  sheetRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
+  sheetRowText: { color: P.text, fontSize: 14 },
+  statusBadge: { alignSelf: 'flex-start', borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, marginTop: 8 },
+  statusBadgeText: { fontSize: 12, fontWeight: '700' },
+  sheetSection: { color: P.textSecondary, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 18, marginBottom: 10 },
+  statusGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  statusChip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9 },
+  statusChipText: { fontSize: 13, fontWeight: '600' },
+  checkoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: P.accent, borderRadius: 12, paddingVertical: 14, marginTop: 18 },
+  checkoutBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  dragHint: { color: P.textTertiary, fontSize: 12, lineHeight: 17, textAlign: 'center', marginTop: 12 },
+});
