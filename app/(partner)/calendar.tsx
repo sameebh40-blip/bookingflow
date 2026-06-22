@@ -51,7 +51,7 @@ const P = {
 // ─── Grid geometry ──────────────────────────────────────────────────────────
 const HOUR_HEIGHT = 80;
 const PX_PER_MIN = HOUR_HEIGHT / 60; // 1.333 px per minute
-const SNAP_MIN = 15;                 // snap dragging to 15-minute increments
+const SNAP_MIN = 5;                  // snap dragging to 5-minute increments (+5/+5/+5…)
 const TIME_COL_W = 52;
 const MIN_COL_W = 96;
 const SCREEN_W = Dimensions.get('window').width;
@@ -220,6 +220,7 @@ function PartnerCalendarInner() {
   const [isDemo, setIsDemo] = useState(false);
   const [selected, setSelected] = useState<Booking | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [, setNowTick] = useState(0); // re-render every 30s so the live "now" line moves
   const toastY = useRef(new RNAnimated.Value(-80)).current;
   const gridScrollRef = useRef<any>(null);
 
@@ -270,6 +271,7 @@ function PartnerCalendarInner() {
 
   useEffect(() => { fetchBarbers(); }, [fetchBarbers]);
   useEffect(() => { fetchBookings(); }, [fetchBookings]);
+  useEffect(() => { const t = setInterval(() => setNowTick((x) => x + 1), 30000); return () => clearInterval(t); }, []);
 
   // ── Realtime: new/changed bookings land on the grid live ────────────────────
   useEffect(() => {
