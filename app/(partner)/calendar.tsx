@@ -63,6 +63,7 @@ interface Booking {
   end_at: string | null;
   status: string;
   customer_name: string | null;
+  customer_profile_id?: string | null;
   barber_id: string | null;
   shop_id: string;
   service_name?: string | null;
@@ -221,6 +222,13 @@ function PartnerCalendarInner() {
   const [selected, setSelected] = useState<Booking | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [, setNowTick] = useState(0); // re-render every 30s so the live "now" line moves
+  const [pendingMove, setPendingMove] = useState<null | {
+    id: string;
+    orig: { start_at: string; end_at: string | null; barber_id: string | null };
+    next: { start_at: string; end_at: string; barber_id: string | null };
+    startMin: number; dur: number; clientName: string; customer_profile_id?: string | null;
+  }>(null);
+  const [notifyClient, setNotifyClient] = useState(true);
   const toastY = useRef(new RNAnimated.Value(-80)).current;
   const gridScrollRef = useRef<any>(null);
 
@@ -245,7 +253,7 @@ function PartnerCalendarInner() {
       // Plain select (no join) so a service FK quirk can never blank the calendar.
       const { data, error } = await supabase
         .from('bookings')
-        .select('id, start_at, end_at, status, customer_name, barber_id, shop_id, total_price, service_id')
+        .select('id, start_at, end_at, status, customer_name, customer_profile_id, barber_id, shop_id, total_price, service_id')
         .eq('shop_id', shopId)
         .gte('start_at', dayStart.toISOString())
         .lte('start_at', dayEnd.toISOString())
@@ -346,11 +354,40 @@ function PartnerCalendarInner() {
     const ne = new Date(ns.getTime() + dur * 60000);
     const startIso = ns.toISOString(); const endIso = ne.toISOString();
 
+    // Optimistically move the block, then ask the owner to confirm the reschedule.
     setBookings((prev) => prev.map((x) => x.id === id ? { ...x, start_at: startIso, end_at: endIso, barber_id: newBarberId } : x));
-    if (isDemo || !shopId) return;
-    const { error } = await supabase.from('bookings').update({ start_at: startIso, end_at: endIso, barber_id: newBarberId }).eq('id', id);
-    if (error) { showToast('Could not move booking'); fetchBookings(); }
-  }, [bookings, colIndexFor, columns, numCols, dayStartMin, endHour, isDemo, shopId, fetchBookings, showToast]);
+    if (isDemo || !shopId) return; // demo mode: no confirmation / no DB write
+    setNotifyClient(true);
+    setPendingMove({
+      id,
+      orig: { start_at: b.start_at, end_at: b.end_at, barber_id: b.barber_id },
+      next: { start_at: startIso, end_at: endIso, barber_id: newBarberId },
+      startMin: newStartMin, dur, clientName: b.customer_name || 'the client', customer_profile_id: b.customer_profile_id,
+    });
+  }, [bookings, colIndexFor, columns, numCols, dayStartMin, endHour, isDemo, shopId]);
+
+  // Confirm / cancel a staged reschedule (the "Update appointment" sheet)
+  const confirmReschedule = useCallback(async () => {
+    if (!pendingMove) return;
+    const { id, next, startMin, customer_profile_id } = pendingMove;
+    const { error } = await supabase.from('bookings')
+      .update({ start_at: next.start_at, end_at: next.end_at, barber_id: next.barber_id }).eq('id', id);
+    if (error) { showToast('Could not reschedule'); fetchBookings(); }
+    else if (notifyClient && customer_profile_id && shopId) {
+      supabase.from('messages').insert({
+        venue_id: shopId, client_id: customer_profile_id, sender_id: null,
+        text: `Your appointment has been rescheduled to ${fmtTime(startMin)}.`, is_from_venue: true,
+      }).then(() => {}, () => {});
+    }
+    setPendingMove(null);
+  }, [pendingMove, notifyClient, shopId, fetchBookings, showToast]);
+
+  const cancelReschedule = useCallback(() => {
+    if (!pendingMove) return;
+    const { id, orig } = pendingMove;
+    setBookings((prev) => prev.map((x) => x.id === id ? { ...x, start_at: orig.start_at, end_at: orig.end_at, barber_id: orig.barber_id } : x));
+    setPendingMove(null);
+  }, [pendingMove]);
 
   // ── Commit resize (duration) ────────────────────────────────────────────────
   const commitResize = useCallback(async (id: string, newDuration: number) => {
@@ -456,6 +493,22 @@ function PartnerCalendarInner() {
                 {columns.map((c, i) => (
                   <View key={c.key} style={[styles.colSep, { left: TIME_COL_W + i * colWidth, height: totalHeight }]} />
                 ))}
+                {/* Tap an empty slot → new booking for that staff + time */}
+                {columns.map((c, i) => (
+                  <Pressable
+                    key={'tap-' + c.key}
+                    style={{ position: 'absolute', left: TIME_COL_W + i * colWidth, top: 0, width: colWidth, height: totalHeight }}
+                    onPress={(e) => {
+                      const y = (e.nativeEvent as any).locationY ?? 0;
+                      let min = dayStartMin + Math.round((y / PX_PER_MIN) / SNAP_MIN) * SNAP_MIN;
+                      min = Math.max(dayStartMin, Math.min(min, endHour * 60 - 30));
+                      const d = new Date(selectedDate);
+                      d.setHours(Math.floor(min / 60), min % 60, 0, 0);
+                      const hhmm = `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+                      router.push(`/(partner)/new-booking?barberId=${c.barberId ?? ''}&date=${encodeURIComponent(d.toISOString())}&time=${hhmm}` as never);
+                    }}
+                  />
+                ))}
                 {/* Now line */}
                 {isToday && nowTop >= 0 && nowTop <= totalHeight && (
                   <View style={[styles.nowLine, { top: nowTop, width: gridWidth }]}>
@@ -552,6 +605,42 @@ function PartnerCalendarInner() {
                 </>
               );
             })()}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Reschedule confirmation sheet (after a drag-move) */}
+      <Modal visible={!!pendingMove} transparent animationType="slide" onRequestClose={cancelReschedule}>
+        <Pressable style={styles.sheetBackdrop} onPress={cancelReschedule}>
+          <Pressable style={[styles.sheet, { paddingBottom: insets.bottom + 20 }]} onPress={(e) => e.stopPropagation()}>
+            {pendingMove && (
+              <>
+                <View style={styles.sheetHandle} />
+                <View style={styles.sheetHeader}>
+                  <Text style={styles.sheetName}>Update appointment</Text>
+                  <Pressable onPress={cancelReschedule} hitSlop={10}><X size={20} color={P.textSecondary} /></Pressable>
+                </View>
+                <View style={styles.sheetRow}>
+                  <Clock size={15} color={P.textSecondary} />
+                  <Text style={styles.sheetRowText}>
+                    {pendingMove.clientName} → {fmtTime(pendingMove.startMin)} – {fmtTime(pendingMove.startMin + pendingMove.dur)}
+                  </Text>
+                </View>
+                <Pressable style={styles.notifyRow} onPress={() => setNotifyClient((v) => !v)}>
+                  <View style={[styles.checkbox, notifyClient && styles.checkboxOn]}>
+                    {notifyClient && <Check size={14} color="#fff" />}
+                  </View>
+                  <Text style={styles.notifyText}>Notify {pendingMove.clientName} about the reschedule</Text>
+                </Pressable>
+                <Pressable style={styles.checkoutBtn} onPress={confirmReschedule}>
+                  <Check size={18} color="#fff" />
+                  <Text style={styles.checkoutBtnText}>Update</Text>
+                </Pressable>
+                <Pressable style={styles.cancelBtn} onPress={cancelReschedule}>
+                  <Text style={styles.cancelBtnText}>Cancel</Text>
+                </Pressable>
+              </>
+            )}
           </Pressable>
         </Pressable>
       </Modal>
@@ -654,5 +743,11 @@ const styles = StyleSheet.create({
   statusChipText: { fontSize: 13, fontWeight: '600' },
   checkoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: P.accent, borderRadius: 12, paddingVertical: 14, marginTop: 18 },
   checkoutBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  notifyRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 16, paddingVertical: 4 },
+  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: P.border, alignItems: 'center', justifyContent: 'center' },
+  checkboxOn: { backgroundColor: P.accent, borderColor: P.accent },
+  notifyText: { flex: 1, color: P.text, fontSize: 14 },
+  cancelBtn: { alignItems: 'center', justifyContent: 'center', paddingVertical: 13, marginTop: 10, borderRadius: 12, borderWidth: 1, borderColor: P.border },
+  cancelBtnText: { color: P.textSecondary, fontSize: 15, fontWeight: '600' },
   dragHint: { color: P.textTertiary, fontSize: 12, lineHeight: 17, textAlign: 'center', marginTop: 12 },
 });
