@@ -13,9 +13,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, Share2, Heart, Star, Clock, ChevronDown, ChevronUp, Scissors } from 'lucide-react-native';
+import { ArrowLeft, Share2, Heart, Star, Clock, ChevronDown, ChevronUp, Scissors, MessageCircle } from 'lucide-react-native';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { supabase } from '@/utils/supabase';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -120,6 +121,14 @@ export default function BarberProfileScreen() {
   const [isFavourite, setIsFavourite] = useState(false);
   const [bioExpanded, setBioExpanded] = useState(false);
   const [starRating, setStarRating] = useState(0);
+  const [shopId, setShopId] = useState<string | null>(null);
+
+  // Resolve the barber's shop so "Message" opens a real chat (messages are shop-scoped)
+  useEffect(() => {
+    if (!id) return;
+    supabase.from('barbers').select('shop_id').eq('id', id).maybeSingle()
+      .then(({ data }) => { if (data?.shop_id) setShopId(data.shop_id); });
+  }, [id]);
 
   const getProfile = (): BarberProfile => {
     if (id && MOCK_BARBER_PROFILES[id]) {
@@ -159,6 +168,11 @@ export default function BarberProfileScreen() {
     console.log('[BarberProfile] Book Now pressed for barber:', barber.id, barber.name);
     router.push(`/booking/services?barberId=${barber.id}`);
   }, [barber, router]);
+
+  const handleMessage = useCallback(() => {
+    if (shopId) router.push(`/chat/${shopId}` as never);
+    else router.push(`/chat/${barber.id}` as never);
+  }, [shopId, barber.id, router]);
 
   const handleServiceBook = useCallback((service: Service) => {
     console.log('[BarberProfile] Service book pressed:', service.id, service.name, 'barber:', barber.id);
@@ -235,10 +249,16 @@ export default function BarberProfileScreen() {
         </View>
       </View>
 
-      {/* Book Now button */}
-      <AnimatedPressable onPress={handleBookNow} style={styles.bookNowBtn}>
-        <Text style={styles.bookNowText}>Book Now</Text>
-      </AnimatedPressable>
+      {/* Book Now + Message */}
+      <View style={styles.ctaRow}>
+        <AnimatedPressable onPress={handleMessage} style={styles.messageBtn}>
+          <MessageCircle size={18} color={MADAR_COLORS.gold} />
+          <Text style={styles.messageBtnText}>Message</Text>
+        </AnimatedPressable>
+        <AnimatedPressable onPress={handleBookNow} style={[styles.bookNowBtn, { flex: 1, marginHorizontal: 0 }]}>
+          <Text style={styles.bookNowText}>Book Now</Text>
+        </AnimatedPressable>
+      </View>
 
       {/* Stats card */}
       <View style={styles.statsCard}>
@@ -451,6 +471,13 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0A0A0F',
   },
+  ctaRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginTop: 16 },
+  messageBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    paddingVertical: 16, paddingHorizontal: 18, borderRadius: 28,
+    borderWidth: 1.5, borderColor: MADAR_COLORS.gold,
+  },
+  messageBtnText: { fontSize: 15, fontWeight: '700', color: MADAR_COLORS.gold },
   statsCard: {
     flexDirection: 'row',
     marginHorizontal: 16,

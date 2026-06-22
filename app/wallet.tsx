@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -10,10 +10,20 @@ import { ArrowLeft, Wallet } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/utils/supabase';
 
 export default function WalletScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { user } = useAuth();
+  const [points, setPoints] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase.from('customers').select('loyalty_points').eq('id', user.id).maybeSingle()
+      .then(({ data }) => { if (data?.loyalty_points != null) setPoints(Number(data.loyalty_points)); });
+  }, [user]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -35,10 +45,10 @@ export default function WalletScreen() {
         end={{ x: 1, y: 1 }}
         style={styles.balanceCard}
       >
-        <Text style={styles.balanceLabel}>Wallet balance</Text>
-        <Text style={styles.balanceAmount}>BHD 0.000</Text>
+        <Text style={styles.balanceLabel}>Loyalty points</Text>
+        <Text style={styles.balanceAmount}>{points.toLocaleString()} pts</Text>
         <View style={styles.topUpBtn}>
-          <Text style={styles.topUpText}>Coming soon</Text>
+          <Text style={styles.topUpText}>Earn points on every booking</Text>
         </View>
       </LinearGradient>
 

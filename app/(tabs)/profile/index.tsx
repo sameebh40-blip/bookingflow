@@ -49,6 +49,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { user, signOut } = useAuth();
   const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [points, setPoints] = useState(0);
 
   useEffect(() => {
     if (user) {
@@ -66,11 +67,14 @@ export default function ProfileScreen() {
             setProfile(data);
           }
         });
+      // Real loyalty points (drives the tier + the wallet card)
+      supabase.from('customers').select('loyalty_points').eq('id', user.id).maybeSingle()
+        .then(({ data }) => { if (data?.loyalty_points != null) setPoints(Number(data.loyalty_points)); });
     }
   }, [user]);
 
   const displayName = profile?.full_name ?? user?.user_metadata?.full_name ?? user?.email?.split('@')[0] ?? 'Guest';
-  const membershipTier = profile?.membership_tier ?? 'Silver';
+  const membershipTier = profile?.membership_tier ?? (points >= 500 ? 'Gold' : points >= 100 ? 'Silver' : 'Bronze');
   const avatarUrl = profile?.avatar_url ?? null;
 
   const initials = displayName
@@ -144,10 +148,10 @@ export default function ProfileScreen() {
           end={{ x: 1, y: 1 }}
           style={styles.walletCard}
         >
-          <Text style={styles.walletLabel}>Wallet balance</Text>
-          <Text style={styles.walletBalance}>BHD 0.000</Text>
+          <Text style={styles.walletLabel}>Loyalty points</Text>
+          <Text style={styles.walletBalance}>{points.toLocaleString()} pts</Text>
           <View style={styles.viewWalletBtn}>
-            <Text style={styles.viewWalletText}>View wallet</Text>
+            <Text style={styles.viewWalletText}>{membershipTier} member</Text>
           </View>
         </LinearGradient>
       </AnimatedPressable>

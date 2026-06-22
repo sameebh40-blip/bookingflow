@@ -137,7 +137,7 @@ export default function PartnerMore() {
 
       const { data: bookings, error } = await supabase
         .from('bookings')
-        .select('price_bhd, status, source, start_at')
+        .select('price_bhd, status, source, start_at, customer_profile_id')
         .eq('shop_id', shopId)
         .gte('start_at', start.toISOString())
         .lte('start_at', end.toISOString());
@@ -160,7 +160,23 @@ export default function PartnerMore() {
         return rows.filter(b => b.start_at?.slice(0, 10) === dayStr && b.status === 'completed').reduce((s, b) => s + Number(b.price_bhd || 0), 0);
       });
 
-      setInsightData({ totalSales, apptCount, avgSale, newClients: 0, returningClients: 0, offlineSales, onlineSales, barData });
+      // Real new vs returning clients: a client is "returning" if they had a booking before this period.
+      const periodClientIds = [...new Set(rows.map((b: any) => b.customer_profile_id).filter(Boolean))] as string[];
+      let newClients = periodClientIds.length;
+      let returningClients = 0;
+      if (periodClientIds.length > 0) {
+        const { data: prior } = await supabase
+          .from('bookings')
+          .select('customer_profile_id')
+          .eq('shop_id', shopId)
+          .in('customer_profile_id', periodClientIds)
+          .lt('start_at', start.toISOString());
+        const returningSet = new Set((prior ?? []).map((p: any) => p.customer_profile_id));
+        returningClients = periodClientIds.filter(cid => returningSet.has(cid)).length;
+        newClients = periodClientIds.length - returningClients;
+      }
+
+      setInsightData({ totalSales, apptCount, avgSale, newClients, returningClients, offlineSales, onlineSales, barData });
     } catch (err) {
       console.log('[More] fetchInsights error:', err);
       setInsightData(EMPTY_INSIGHT);
@@ -337,8 +353,8 @@ export default function PartnerMore() {
               {/* Bar chart */}
               <View style={styles.barChart}>
                 <View style={styles.barYAxis}>
-                  {['BHD 40', 'BHD 30', 'BHD 20', 'BHD 10', 'BHD 0'].map(l => (
-                    <Text key={l} style={styles.barYLabel}>{l}</Text>
+                  {[1, 0.75, 0.5, 0.25, 0].map(f => (
+                    <Text key={f} style={styles.barYLabel}>BHD {Math.round(maxBar * f)}</Text>
                   ))}
                 </View>
                 <View style={styles.barArea}>
