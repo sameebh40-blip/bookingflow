@@ -11,6 +11,7 @@ import {
   ImageSourcePropType,
   Modal,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -232,6 +233,10 @@ export default function NewBooking() {
       return;
     }
     console.log('[NewBooking] Save booking pressed');
+    if (!selectedServices[0]?.id) {
+      Alert.alert('Add a service', 'Please add at least one service to save the appointment.');
+      return;
+    }
     setSaving(true);
     try {
       const scheduledAt = buildScheduledAt();
@@ -255,6 +260,7 @@ export default function NewBooking() {
       });
       if (error) {
         console.log('[NewBooking] insert error:', error.message);
+        Alert.alert('Booking failed', error.message);
       } else {
         console.log('[NewBooking] Booking saved successfully');
         router.back();

@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { ChevronLeft, Send } from 'lucide-react-native';
+import { ChevronLeft, Send, Check, CheckCheck } from 'lucide-react-native';
 import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -36,9 +36,11 @@ const P = {
 interface Message {
   id: string;
   sender_id: string;
+  client_id?: string;
   text: string;
   created_at: string;
   is_from_venue: boolean;
+  read?: boolean;
 }
 
 export default function PartnerChatThread() {
@@ -61,7 +63,7 @@ export default function PartnerChatThread() {
     try {
       const { data } = await supabase
         .from('messages')
-        .select('id, sender_id, text, created_at, is_from_venue')
+        .select('id, sender_id, client_id, text, created_at, is_from_venue, read')
         .eq('venue_id', shopId)
         .eq('client_id', clientId)
         .order('created_at', { ascending: true });
@@ -73,29 +75,40 @@ export default function PartnerChatThread() {
     }
   }, [shopId, clientId]);
 
+  // Mark the client's messages as read (flips their ticks to 2)
+  const markClientRead = useCallback(async () => {
+    if (!shopId || !clientId) return;
+    await supabase.from('messages').update({ read: true })
+      .eq('venue_id', shopId).eq('client_id', clientId).eq('is_from_venue', false).eq('read', false);
+  }, [shopId, clientId]);
+
   useEffect(() => {
-    fetchMessages();
+    fetchMessages().then(markClientRead);
     // Fetch client name
     supabase.from('profiles').select('full_name').eq('id', clientId).single().then(({ data }) => {
       if (data) setClientName(data.full_name ?? 'Client');
     });
-  }, [fetchMessages, clientId]);
+  }, [fetchMessages, clientId, markClientRead]);
 
   useEffect(() => {
     if (!shopId) return;
     const channel = supabase
       .channel(`partner-chat-thread-${shopId}-${clientId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `venue_id=eq.${shopId}` }, (payload) => {
-        console.log('[PartnerChatThread] New message:', payload.new);
         const msg = payload.new as Message;
         if (msg.client_id === clientId) {
-          setMessages(prev => [...prev, msg]);
+          setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
           setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+          if (!msg.is_from_venue) markClientRead();
         }
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `venue_id=eq.${shopId}` }, (payload) => {
+        const msg = payload.new as Message;
+        if (msg.client_id === clientId) setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, read: msg.read } : m));
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [shopId, clientId]);
+  }, [shopId, clientId, markClientRead]);
 
   const sendMessage = async () => {
     if (!inputText.trim() || !shopId || !user) return;
@@ -156,7 +169,10 @@ export default function PartnerChatThread() {
                 <View style={[styles.bubble, isVenue ? styles.bubbleVenue : styles.bubbleClient]}>
                   <Text style={[styles.bubbleText, isVenue && styles.bubbleTextVenue]}>{msg.text}</Text>
                 </View>
-                <Text style={styles.timeText}>{timeText}</Text>
+                <View style={styles.metaRow}>
+                  <Text style={styles.timeText}>{timeText}</Text>
+                  {isVenue && (msg.read ? <CheckCheck size={13} color={P.success} /> : <Check size={13} color={P.textTertiary} />)}
+                </View>
               </View>
             );
           })}
@@ -199,7 +215,8 @@ const styles = StyleSheet.create({
   bubbleVenue: { backgroundColor: P.accent, borderBottomRightRadius: 4 },
   bubbleText: { color: P.text, fontSize: 15 },
   bubbleTextVenue: { color: '#fff' },
-  timeText: { color: P.textTertiary, fontSize: 10, marginTop: 3, paddingHorizontal: 4 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3, paddingHorizontal: 4, alignSelf: 'flex-end' },
+  timeText: { color: P.textTertiary, fontSize: 10 },
   inputBar: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, paddingHorizontal: 16, paddingTop: 10, backgroundColor: P.surface, borderTopWidth: 1, borderTopColor: P.border },
   input: { flex: 1, backgroundColor: P.surfaceElevated, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, color: P.text, fontSize: 15, maxHeight: 100, borderWidth: 1, borderColor: P.border },
   sendBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center' },
