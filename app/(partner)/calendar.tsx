@@ -13,6 +13,7 @@ import {
   Animated as RNAnimated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import Animated, {
   useSharedValue,
@@ -30,22 +31,23 @@ import { useAuth } from '@/contexts/AuthContext';
 
 // ─── Palette ────────────────────────────────────────────────────────────────
 const P = {
-  bg: '#0F0F1A',
-  surface: '#1A1A2E',
-  surfaceElevated: '#242438',
-  border: '#2A2A45',
+  // Fresha-style light theme
+  bg: '#FFFFFF',
+  surface: '#FFFFFF',
+  surfaceElevated: '#F4F4F8',
+  border: '#E7E7EF',
   accent: '#7C3AED',
-  accentLight: 'rgba(124,58,237,0.18)',
+  accentLight: 'rgba(124,58,237,0.10)',
   gold: '#C9A84C',
-  text: '#F0F0FF',
-  textSecondary: '#9090B0',
-  textTertiary: '#5A5A7A',
-  success: '#4CAF7D',
-  danger: '#E85454',
-  warning: '#F59E0B',
+  text: '#17171F',
+  textSecondary: '#6E6E80',
+  textTertiary: '#A2A2B2',
+  success: '#1F9E6B',
+  danger: '#E2483F',
+  warning: '#E08A1E',
   blue: '#3B82F6',
-  teal: '#14B8A6',
-  divider: '#1E1E35',
+  teal: '#0E9F8E',
+  divider: '#EFEFF4',
 };
 
 // ─── Grid geometry ──────────────────────────────────────────────────────────
@@ -436,6 +438,7 @@ function PartnerCalendarInner() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
+      <StatusBar style="dark" />
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.dateNav}>
@@ -687,12 +690,12 @@ const styles = StyleSheet.create({
 
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 10 },
   dateNav: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  navBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: P.surface },
+  navBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: P.surfaceElevated },
   dateLabelWrap: { alignItems: 'center', minWidth: 96 },
   dateLabel: { color: P.text, fontSize: 17, fontWeight: '800' },
   dateSub: { color: P.textSecondary, fontSize: 11, marginTop: 1 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  iconBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: P.surface },
+  iconBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: P.surfaceElevated },
   demoPill: { backgroundColor: P.warning + '22', borderColor: P.warning, borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
   demoPillText: { color: P.warning, fontSize: 11, fontWeight: '700' },
 
@@ -717,7 +720,7 @@ const styles = StyleSheet.create({
   apptName: { color: P.text, fontSize: 12, fontWeight: '700' },
   apptMeta: { color: P.textSecondary, fontSize: 10, marginTop: 1 },
   resizeHandle: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 16, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 2 },
-  resizeBar: { width: 24, height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.5)' },
+  resizeBar: { width: 24, height: 3, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.28)' },
 
   emptyHint: { position: 'absolute', top: '46%', left: 0, right: 0, alignItems: 'center' },
   emptyHintText: { color: P.textTertiary, fontSize: 14, textAlign: 'center', lineHeight: 20 },
