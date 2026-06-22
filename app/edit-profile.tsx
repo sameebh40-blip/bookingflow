@@ -8,9 +8,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import { ArrowLeft, Camera, User, Mail, Phone } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MADAR_COLORS } from '@/constants/Colors';
@@ -26,7 +29,9 @@ export default function EditProfileScreen() {
   const [name, setName] = useState(profile?.full_name ?? user?.user_metadata?.full_name ?? '');
   const [email, setEmail] = useState(profile?.email ?? user?.email ?? '');
   const [phone, setPhone] = useState(profile?.phone ?? user?.user_metadata?.phone ?? '');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(profile?.avatar_url ?? null);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   // Load existing profile data from DB on mount
   useEffect(() => {
@@ -40,8 +45,38 @@ export default function EditProfileScreen() {
         if (data?.full_name) setName(data.full_name);
         if (data?.phone) setPhone(data.phone);
         if (data?.email) setEmail(data.email);
+        if (data?.avatar_url) setAvatarUrl(data.avatar_url);
       });
   }, [user?.id]);
+
+  const handlePickAvatar = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') { Alert.alert('Permission needed', 'Please allow photo access to change your picture.'); return; }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8, allowsEditing: true, aspect: [1, 1],
+      });
+      if (result.canceled || !result.assets[0]) return;
+      setUploading(true);
+      const resp = await fetch(result.assets[0].uri);
+      const blob = await resp.blob();
+      // avatars bucket RLS requires the path to start with the user's id
+      const path = `${user.id}/avatar_${Date.now()}.jpg`;
+      const { error: upErr } = await supabase.storage.from('avatars').upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+      if (upErr) { Alert.alert('Upload failed', upErr.message); return; }
+      const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
+      const url = pub.publicUrl;
+      await supabase.from('profiles').update({ avatar_url: url }).eq('id', user.id);
+      setAvatarUrl(url);
+      await refreshProfile();
+    } catch (err: any) {
+      console.log('[EditProfile] avatar upload error:', err);
+      Alert.alert('Upload failed', err?.message ?? 'Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  }, [user, refreshProfile]);
 
   const initials = name
     .split(' ')
@@ -103,10 +138,16 @@ export default function EditProfileScreen() {
         {/* Avatar */}
         <View style={styles.avatarSection}>
           <View style={styles.avatarCircle}>
-            <Text style={styles.avatarInitials}>{initials}</Text>
+            {uploading ? (
+              <ActivityIndicator color={MADAR_COLORS.purple} />
+            ) : avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarInitials}>{initials}</Text>
+            )}
           </View>
           <AnimatedPressable
-            onPress={() => console.log('[EditProfile] Change avatar pressed')}
+            onPress={handlePickAvatar}
             style={styles.cameraBtn}
           >
             <Camera size={16} color={MADAR_COLORS.background} />
@@ -199,6 +240,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   avatarInitials: { fontSize: 28, fontWeight: '800', color: MADAR_COLORS.purple },
+  avatarImage: { width: 88, height: 88, borderRadius: 44 },
   cameraBtn: {
     position: 'absolute', bottom: 16, right: '35%',
     width: 32, height: 32, borderRadius: 16,
