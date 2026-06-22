@@ -1,41 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
-import * as SecureStore from 'expo-secure-store';
-import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// expo-secure-store works in Expo Go; AsyncStorage v3 requires a native build.
-// Use SecureStore on native, localStorage on web.
-const ExpoSecureStoreAdapter = {
-  getItem: (key: string) => {
-    console.log('[Supabase Storage] getItem:', key);
-    if (Platform.OS === 'web') {
-      return Promise.resolve(typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null);
-    }
-    return SecureStore.getItemAsync(key);
-  },
-  setItem: (key: string, value: string) => {
-    console.log('[Supabase Storage] setItem:', key);
-    if (Platform.OS === 'web') {
-      if (typeof localStorage !== 'undefined') localStorage.setItem(key, value);
-      return Promise.resolve();
-    }
-    return SecureStore.setItemAsync(key, value);
-  },
-  removeItem: (key: string) => {
-    console.log('[Supabase Storage] removeItem:', key);
-    if (Platform.OS === 'web') {
-      if (typeof localStorage !== 'undefined') localStorage.removeItem(key);
-      return Promise.resolve();
-    }
-    return SecureStore.deleteItemAsync(key);
-  },
-};
-
+// Use AsyncStorage for the auth session on every platform.
+// (SecureStore was throwing keychain "User interaction is not allowed" errors in
+// the iOS preview, which broke the session and hung session-dependent screens.)
 export const supabase = createClient(
   'https://xiwhdcutsjfdbikfyhtw.supabase.co',
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhpd2hkY3V0c2pmZGJpa2Z5aHR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzNzMwMzYsImV4cCI6MjA5NTk0OTAzNn0.KWBKgBVfA8xlflCXc6hvr1RByZ-p0AgOHbGx_GV9goU',
   {
     auth: {
-      storage: ExpoSecureStoreAdapter,
+      storage: AsyncStorage,
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,
