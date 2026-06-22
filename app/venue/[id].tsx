@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -164,6 +164,30 @@ export default function VenueDetailScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
   const tabScrollRef = useRef<ScrollView>(null);
 
+  // Load + persist favourite state against the favorites table.
+  useEffect(() => {
+    if (!user || !id) return;
+    supabase.from('favorites')
+      .select('id').eq('profile_id', user.id).eq('target_type', 'shop').eq('target_id', id).maybeSingle()
+      .then(({ data }) => setIsFavourite(!!data));
+  }, [user?.id, id]);
+
+  const toggleFavourite = useCallback(async () => {
+    if (!user || !id) { setIsFavourite(f => !f); return; }
+    const next = !isFavourite;
+    setIsFavourite(next);
+    try {
+      if (next) {
+        await supabase.from('favorites').insert({ profile_id: user.id, target_type: 'shop', target_id: id });
+      } else {
+        await supabase.from('favorites').delete()
+          .eq('profile_id', user.id).eq('target_type', 'shop').eq('target_id', id);
+      }
+    } catch {
+      setIsFavourite(!next); // revert on failure
+    }
+  }, [user, id, isFavourite]);
+
   // Review state
   const [showReviewSheet, setShowReviewSheet] = useState(false);
   const [reviewRating, setReviewRating] = useState(5);
@@ -228,19 +252,21 @@ export default function VenueDetailScreen() {
         const data = venueRes.data;
         coverUrl = getPublicUrl(data.cover_url) || coverUrl;
         const openNow = isVenueOpenNow(data.opening_hours ?? undefined);
+        const svcPrices = (servicesRes.data ?? []).map((s: any) => Number(s.price_bhd) || 0).filter((p: number) => p > 0);
+        const minSvcPrice = svcPrices.length ? Math.min(...svcPrices) : 0;
         setVenue({
           id: data.id,
           name: data.name,
           category: data.category ?? 'Barber',
           rating: Number(data.rating_avg) || 0,
           review_count: 0,
-          distance_km: 0.5,
+          distance_km: 0,
           address: data.address ?? '',
           image_url: coverUrl,
           description: data.description ?? '',
-          is_open: openNow || data.is_active,
+          is_open: openNow,
           open_until: '21:00',
-          starting_price: 5,
+          starting_price: minSvcPrice,
           opening_hours: data.opening_hours ?? undefined,
         });
       }
@@ -271,9 +297,16 @@ export default function VenueDetailScreen() {
 
       console.log('[VenueDetail] Reviews fetch result:', reviewsRes.error?.message ?? 'ok', 'count:', reviewsRes.data?.length ?? 0);
       if (reviewsRes.data && reviewsRes.data.length > 0) {
+        // Resolve real reviewer names from profiles.
+        const reviewerIds = Array.from(new Set(reviewsRes.data.map((r: any) => r.customer_profile_id).filter(Boolean)));
+        const nameById: Record<string, string> = {};
+        if (reviewerIds.length > 0) {
+          const { data: profs } = await supabase.from('profiles').select('id, full_name').in('id', reviewerIds);
+          (profs ?? []).forEach((p: any) => { nameById[p.id] = p.full_name || 'Customer'; });
+        }
         const mappedReviews = reviewsRes.data.map((r: any) => {
-          const fullName = 'Customer';
-          const initials = 'C';
+          const fullName = nameById[r.customer_profile_id] || 'Customer';
+          const initials = fullName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) || 'C';
           const dateStr = r.created_at
             ? new Date(r.created_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
             : '';
@@ -478,10 +511,7 @@ export default function VenueDetailScreen() {
               <Share2 size={18} color="#fff" />
             </AnimatedPressable>
             <AnimatedPressable
-              onPress={() => {
-                console.log('[VenueDetail] Favourite toggled:', !isFavourite);
-                setIsFavourite(f => !f);
-              }}
+              onPress={toggleFavourite}
               style={styles.carouselBtn}
             >
               <Heart
@@ -517,7 +547,7 @@ export default function VenueDetailScreen() {
           <View style={styles.addressPill}>
             <MapPin size={14} color={MADAR_COLORS.gold} />
             <Text style={styles.addressText} numberOfLines={1}>
-              {distanceFixed} km · {venue.address}
+              {venue.distance_km > 0 ? `${distanceFixed} km · ` : ''}{venue.address || 'Location'}
             </Text>
           </View>
         </View>

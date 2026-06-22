@@ -74,7 +74,7 @@ export default function MessagesScreen() {
 
     channelRef.current = supabase
       .channel(`messages-list-${user.id}-${Date.now()}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `client_id=eq.${user.id}` }, () => {
         console.log('[Messages] Realtime INSERT received, refreshing conversations');
         fetchConversations();
       })

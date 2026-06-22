@@ -211,9 +211,9 @@ function SkeletonCarouselCard() {
 }
 
 function CarouselVenueCard({ venue, onPress }: { venue: Venue; onPress: () => void }) {
-  const distanceStr = venue.distance_km < 1
-    ? `${Math.round(venue.distance_km * 1000)}m`
-    : `${venue.distance_km.toFixed(1)} km`;
+  const distanceStr = venue.distance_km > 0
+    ? (venue.distance_km < 1 ? `${Math.round(venue.distance_km * 1000)}m` : `${venue.distance_km.toFixed(1)} km`)
+    : '';
   const ratingStr = Number(venue.rating).toFixed(1);
 
   return (
@@ -236,8 +236,13 @@ function CarouselVenueCard({ venue, onPress }: { venue: Venue; onPress: () => vo
         <View style={styles.carouselRatingRow}>
           <Star size={11} color={MADAR_COLORS.gold} fill={MADAR_COLORS.gold} />
           <Text style={styles.carouselRating}>{ratingStr}</Text>
-          <MapPin size={10} color={MADAR_COLORS.textTertiary} />
-          <Text style={styles.carouselDistance}>{distanceStr}</Text>
+          {venue.review_count > 0 && <Text style={styles.carouselDistance}>({venue.review_count})</Text>}
+          {distanceStr ? (
+            <>
+              <MapPin size={10} color={MADAR_COLORS.textTertiary} />
+              <Text style={styles.carouselDistance}>{distanceStr}</Text>
+            </>
+          ) : null}
         </View>
       </View>
     </AnimatedPressable>
@@ -344,18 +349,32 @@ export default function HomeScreen() {
         setVenues(applyFilters(MOCK_VENUES, filterStore.get(), activeCategory));
       } else {
         console.log('[Home] Loaded', venuesRes.data.length, 'barbershops');
+        const shopIds = venuesRes.data.map((b: any) => b.id);
+        // Best-effort: real starting price (min active service) + real review counts.
+        const [svcRes, revRes] = await Promise.all([
+          supabase.from('services').select('shop_id, price_bhd').in('shop_id', shopIds).eq('is_active', true),
+          supabase.from('reviews').select('shop_id').in('shop_id', shopIds),
+        ]);
+        const minPrice: Record<string, number> = {};
+        (svcRes.data ?? []).forEach((s: any) => {
+          const p = Number(s.price_bhd) || 0;
+          if (p > 0 && (minPrice[s.shop_id] === undefined || p < minPrice[s.shop_id])) minPrice[s.shop_id] = p;
+        });
+        const revCount: Record<string, number> = {};
+        (revRes.data ?? []).forEach((r: any) => { revCount[r.shop_id] = (revCount[r.shop_id] || 0) + 1; });
+
         const mapped: Venue[] = venuesRes.data.map((b: any) => ({
           id: b.id,
           name: b.name,
           category: b.category ?? 'Barber',
           rating: Number(b.rating_avg) || 0,
-          review_count: 0,
-          distance_km: 0.5,
+          review_count: revCount[b.id] ?? 0,
+          distance_km: 0,
           address: b.address ?? '',
           image_url: getPublicUrl(b.cover_url) ?? getPublicUrl(b.logo_url, 'avatars') ?? 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800',
           logo_url: getPublicUrl(b.logo_url, 'avatars') ?? undefined,
-          starting_price: 5,
-          is_open: isVenueOpenNow(b.opening_hours) || b.is_active,
+          starting_price: minPrice[b.id] ?? 0,
+          is_open: isVenueOpenNow(b.opening_hours),
         }));
         setAllVenues(mapped);
         setVenues(applyFilters(mapped, filterStore.get(), activeCategory));

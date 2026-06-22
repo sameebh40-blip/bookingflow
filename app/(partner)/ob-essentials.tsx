@@ -150,7 +150,7 @@ export default function ObEssentials() {
           email: emailVal,
           owner_profile_id: user.id,
           is_active: true,
-          status: 'active',
+          status: 'approved',
           category: 'barbershop',
         });
         if (error) throw new Error(error.message);

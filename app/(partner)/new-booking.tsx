@@ -174,23 +174,22 @@ export default function NewBooking() {
       setClients(filtered);
       return;
     }
-    if (search.length < 1) { setClients([]); return; }
-    console.log('[NewBooking] Searching clients:', search);
+    console.log('[NewBooking] Loading clients, search:', search || '(all)');
     try {
       const { data } = await supabase
         .from('bookings')
-        .select('profiles!customer_profile_id(id, full_name, avatar_url, email, phone)')
+        .select('created_at, profiles!customer_profile_id(id, full_name, avatar_url, email, phone)')
         .eq('shop_id', shopId)
         .not('customer_profile_id', 'is', null)
-        .limit(30);
+        .order('created_at', { ascending: false })
+        .limit(50);
       const seen = new Set<string>();
       const unique: Client[] = [];
+      const q = search.trim().toLowerCase();
       for (const b of (data ?? []) as unknown as { profiles: Client | null }[]) {
         if (b.profiles && !seen.has(b.profiles.id)) {
           seen.add(b.profiles.id);
-          if (b.profiles.full_name?.toLowerCase().includes(search.toLowerCase())) {
-            unique.push(b.profiles);
-          }
+          if (!q || (b.profiles.full_name?.toLowerCase().includes(q))) unique.push(b.profiles);
         }
       }
       setClients(unique);
@@ -211,9 +210,8 @@ export default function NewBooking() {
 
   useEffect(() => {
     if (showClientSheet) {
-      if (clientSearch.length >= 1) fetchClients(clientSearch);
-      else if (!shopId) setClients(DEMO_CLIENTS);
-      else setClients([]);
+      if (!shopId) setClients(DEMO_CLIENTS);
+      else fetchClients(clientSearch);
     }
   }, [clientSearch, showClientSheet, fetchClients, shopId]);
 
@@ -400,13 +398,6 @@ export default function NewBooking() {
                       <Text style={styles.serviceCardMeta}>
                         {svcTimeLabel} · {svc.duration_minutes}min · {barberName}
                       </Text>
-                      <TouchableOpacity
-                        style={styles.teamWarning}
-                        onPress={() => { console.log('[NewBooking] Team member warning pressed'); setShowBarberSheet(true); }}
-                      >
-                        <AlertTriangle size={12} color={P.warning} />
-                        <Text style={styles.teamWarningText}>Team member not available</Text>
-                      </TouchableOpacity>
                     </View>
                     <Text style={styles.serviceCardPrice}>BHD {priceStr}</Text>
                   </View>
@@ -585,8 +576,8 @@ export default function NewBooking() {
                 <Text style={styles.clientOptionText}>Walk-In</Text>
               </TouchableOpacity>
 
-              {/* Client list */}
-              {(clientSearch.length > 0 ? clients : DEMO_CLIENTS).map(c => (
+              {/* Client list — real clients for the shop (demo only when no shop yet) */}
+              {clients.map(c => (
                 <TouchableOpacity
                   key={c.id}
                   style={styles.clientRow}

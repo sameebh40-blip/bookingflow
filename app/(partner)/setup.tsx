@@ -339,7 +339,7 @@ export default function ShopSetup() {
           opening_hours: openingHoursObj,
           owner_profile_id: user.id,
           is_active: true,
-          status: 'active',
+          status: 'approved',
         })
         .select('id')
         .single();

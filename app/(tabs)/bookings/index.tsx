@@ -30,6 +30,8 @@ interface Appointment {
   items: number;
   status: 'upcoming' | 'past';
   venue_id: string;
+  service_id?: string;
+  barber_id?: string;
   services?: { name: string; price: number }[];
 }
 
@@ -112,8 +114,13 @@ function UpcomingCard({ appt, onViewDetails, onRebook, onCancelled }: {
 
   const handleReschedulePress = useCallback(() => {
     console.log('[Bookings] Reschedule pressed for appointment:', appt.id);
-    router.push(`/booking/datetime?venueId=${appt.venue_id}`);
-  }, [appt.id, appt.venue_id, router]);
+    // Preserve the original service + staff so the confirm step has everything it needs.
+    if (appt.service_id) {
+      router.push(`/booking/datetime?venueId=${appt.venue_id}&services=${appt.service_id}&staffId=${appt.barber_id ?? 'any'}`);
+    } else {
+      router.push(`/venue/${appt.venue_id}`);
+    }
+  }, [appt.id, appt.venue_id, appt.service_id, appt.barber_id, router]);
 
   const handleMessage = useCallback(() => {
     console.log('[Bookings] Message shop pressed for venue:', appt.venue_id);
@@ -346,6 +353,7 @@ export default function BookingsScreen() {
           price_bhd,
           shop_id,
           barber_id,
+          service_id,
           barbershops!shop_id(id, name, cover_url, address)
         `)
         .eq('customer_profile_id', user.id)
@@ -367,6 +375,8 @@ export default function BookingsScreen() {
           return {
             id: row.id,
             venue_id: row.shop_id,
+            service_id: row.service_id ?? undefined,
+            barber_id: row.barber_id ?? undefined,
             venue_name: shop.name ?? 'Unknown Venue',
             venue_image: shop.cover_url ?? '',
             start_at: row.start_at,
