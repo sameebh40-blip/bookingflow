@@ -13,8 +13,7 @@ import {
   Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { Plus, Star, ChevronRight, X } from 'lucide-react-native';
+import { Plus, Star, ChevronRight, X, Trash2 } from 'lucide-react-native';
 import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
@@ -50,6 +49,7 @@ interface Barber {
   rating_avg?: number;
   reviews_count?: number;
   status?: string;
+  is_active?: boolean;
 }
 
 function StarRating({ rating }: { rating: number }) {
@@ -65,7 +65,6 @@ function StarRating({ rating }: { rating: number }) {
 
 export default function PartnerTeam() {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const { profile } = useAuth();
   const shopId = profile?.shop_id;
 
@@ -76,13 +75,28 @@ export default function PartnerTeam() {
   const [addSpecialty, setAddSpecialty] = useState('');
   const [addSaving, setAddSaving] = useState(false);
 
+  // Manage (edit / pause / delete) an existing barber
+  const [managing, setManaging] = useState<Barber | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editSpecialty, setEditSpecialty] = useState('');
+  const [editActive, setEditActive] = useState(true);
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const openManage = useCallback((b: Barber) => {
+    console.log('[Team] Manage barber:', b.id);
+    setManaging(b);
+    setEditName(b.display_name ?? '');
+    setEditSpecialty(b.specialty ?? '');
+    setEditActive(b.is_active !== false);
+  }, []);
+
   const fetchBarbers = useCallback(async () => {
     if (!shopId) return;
     console.log('[Team] Fetching barbers for shop:', shopId);
     try {
       const { data } = await supabase
         .from('barbers')
-        .select('id, display_name, specialty, avatar_url, rating_avg, reviews_count, status')
+        .select('id, display_name, specialty, avatar_url, rating_avg, reviews_count, status, is_active')
         .eq('shop_id', shopId);
       setBarbers((data as Barber[]) ?? []);
       console.log('[Team] Loaded', data?.length ?? 0, 'barbers');
@@ -97,6 +111,37 @@ export default function PartnerTeam() {
   useEffect(() => {
     fetchBarbers();
   }, [fetchBarbers]);
+
+  const saveBarber = useCallback(async () => {
+    if (!managing || !editName.trim()) return;
+    setSavingEdit(true);
+    try {
+      const { error } = await supabase
+        .from('barbers')
+        .update({ display_name: editName.trim(), specialty: editSpecialty.trim() || null, is_active: editActive })
+        .eq('id', managing.id);
+      if (error) { Alert.alert('Error', error.message); return; }
+      setManaging(null);
+      fetchBarbers();
+    } catch (err: any) {
+      Alert.alert('Error', err?.message ?? 'Could not save.');
+    } finally {
+      setSavingEdit(false);
+    }
+  }, [managing, editName, editSpecialty, editActive, fetchBarbers]);
+
+  const deleteBarber = useCallback(() => {
+    if (!managing) return;
+    Alert.alert('Remove barber', `Remove ${managing.display_name} from your team?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: async () => {
+        const { error } = await supabase.from('barbers').delete().eq('id', managing.id);
+        if (error) { Alert.alert('Error', error.message); return; }
+        setManaging(null);
+        fetchBarbers();
+      }},
+    ]);
+  }, [managing, fetchBarbers]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -123,15 +168,13 @@ export default function PartnerTeam() {
               const initials = barber.display_name.charAt(0).toUpperCase();
               const rating = Number(barber.rating_avg) || 0;
               const reviews = barber.reviews_count ?? 0;
-              const statusColor = barber.status === 'approved' ? P.success : P.warning;
-              const statusLabel = barber.status ?? 'pending';
+              const active = barber.is_active !== false;
+              const statusColor = active ? P.success : P.textTertiary;
+              const statusLabel = active ? 'Active' : 'Paused';
               return (
                 <AnimatedPressable
                   key={barber.id}
-                  onPress={() => {
-                    console.log('[Team] Barber tapped:', barber.id);
-                    router.push(`/(partner)/team/${barber.id}` as never);
-                  }}
+                  onPress={() => openManage(barber)}
                 >
                   <View style={styles.barberCard}>
                     {barber.avatar_url ? (
@@ -242,6 +285,56 @@ export default function PartnerTeam() {
           </View>
         </View>
       </Modal>
+
+      {/* Manage Barber modal — full control */}
+      <Modal visible={!!managing} transparent animationType="slide" onRequestClose={() => setManaging(null)}>
+        <View style={styles.sheetOverlay}>
+          <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Manage barber</Text>
+              <TouchableOpacity onPress={() => setManaging(null)}>
+                <X size={20} color={P.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.addForm}>
+              <Text style={styles.addLabel}>Display name *</Text>
+              <TextInput style={styles.addInput} placeholder="Name" placeholderTextColor={P.textTertiary} value={editName} onChangeText={setEditName} />
+              <Text style={[styles.addLabel, { marginTop: 12 }]}>Specialty</Text>
+              <TextInput style={styles.addInput} placeholder="e.g. Fades, Beard" placeholderTextColor={P.textTertiary} value={editSpecialty} onChangeText={setEditSpecialty} />
+
+              <Text style={[styles.addLabel, { marginTop: 12 }]}>Availability</Text>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity
+                  style={[styles.toggleBtn, editActive && styles.toggleBtnActive]}
+                  onPress={() => setEditActive(true)}
+                >
+                  <Text style={[styles.toggleText, editActive && { color: P.success }]}>Active</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.toggleBtn, !editActive && styles.toggleBtnPaused]}
+                  onPress={() => setEditActive(false)}
+                >
+                  <Text style={[styles.toggleText, !editActive && { color: P.textSecondary }]}>Paused</Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.addSaveBtn, (!editName.trim() || savingEdit) && { opacity: 0.5 }]}
+                disabled={!editName.trim() || savingEdit}
+                onPress={saveBarber}
+              >
+                {savingEdit ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.addSaveBtnText}>Save changes</Text>}
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.deleteBtn} onPress={deleteBarber}>
+                <Trash2 size={16} color={P.danger} />
+                <Text style={styles.deleteBtnText}>Remove from team</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -291,4 +384,10 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   addSaveBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  toggleBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: P.border, alignItems: 'center', backgroundColor: P.surfaceElevated },
+  toggleBtnActive: { borderColor: P.success, backgroundColor: P.success + '22' },
+  toggleBtnPaused: { borderColor: P.textTertiary, backgroundColor: P.textTertiary + '22' },
+  toggleText: { color: P.textSecondary, fontSize: 14, fontWeight: '700' },
+  deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, marginTop: 10, borderRadius: 12, borderWidth: 1, borderColor: P.danger + '55' },
+  deleteBtnText: { color: P.danger, fontSize: 14, fontWeight: '700' },
 });
