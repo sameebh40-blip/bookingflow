@@ -133,11 +133,12 @@ export default function ObEssentials() {
     setSaving(true);
     const fullPhone = editCountryCode + ' ' + editPhone.trim();
     try {
+      const emailVal = editEmail.trim() || null;
       if (profile?.shop_id) {
         // Shop exists — just update
         const { error } = await supabase
           .from('barbershops')
-          .update({ name: editName.trim(), phone: fullPhone })
+          .update({ name: editName.trim(), phone: fullPhone, email: emailVal })
           .eq('id', profile.shop_id);
         if (error) throw new Error(error.message);
       } else {
@@ -146,6 +147,7 @@ export default function ObEssentials() {
         const { error } = await supabase.from('barbershops').insert({
           name: editName.trim(),
           phone: fullPhone,
+          email: emailVal,
           owner_profile_id: user.id,
           is_active: true,
           status: 'active',
@@ -160,6 +162,7 @@ export default function ObEssentials() {
       }
       setDisplayName(editName.trim());
       setPhone(editPhone.trim());
+      setEmail(editEmail.trim());
       setCountryCode(editCountryCode);
       setEssentialsModalVisible(false);
     } catch (err: any) {

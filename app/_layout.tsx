@@ -47,14 +47,17 @@ function RoleRouter() {
     if (isPartner && !inPartner && !inAuth) {
       const hasShop = !!profile?.shop_id;
       if (!hasShop) {
-        console.log('[RoleRouter] Partner has no shop, redirecting to onboarding');
-        router.replace('/(partner)/ob-essentials');
+        console.log('[RoleRouter] Partner has no shop, redirecting to setup wizard');
+        router.replace('/(partner)/setup');
       } else {
         console.log('[RoleRouter] Redirecting to partner dashboard');
         router.replace('/(partner)');
       }
-    } else if (!isPartner && inPartner) {
-      console.log('[RoleRouter] Redirecting to customer tabs');
+    } else if (profile && !isPartner && inPartner) {
+      // Only bounce to customer tabs once we KNOW the role is a customer.
+      // Never bounce while profile is still null/loading — that caused partners
+      // to be kicked to the client app during signup.
+      console.log('[RoleRouter] Customer in partner area, redirecting to tabs');
       router.replace('/(tabs)' as never);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

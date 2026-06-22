@@ -62,6 +62,26 @@ interface ServiceItem {
   id: string;
   name: string;
   price: number;
+  duration: number;
+}
+
+// Build a valid ISO start time from a date param (which may be 'YYYY-MM-DD' OR a
+// full ISO timestamp) plus an 'HH:MM' time. Constructed in local time so the day
+// doesn't shift across timezones. Falls back to now() if anything is malformed.
+function buildStartISO(date?: string, time?: string): string {
+  if (!date) return new Date().toISOString();
+  const datePart = date.slice(0, 10); // 'YYYY-MM-DD'
+  const timePart = time && /^\d{1,2}:\d{2}/.test(time) ? time.slice(0, 5) : '12:00';
+  const [y, m, d] = datePart.split('-').map(Number);
+  const [hh, mm] = timePart.split(':').map(Number);
+  const dt = new Date(y, (m || 1) - 1, d || 1, hh || 0, mm || 0, 0, 0);
+  if (isNaN(dt.getTime())) return new Date().toISOString();
+  return dt.toISOString();
+}
+
+// A valid UUID — used to reject leftover mock IDs ('1','2'...) before they hit the DB.
+function isUuid(v?: string | null): boolean {
+  return !!v && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 }
 
 interface ShopInfo {
@@ -79,7 +99,7 @@ interface BarberInfo {
 export default function BookingConfirmScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const params = useLocalSearchParams<{
     venueId: string;
     services: string;
@@ -157,6 +177,7 @@ export default function BookingConfirmScreen() {
           id: s.id,
           name: s.name,
           price: Number(s.price_bhd) || 0,
+          duration: Number(s.duration_minutes) || 30,
         })));
       }
     } catch (err) {
@@ -167,6 +188,7 @@ export default function BookingConfirmScreen() {
   };
 
   const totalPrice = serviceItems.reduce((sum, s) => sum + s.price, 0);
+  const totalDuration = Math.max(15, serviceItems.reduce((sum, s) => sum + (s.duration || 0), 0) || 30);
   const staffName = barberInfo?.display_name ?? (staffId === 'any' ? 'Any available' : 'Barber');
   const staffAvatar = barberInfo?.avatar_url ?? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200';
   const staffSpecialty = barberInfo?.specialty ?? 'Barber';
@@ -188,18 +210,29 @@ export default function BookingConfirmScreen() {
       setLoading(false);
       return;
     }
+    // Guard against leftover demo/mock IDs reaching the DB as fake foreign keys.
+    if (!isUuid(venueId)) {
+      Alert.alert('Demo venue', 'This is a sample venue. Please pick a real shop to book.');
+      setLoading(false);
+      return;
+    }
+    const realServiceId = serviceIds.find(isUuid) ?? null;
+    if (!realServiceId) {
+      Alert.alert('Demo service', 'This shop has no bookable services yet. Please try another shop.');
+      setLoading(false);
+      return;
+    }
+    const realStaffId = staffId && staffId !== 'any' && isUuid(staffId) ? staffId : null;
     try {
       if (user) {
-        const scheduledAt = date && time
-          ? new Date(`${date}T${time}`).toISOString()
-          : new Date().toISOString();
-        const endAt = new Date(new Date(scheduledAt).getTime() + 30 * 60 * 1000).toISOString();
+        const scheduledAt = buildStartISO(date, time);
+        const endAt = new Date(new Date(scheduledAt).getTime() + totalDuration * 60 * 1000).toISOString();
         console.log('[Booking/Confirm] Inserting booking into hallaq bookings table');
         const { error } = await supabase.from('bookings').insert({
           customer_profile_id: user.id,
           shop_id: venueId,
-          barber_id: staffId && staffId !== 'any' ? staffId : null,
-          service_id: serviceIds[0] ?? null,
+          barber_id: realStaffId,
+          service_id: realServiceId,
           start_at: scheduledAt,
           end_at: endAt,
           status: 'pending',
@@ -209,8 +242,8 @@ export default function BookingConfirmScreen() {
           price_bhd: totalPrice,
           currency: 'BHD',
           source: 'customer',
-          customer_name: user.user_metadata?.full_name ?? null,
-          customer_email: user.email ?? null,
+          customer_name: profile?.full_name ?? user.user_metadata?.full_name ?? null,
+          customer_email: profile?.email ?? user.email ?? null,
         });
         if (error) {
           console.log('[Booking/Confirm] Supabase insert error:', error.message);

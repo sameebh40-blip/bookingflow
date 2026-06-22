@@ -210,7 +210,7 @@ export default function PartnerCatalog() {
   const fetchBarbers = useCallback(async () => {
     if (!shopId) return;
     try {
-      const { data } = await supabase.from('barbers').select('id, name, avatar_url').eq('shop_id', shopId);
+      const { data } = await supabase.from('barbers').select('id, name:display_name, avatar_url').eq('shop_id', shopId);
       setBarbers((data as Barber[]) ?? []);
     } catch (err) {
       console.log('[Catalog] fetchBarbers error:', err);

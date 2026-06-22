@@ -7,6 +7,8 @@ interface ProfileData {
   role: string;
   full_name?: string;
   avatar_url?: string;
+  phone?: string;
+  email?: string;
   shop_id?: string;
 }
 
@@ -45,7 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('role, full_name, avatar_url')
+        .select('id, role, full_name, avatar_url, phone, email')
         .eq('id', userId)
         .single();
       if (profileData) {
@@ -159,7 +161,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { full_name: fullName } },
+        // role travels in user metadata so the handle_new_user() trigger assigns
+        // the correct role synchronously — no customer→shop_owner race.
+        options: { data: { full_name: fullName, role } },
       });
       if (error) {
         console.log('[Auth] signUp error:', error.message);
@@ -167,8 +171,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       console.log('[Auth] signUp success');
       if (data.user) {
+        // Optimistically set the role locally so RoleRouter routes correctly
+        // even before the DB round-trip completes.
+        setProfile({ id: data.user.id, role, full_name: fullName, email: data.user.email ?? undefined });
         await upsertProfile(data.user, role);
-        await upsertCustomer(data.user);
+        if (role === 'customer') await upsertCustomer(data.user);
         await fetchProfile(data.user.id);
       }
       return { error: null };

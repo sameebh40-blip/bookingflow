@@ -133,9 +133,9 @@ export default function BookingDatetimeScreen() {
 
       const { data: bookingsData } = await supabase
         .from('bookings')
-        .select('start_at, duration_minutes')
+        .select('start_at')
         .eq('shop_id', venueId)
-        .eq('status', 'confirmed')
+        .in('status', ['pending', 'confirmed'])
         .gte('start_at', startOfDay.toISOString())
         .lte('start_at', endOfDay.toISOString());
 

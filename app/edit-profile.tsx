@@ -21,11 +21,11 @@ import { supabase } from '@/utils/supabase';
 export default function EditProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
 
-  const [name, setName] = useState(user?.user_metadata?.full_name ?? '');
-  const [email, setEmail] = useState(user?.email ?? '');
-  const [phone, setPhone] = useState(user?.user_metadata?.phone ?? '');
+  const [name, setName] = useState(profile?.full_name ?? user?.user_metadata?.full_name ?? '');
+  const [email, setEmail] = useState(profile?.email ?? user?.email ?? '');
+  const [phone, setPhone] = useState(profile?.phone ?? user?.user_metadata?.phone ?? '');
   const [saving, setSaving] = useState(false);
 
   // Load existing profile data from DB on mount
@@ -33,11 +33,13 @@ export default function EditProfileScreen() {
     if (!user) return;
     supabase
       .from('profiles')
-      .select('full_name, avatar_url')
+      .select('full_name, avatar_url, phone, email')
       .eq('id', user.id)
       .single()
       .then(({ data }) => {
         if (data?.full_name) setName(data.full_name);
+        if (data?.phone) setPhone(data.phone);
+        if (data?.email) setEmail(data.email);
       });
   }, [user?.id]);
 
@@ -55,13 +57,15 @@ export default function EditProfileScreen() {
     try {
       const { error } = await supabase
         .from('profiles')
-        .update({ full_name: name })
+        .update({ full_name: name.trim(), phone: phone.trim() || null })
         .eq('id', user.id);
       if (error) {
         console.log('[EditProfile] Error saving profile:', error.message);
         Alert.alert('Error', 'Could not save profile. Please try again.');
       } else {
         console.log('[EditProfile] Profile saved successfully');
+        // Refresh the global profile so the change shows everywhere immediately.
+        await refreshProfile();
         router.back();
       }
     } catch (err) {

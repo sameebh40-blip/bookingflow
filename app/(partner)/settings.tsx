@@ -161,8 +161,8 @@ export default function PartnerSettings() {
       // Fetch all shops owned by this partner
       const { data: allShops } = await supabase
         .from('barbershops')
-        .select('id, name_en, logo_url, cover_url')
-        .eq('owner_profile_id', profile?.shop_id ?? '');
+        .select('id, name, logo_url, cover_url')
+        .eq('owner_profile_id', profile?.id ?? '');
       if (allShops) setMyShops(allShops as ShopData[]);
 
       // Build opening hours
@@ -229,7 +229,7 @@ export default function PartnerSettings() {
     console.log('[Settings] Save shop pressed');
     setSaving(true);
     try {
-      await supabase.from('barbershops').update({
+      const { error } = await supabase.from('barbershops').update({
         name: shop.name,
         description: shop.description,
         phone: shop.phone,
@@ -242,9 +242,16 @@ export default function PartnerSettings() {
         lng: shop.lng,
         opening_hours: openingHours,
       }).eq('id', shopId);
-      console.log('[Settings] Shop saved');
-    } catch (err) {
+      if (error) {
+        console.log('[Settings] saveShop error:', error.message);
+        Alert.alert('Save failed', error.message);
+      } else {
+        console.log('[Settings] Shop saved');
+        Alert.alert('Saved', 'Your changes have been saved.');
+      }
+    } catch (err: any) {
       console.log('[Settings] saveShop error:', err);
+      Alert.alert('Save failed', err?.message ?? 'Please try again.');
     } finally {
       setSaving(false);
     }
@@ -262,12 +269,13 @@ export default function PartnerSettings() {
       if (!url) return;
       await supabase.from('posts').insert({
         shop_id: shopId,
+        owner_type: 'shop',
         image_url: url,
         media_url: url,
         caption: newPostCaption,
         is_active: true,
-        status: 'published',
-        created_by: profile?.shop_id,
+        status: 'pending',
+        created_by: profile?.id,
       });
       setNewPostCaption('');
       await fetchData();
