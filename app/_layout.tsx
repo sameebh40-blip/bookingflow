@@ -40,23 +40,19 @@ function RoleRouter() {
     if (!segments || (segments as string[]).length === 0) return; // guard null/empty
     const isPartner = profile?.role === 'shop_owner' || profile?.role === 'barber';
     const inPartner = segments[0] === '(partner)';
-    const inAuth = segments[0] === 'auth';
+    const inTabs = segments[0] === '(tabs)';
 
     console.log('[RoleRouter] profile role:', profile?.role, 'segments:', segments[0], 'isPartner:', isPartner);
 
-    if (isPartner && !inPartner && !inAuth) {
+    // Only enforce the role boundary at the TOP-LEVEL group. Shared routes
+    // (chat, venue, booking, barber, wallet, appointment, …) are open to
+    // everyone, so we must NOT bounce a partner away from them — doing that was
+    // why tapping a chat kicked shop-owner accounts back to the dashboard.
+    if (isPartner && inTabs) {
       const hasShop = !!profile?.shop_id;
-      if (!hasShop) {
-        console.log('[RoleRouter] Partner has no shop, redirecting to setup wizard');
-        router.replace('/(partner)/setup');
-      } else {
-        console.log('[RoleRouter] Redirecting to partner dashboard');
-        router.replace('/(partner)');
-      }
+      console.log('[RoleRouter] Partner in customer tabs → redirecting to partner area');
+      router.replace(hasShop ? '/(partner)' : '/(partner)/setup');
     } else if (profile && !isPartner && inPartner) {
-      // Only bounce to customer tabs once we KNOW the role is a customer.
-      // Never bounce while profile is still null/loading — that caused partners
-      // to be kicked to the client app during signup.
       console.log('[RoleRouter] Customer in partner area, redirecting to tabs');
       router.replace('/(tabs)' as never);
     }
