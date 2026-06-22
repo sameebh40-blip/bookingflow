@@ -309,7 +309,7 @@ export default function HomeScreen() {
         supabase
           .from('barbershops')
           .select('id, name, category, rating_avg, address, cover_url, logo_url, lat, lng, is_active, status, opening_hours')
-          .eq('status', 'approved')
+          .in('status', ['approved', 'active'])
           .eq('is_active', true)
           .limit(10) as unknown as Promise<any>,
         supabase

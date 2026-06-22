@@ -53,12 +53,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (profileData) {
         let shopId: string | undefined;
         if (profileData.role === 'shop_owner' || profileData.role === 'barber') {
-          const { data: shop } = await supabase
+          // Use limit(1), NOT .single() — an owner may have more than one shop,
+          // and .single() throws on multiple rows, which would leave shop_id null
+          // and trap the partner on "Setup Required" forever.
+          const { data: shops } = await supabase
             .from('barbershops')
             .select('id')
             .eq('owner_profile_id', userId)
-            .single();
-          if (shop) shopId = shop.id;
+            .order('created_at', { ascending: true })
+            .limit(1);
+          if (shops && shops.length > 0) shopId = shops[0].id;
         }
         const fullProfile: ProfileData = { ...profileData, shop_id: shopId };
         setProfile(fullProfile);

@@ -249,7 +249,7 @@ export default function MapSearchScreen() {
         const { data, error } = await supabase
           .from('barbershops')
           .select('id, name, category, rating_avg, address, cover_url, lat, lng, is_active, status')
-          .eq('status', 'approved')
+          .in('status', ['approved', 'active'])
           .limit(20);
         if (!error && data && data.length > 0) {
           console.log('[MapSearch] Loaded', data.length, 'barbershops');
