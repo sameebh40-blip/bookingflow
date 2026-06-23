@@ -154,7 +154,10 @@ export default function MessagesScreen() {
 
   const handleConversationPress = (id: string, name: string) => {
     console.log('[Messages] Conversation pressed:', id, name);
-    router.push(`/chat/${id}`);
+    if (!id) return;
+    // Object form resolves the route by name from the ROOT navigator — reliable
+    // from inside the nested (tabs) stack, unlike a bare string path on iOS.
+    router.navigate({ pathname: '/chat/[venueId]', params: { venueId: id } });
   };
 
   return (

@@ -124,7 +124,8 @@ function UpcomingCard({ appt, onViewDetails, onRebook, onCancelled }: {
 
   const handleMessage = useCallback(() => {
     console.log('[Bookings] Message shop pressed for venue:', appt.venue_id);
-    router.push(`/chat/${appt.venue_id}`);
+    if (!appt.venue_id) return;
+    router.navigate({ pathname: '/chat/[venueId]', params: { venueId: appt.venue_id } });
   }, [appt.venue_id, router]);
 
   const handleGetDirections = useCallback(() => {
