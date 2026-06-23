@@ -8,9 +8,10 @@ import {
   Image,
   TextInput,
   ImageSourcePropType,
+  Modal,
 } from 'react-native';
+import ChatPanel from '@/components/ChatPanel';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 import { Search, MessageCircle } from 'lucide-react-native';
 import { MADAR_COLORS } from '@/constants/Colors';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
@@ -54,11 +55,11 @@ function AnimatedListItem({ index, children }: { index: number; children: React.
 
 export default function MessagesScreen() {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const { user } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [openVenueId, setOpenVenueId] = useState<string | null>(null);
 
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
@@ -153,11 +154,10 @@ export default function MessagesScreen() {
   );
 
   const handleConversationPress = (id: string, name: string) => {
-    console.log('[Messages] Conversation pressed:', id, name);
+    console.log('[Messages] Conversation pressed → opening chat overlay for venue:', id, name);
     if (!id) return;
-    // Object form resolves the route by name from the ROOT navigator — reliable
-    // from inside the nested (tabs) stack, unlike a bare string path on iOS.
-    router.navigate({ pathname: '/chat/[venueId]', params: { venueId: id } });
+    // Open the chat as an in-screen overlay (no router navigation = can't fail to open).
+    setOpenVenueId(id);
   };
 
   return (
@@ -231,6 +231,17 @@ export default function MessagesScreen() {
         )}
         <View style={{ height: 120 }} />
       </ScrollView>
+
+      {/* Chat opens as a full-screen native modal — presents over everything,
+          no router navigation, so it cannot fail to open from the nested tab. */}
+      <Modal
+        visible={!!openVenueId}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setOpenVenueId(null)}
+      >
+        {openVenueId && <ChatPanel venueId={openVenueId} onBack={() => setOpenVenueId(null)} />}
+      </Modal>
     </View>
   );
 }
